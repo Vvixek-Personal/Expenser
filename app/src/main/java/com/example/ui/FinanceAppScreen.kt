@@ -40,6 +40,19 @@ import com.example.ui.theme.*
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
+import java.io.File
+import android.graphics.Bitmap
+import android.graphics.ImageDecoder
+import android.net.Uri
+import android.os.Build
+import android.provider.MediaStore
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.result.launch
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.layout.ContentScale
+import coil.compose.AsyncImage
 
 sealed class Screen(val route: String, val title: String, val icon: ImageVector) {
     object Dashboard : Screen("dashboard", "Dashboard", Icons.Default.Dashboard)
@@ -60,15 +73,37 @@ val categoryColors = mapOf(
     "Others" to Color(0xFF64748B)        // Slate
 )
 
-fun getCategoryIcon(category: String): ImageVector {
-    return when (category) {
-        "Food" -> Icons.Default.Restaurant
-        "Travel" -> Icons.Default.DirectionsCar
-        "Rent" -> Icons.Default.Home
-        "Utilities" -> Icons.Default.Bolt
-        "Entertainment" -> Icons.Default.Movie
-        "Shopping" -> Icons.Default.ShoppingCart
-        "Persons" -> Icons.Default.Person
+fun getCategoryIcon(category: String, customMap: Map<String, String> = emptyMap()): ImageVector {
+    val resolved = customMap[category] ?: category
+    return when (resolved) {
+        "Food", "Restaurant" -> Icons.Default.Restaurant
+        "Travel", "DirectionsCar" -> Icons.Default.DirectionsCar
+        "Rent", "Home" -> Icons.Default.Home
+        "Utilities", "Bolt", "ElectricBolt" -> Icons.Default.Bolt
+        "Entertainment", "Movie" -> Icons.Default.Movie
+        "Shopping", "ShoppingCart" -> Icons.Default.ShoppingCart
+        "Persons", "Person" -> Icons.Default.Person
+        "LocalHospital", "Healing" -> Icons.Default.LocalHospital
+        "School" -> Icons.Default.School
+        "Work" -> Icons.Default.Work
+        "Flight", "FlightTakeoff" -> Icons.Default.Flight
+        "SportsEsports" -> Icons.Default.SportsEsports
+        "CardGiftcard" -> Icons.Default.CardGiftcard
+        "MonetizationOn" -> Icons.Default.MonetizationOn
+        "Settings" -> Icons.Default.Settings
+        "Pets" -> Icons.Default.Pets
+        "Star" -> Icons.Default.Star
+        "Construction" -> Icons.Default.Construction
+        "Fastfood" -> Icons.Default.Fastfood
+        "Coffee" -> Icons.Default.Coffee
+        "WaterDrop" -> Icons.Default.WaterDrop
+        "Checkroom" -> Icons.Default.Checkroom
+        "DirectionsBus" -> Icons.Default.DirectionsBus
+        "LocalGasStation" -> Icons.Default.LocalGasStation
+        "FitnessCenter" -> Icons.Default.FitnessCenter
+        "Event" -> Icons.Default.Event
+        "Spa" -> Icons.Default.Spa
+        "Pending" -> Icons.Default.Pending
         else -> Icons.Default.Category
     }
 }
@@ -88,6 +123,7 @@ fun FinanceAppScreen(viewModel: FinanceViewModel) {
     var prefilledDateForAddDialog by remember { mutableStateOf<Long?>(null) }
     var showAiCoachDialog by remember { mutableStateOf(false) }
     var editingExpense by remember { mutableStateOf<Expense?>(null) }
+    var viewingDetailExpense by remember { mutableStateOf<Expense?>(null) }
 
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
@@ -97,7 +133,7 @@ fun FinanceAppScreen(viewModel: FinanceViewModel) {
         drawerContent = {
             ModalDrawerSheet(
                 drawerContainerColor = SleekBg,
-                modifier = Modifier.width(320.dp).fillMaxHeight()
+                modifier = Modifier.fillMaxSize()
             ) {
                 SidebarDrawerContent(
                     viewModel = viewModel,
@@ -291,7 +327,7 @@ fun FinanceAppScreen(viewModel: FinanceViewModel) {
                             prefilledDateForAddDialog = null
                             showAddExpenseDialog = true
                         },
-                        onEditExpenseClick = { editingExpense = it }
+                        onEditExpenseClick = { viewingDetailExpense = it }
                     )
                     Screen.Analytics -> AnalyticsTab(
                         viewModel = viewModel
@@ -302,7 +338,7 @@ fun FinanceAppScreen(viewModel: FinanceViewModel) {
                             prefilledDateForAddDialog = date
                             showAddExpenseDialog = true
                         },
-                        onEditExpense = { editingExpense = it },
+                        onEditExpense = { viewingDetailExpense = it },
                         onDeleteExpense = { viewModel.deleteExpense(it) },
                         onAiCoachClick = { showAiCoachDialog = true }
                     )
@@ -315,8 +351,9 @@ fun FinanceAppScreen(viewModel: FinanceViewModel) {
                     categories = allCategories,
                     onAddCategory = { viewModel.addCustomCategory(it) },
                     onDismiss = { showAddExpenseDialog = false },
-                    onConfirm = { amount, category, date, note ->
-                        viewModel.addExpense(amount, category, date, note)
+                    onConfirm = { amount, category, date, note, imagePath ->
+                        viewModel.addExpense(amount, category, date, note, imagePath)
+                        viewModel.refreshUsageData()
                         showAddExpenseDialog = false
                     }
                 )
@@ -331,6 +368,22 @@ fun FinanceAppScreen(viewModel: FinanceViewModel) {
                     onConfirm = { updatedExpense ->
                         viewModel.updateExpense(updatedExpense)
                         editingExpense = null
+                    }
+                )
+            }
+
+            if (viewingDetailExpense != null) {
+                ExpenseDetailDialog(
+                    expense = viewingDetailExpense!!,
+                    viewModel = viewModel,
+                    onDismiss = { viewingDetailExpense = null },
+                    onEditClick = {
+                        editingExpense = viewingDetailExpense
+                        viewingDetailExpense = null
+                    },
+                    onDeleteClick = {
+                        viewModel.deleteExpense(viewingDetailExpense!!)
+                        viewingDetailExpense = null
                     }
                 )
             }
@@ -2141,7 +2194,7 @@ fun AddExpenseDialog(
     categories: List<String>,
     onAddCategory: (String) -> Unit,
     onDismiss: () -> Unit,
-    onConfirm: (amount: Double, category: String, date: Long, note: String) -> Unit
+    onConfirm: (amount: Double, category: String, date: Long, note: String, imagePath: String?) -> Unit
 ) {
     var amountStr by remember { mutableStateOf("") }
     var category by remember { mutableStateOf(categories.firstOrNull() ?: "Food") }
@@ -2149,6 +2202,43 @@ fun AddExpenseDialog(
 
     var categoryDropdownExpanded by remember { mutableStateOf(false) }
     var showCreateCategoryDialog by remember { mutableStateOf(false) }
+
+    // Image/receipt selection states
+    val context = LocalContext.current
+    var attachedImagePath by remember { mutableStateOf<String?>(null) }
+    var editingBitmap by remember { mutableStateOf<Bitmap?>(null) }
+    var showCropperDialog by remember { mutableStateOf(false) }
+
+    val galleryLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            try {
+                val bitmap = if (Build.VERSION.SDK_INT < 28) {
+                    @Suppress("DEPRECATION")
+                    MediaStore.Images.Media.getBitmap(context.contentResolver, uri)
+                } else {
+                    val source = ImageDecoder.createSource(context.contentResolver, uri)
+                    ImageDecoder.decodeBitmap(source) { decoder, _, _ ->
+                        decoder.isMutableRequired = true
+                    }
+                }
+                editingBitmap = bitmap
+                showCropperDialog = true
+            } catch (e: Exception) {
+                Toast.makeText(context, "Error loading image: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    val cameraLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.TakePicturePreview()
+    ) { bitmap: Bitmap? ->
+        if (bitmap != null) {
+            editingBitmap = bitmap
+            showCropperDialog = true
+        }
+    }
 
     Dialog(onDismissRequest = onDismiss) {
         Card(
@@ -2301,6 +2391,73 @@ fun AddExpenseDialog(
                     )
                 }
 
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Attached image section in Add Dialog
+                Text(
+                    text = "Receipt Photo (Optional)",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = SleekTextSecondary,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+
+                if (!attachedImagePath.isNullOrBlank() && File(attachedImagePath!!).exists()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(140.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .border(1.dp, SleekBorder, RoundedCornerShape(12.dp))
+                            .background(Color.Black),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        AsyncImage(
+                            model = File(attachedImagePath!!),
+                            contentDescription = "Attached Receipt",
+                            contentScale = ContentScale.Fit,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                        IconButton(
+                            onClick = { attachedImagePath = null },
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(8.dp)
+                                .background(Color.Black.copy(alpha = 0.6f), CircleShape)
+                                .size(28.dp)
+                        ) {
+                            Icon(Icons.Default.Close, contentDescription = "Clear Image", tint = Color.White, modifier = Modifier.size(16.dp))
+                        }
+                    }
+                } else {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Button(
+                            onClick = { cameraLauncher.launch() },
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColors(containerColor = SleekPrimaryContainer),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Icon(Icons.Default.PhotoCamera, contentDescription = null, tint = SleekPrimary, modifier = Modifier.size(14.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Camera", color = SleekPrimary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+
+                        Button(
+                            onClick = { galleryLauncher.launch("image/*") },
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColors(containerColor = SleekPrimaryContainer),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Icon(Icons.Default.Photo, contentDescription = null, tint = SleekPrimary, modifier = Modifier.size(14.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Gallery", color = SleekPrimary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+
                 Spacer(modifier = Modifier.height(24.dp))
 
                 // Confirm and Cancel buttons
@@ -2326,7 +2483,8 @@ fun AddExpenseDialog(
                                     amount,
                                     category,
                                     prefilledDate ?: System.currentTimeMillis(),
-                                    note.trim()
+                                    note.trim(),
+                                    attachedImagePath
                                 )
                             }
                         },
@@ -2340,6 +2498,17 @@ fun AddExpenseDialog(
                 }
             }
         }
+    }
+
+    if (showCropperDialog && editingBitmap != null) {
+        ImageEditDialog(
+            initialBitmap = editingBitmap!!,
+            onDismiss = { showCropperDialog = false },
+            onSave = { savedPath ->
+                showCropperDialog = false
+                attachedImagePath = savedPath
+            }
+        )
     }
 
     if (showCreateCategoryDialog) {
@@ -3197,12 +3366,19 @@ fun SidebarDrawerContent(
     val userName by viewModel.userName.collectAsStateWithLifecycle()
     val themeIndex by viewModel.themeIndex.collectAsStateWithLifecycle()
     val customHue by viewModel.customThemeHue.collectAsStateWithLifecycle()
+    val storageSize by viewModel.storageSize.collectAsStateWithLifecycle()
+    val dataSize by viewModel.dataSize.collectAsStateWithLifecycle()
+    val filteredExpenses by viewModel.filteredExpenses.collectAsStateWithLifecycle()
     
     var showEditNameDialog by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        viewModel.refreshUsageData()
+    }
     
     Column(
         modifier = Modifier
-            .fillMaxHeight()
+            .fillMaxSize()
             .background(SleekBg)
             .statusBarsPadding()
             .navigationBarsPadding()
@@ -3329,7 +3505,7 @@ fun SidebarDrawerContent(
                         )
                     }
                     Text(
-                        text = "176.3 MB",
+                        text = storageSize,
                         style = MaterialTheme.typography.bodyMedium,
                         color = Color(0xFF2563EB),
                         fontWeight = FontWeight.Bold
@@ -3372,7 +3548,7 @@ fun SidebarDrawerContent(
                         )
                     }
                     Text(
-                        text = "10.35 GB",
+                        text = dataSize,
                         style = MaterialTheme.typography.bodyMedium,
                         color = Color(0xFF16A34A),
                         fontWeight = FontWeight.Bold
@@ -3392,6 +3568,57 @@ fun SidebarDrawerContent(
             fontWeight = FontWeight.Bold,
             modifier = Modifier.padding(bottom = 12.dp)
         )
+
+        // Dark Mode switch card
+        var darkThemeState by remember { mutableStateOf(com.example.ui.theme.isDarkModeActive) }
+        Card(
+            colors = CardDefaults.cardColors(containerColor = SleekSurface),
+            border = BorderStroke(1.dp, SleekBorder),
+            shape = RoundedCornerShape(16.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 16.dp)
+                .clickable {
+                    viewModel.toggleDarkMode()
+                    darkThemeState = com.example.ui.theme.isDarkModeActive
+                }
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Icon(
+                        imageVector = if (darkThemeState) Icons.Default.DarkMode else Icons.Default.LightMode,
+                        contentDescription = null,
+                        tint = SleekPrimary
+                    )
+                    Text(
+                        text = "Dark Mode Theme",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = SleekTextPrimary
+                    )
+                }
+                Switch(
+                    checked = darkThemeState,
+                    onCheckedChange = {
+                        viewModel.toggleDarkMode()
+                        darkThemeState = com.example.ui.theme.isDarkModeActive
+                    },
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = Color.White,
+                        checkedTrackColor = SleekPrimary
+                    )
+                )
+            }
+        }
         
         ColorThemeGrid(
             selectedThemeIndex = themeIndex,
@@ -3445,6 +3672,162 @@ fun SidebarDrawerContent(
         Spacer(modifier = Modifier.height(16.dp))
         HorizontalDivider(color = SleekBorder)
         Spacer(modifier = Modifier.height(16.dp))
+
+        // 3.5 Export Ledger Statements Section
+        Text(
+            text = "Export Ledger Statements",
+            style = MaterialTheme.typography.titleSmall,
+            color = SleekPrimary,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(bottom = 12.dp)
+        )
+
+        var exportCategoryFilter by remember { mutableStateOf("All Categories") }
+        var exportRangeWeeks by remember { mutableStateOf(4f) }
+        var exportCatExpanded by remember { mutableStateOf(false) }
+
+        Card(
+            colors = CardDefaults.cardColors(containerColor = SleekSurface),
+            border = BorderStroke(1.dp, SleekBorder),
+            shape = RoundedCornerShape(16.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 16.dp)
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(
+                    "Select Ledger Filters",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = SleekTextPrimary
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Text(
+                    "Filter range: Past ${exportRangeWeeks.toInt()} Weeks",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = SleekTextSecondary
+                )
+                Slider(
+                    value = exportRangeWeeks,
+                    onValueChange = { exportRangeWeeks = it },
+                    valueRange = 1f..26f,
+                    colors = SliderDefaults.colors(
+                        thumbColor = SleekPrimary,
+                        activeTrackColor = SleekPrimary,
+                        inactiveTrackColor = SleekBorder
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Text(
+                    "Category Filter",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = SleekTextSecondary
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    OutlinedButton(
+                        onClick = { exportCatExpanded = true },
+                        border = BorderStroke(1.dp, SleekBorder),
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(exportCategoryFilter, color = SleekTextPrimary, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                            Icon(Icons.Default.ArrowDropDown, contentDescription = null, tint = SleekTextSecondary)
+                        }
+                    }
+                    DropdownMenu(
+                        expanded = exportCatExpanded,
+                        onDismissRequest = { exportCatExpanded = false },
+                        modifier = Modifier.background(SleekSurface)
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("All Categories", color = SleekTextPrimary, fontWeight = FontWeight.Bold) },
+                            onClick = {
+                                exportCategoryFilter = "All Categories"
+                                exportCatExpanded = false
+                            }
+                        )
+                        val catsList = listOf("Food", "Travel", "Rent", "Utilities", "Entertainment", "Shopping", "Persons", "Others")
+                        catsList.forEach { c ->
+                            DropdownMenuItem(
+                                text = { Text(c, color = SleekTextPrimary) },
+                                onClick = {
+                                    exportCategoryFilter = c
+                                    exportCatExpanded = false
+                                }
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    val context = LocalContext.current
+                    Button(
+                        onClick = {
+                            val limitTime = System.currentTimeMillis() - (exportRangeWeeks.toInt() * 7 * 24 * 3600 * 1000L)
+                            val filteredList = filteredExpenses.filter {
+                                it.date >= limitTime && (exportCategoryFilter == "All Categories" || it.category == exportCategoryFilter)
+                            }
+                            DataExporter.sharePdfReport(
+                                context = context,
+                                expenses = filteredList,
+                                dateRangeStr = "Past ${exportRangeWeeks.toInt()} Weeks",
+                                categoryFilter = exportCategoryFilter
+                            )
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = SleekPrimary),
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.weight(1f),
+                        contentPadding = PaddingValues(vertical = 10.dp)
+                    ) {
+                        Icon(Icons.Default.PictureAsPdf, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Share PDF", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
+
+                    Button(
+                        onClick = {
+                            val limitTime = System.currentTimeMillis() - (exportRangeWeeks.toInt() * 7 * 24 * 3600 * 1000L)
+                            val filteredList = filteredExpenses.filter {
+                                it.date >= limitTime && (exportCategoryFilter == "All Categories" || it.category == exportCategoryFilter)
+                            }
+                            DataExporter.shareImageReport(
+                                context = context,
+                                expenses = filteredList,
+                                dateRangeStr = "Past ${exportRangeWeeks.toInt()} Weeks",
+                                categoryFilter = exportCategoryFilter
+                            )
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = SleekPrimaryContainer),
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.weight(1f),
+                        contentPadding = PaddingValues(vertical = 10.dp)
+                    ) {
+                        Icon(Icons.Default.Photo, contentDescription = null, tint = SleekPrimary, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Share Card", color = SleekPrimary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+        HorizontalDivider(color = SleekBorder)
+        Spacer(modifier = Modifier.height(16.dp))
         
         // 4. FAQ & Help Section
         Text(
@@ -3455,7 +3838,7 @@ fun SidebarDrawerContent(
             modifier = Modifier.padding(bottom = 12.dp)
         )
         
-        FaqAccordion()
+        FaqAccordion(viewModel)
         
         Spacer(modifier = Modifier.height(32.dp))
         HorizontalDivider(color = SleekBorder)
@@ -3488,7 +3871,7 @@ fun SidebarDrawerContent(
                     modifier = Modifier.size(14.dp)
                 )
                 Text(
-                    text = "by Vivek with Love",
+                    text = "by Vivek",
                     style = MaterialTheme.typography.labelMedium,
                     color = SleekTextSecondary,
                     fontWeight = FontWeight.Bold
@@ -3621,7 +4004,7 @@ fun ColorThemeGrid(
 }
 
 @Composable
-fun FaqAccordion() {
+fun FaqAccordion(viewModel: FinanceViewModel) {
     val faqs = listOf(
         "Is my financial data secure?" to "Yes, all data is stored offline locally on your device and never uploaded to any servers.",
         "How do I set a monthly budget?" to "Click the pencil icon on the monthly card on the Dashboard to set your budget limit.",
@@ -3630,6 +4013,7 @@ fun FaqAccordion() {
     )
     
     var expandedIndex by remember { mutableStateOf<Int?>(null) }
+    val coroutineScope = rememberCoroutineScope()
     
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         faqs.forEachIndexed { index, (question, answer) ->
@@ -3671,6 +4055,107 @@ fun FaqAccordion() {
                             lineHeight = 16.sp
                         )
                     }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+        
+        // 🧠 AI BASED ASK
+        var aiQuestion by remember { mutableStateOf("") }
+        var aiAnswer by remember { mutableStateOf<String?>(null) }
+        var isQuerying by remember { mutableStateOf(false) }
+        
+        Card(
+            colors = CardDefaults.cardColors(containerColor = SleekPrimaryContainer.copy(alpha = 0.15f)),
+            border = BorderStroke(1.dp, SleekPrimary.copy(alpha = 0.35f)),
+            shape = RoundedCornerShape(16.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.AutoAwesome,
+                        contentDescription = "AI",
+                        tint = SleekPrimary,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Text(
+                        text = "Ask AI Financial Guide",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = SleekTextPrimary,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "Have a question about your personal budget, tax, or saving tips? Enter it below to ask your AI Financial Companion.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = SleekTextSecondary,
+                    lineHeight = 16.sp
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                OutlinedTextField(
+                    value = aiQuestion,
+                    onValueChange = { aiQuestion = it },
+                    placeholder = { Text("How can I start investing ₹2000/month?", fontSize = 13.sp, color = SleekTextSecondary) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = SleekPrimary,
+                        unfocusedBorderColor = SleekBorder,
+                        focusedContainerColor = SleekSurface,
+                        unfocusedContainerColor = SleekSurface,
+                        focusedTextColor = SleekTextPrimary,
+                        unfocusedTextColor = SleekTextPrimary
+                    )
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                Button(
+                    onClick = {
+                        if (aiQuestion.isNotBlank()) {
+                            isQuerying = true
+                            coroutineScope.launch {
+                                val answer = try {
+                                    com.example.api.GeminiClient.getFinancialAdvice(
+                                        prompt = aiQuestion,
+                                        systemPrompt = "You are a professional, friendly, supportive offline finance assistant. Answer clearly, concisely (1-3 sentences or short bullet points), and practically. Never hallucinate."
+                                    )
+                                } catch (e: Exception) {
+                                    "Sorry, I am unable to connect offline. Please verify API key configuration."
+                                }
+                                aiAnswer = answer
+                                isQuerying = false
+                            }
+                        }
+                    },
+                    enabled = !isQuerying && aiQuestion.isNotBlank(),
+                    colors = ButtonDefaults.buttonColors(containerColor = SleekPrimary),
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier.align(Alignment.End)
+                ) {
+                    if (isQuerying) {
+                        CircularProgressIndicator(modifier = Modifier.size(14.dp), color = Color.White, strokeWidth = 2.dp)
+                    } else {
+                        Text("Ask AI", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    }
+                }
+                if (aiAnswer != null) {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    HorizontalDivider(color = SleekBorder.copy(alpha = 0.5f))
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        text = aiAnswer!!,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = SleekTextPrimary,
+                        lineHeight = 16.sp,
+                        modifier = Modifier.fillMaxWidth()
+                    )
                 }
             }
         }

@@ -10,42 +10,40 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalContext
 
-private val DarkColorScheme =
-  darkColorScheme(
-    primary = SleekPrimary,
-    secondary = SleekPrimaryContainer,
-    tertiary = SavingGold,
-    background = SleekBg,
-    surface = SleekSurface,
-    onPrimary = SleekBg,
-    onSecondary = SleekTextPrimary,
-    onBackground = SleekTextPrimary,
-    onSurface = SleekTextPrimary,
-    outline = SleekBorder
-  )
-
-private val LightColorScheme =
-  lightColorScheme(
-    primary = SleekPrimary,
-    secondary = SleekPrimaryContainer,
-    tertiary = SavingGold,
-    background = SleekBg,
-    surface = SleekSurface,
-    onPrimary = SleekSurface,
-    onSecondary = SleekOnPrimaryContainer,
-    onBackground = SleekTextPrimary,
-    onSurface = SleekTextPrimary,
-    outline = SleekBorder
-  )
-
 @Composable
 fun MyApplicationTheme(
-  darkTheme: Boolean = isSystemInDarkTheme(),
+  darkTheme: Boolean = isDarkModeActive,
   // Force beautiful theme brand consistency
   dynamicColor: Boolean = false,
   content: @Composable () -> Unit,
 ) {
-  val colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme
+  val colorScheme = if (darkTheme) {
+    darkColorScheme(
+      primary = SleekPrimary,
+      secondary = SleekPrimaryContainer,
+      tertiary = SavingGold,
+      background = SleekBg,
+      surface = SleekSurface,
+      onPrimary = SleekBg,
+      onSecondary = SleekTextPrimary,
+      onBackground = SleekTextPrimary,
+      onSurface = SleekTextPrimary,
+      outline = SleekBorder
+    )
+  } else {
+    lightColorScheme(
+      primary = SleekPrimary,
+      secondary = SleekPrimaryContainer,
+      tertiary = SavingGold,
+      background = SleekBg,
+      surface = SleekSurface,
+      onPrimary = SleekSurface,
+      onSecondary = SleekOnPrimaryContainer,
+      onBackground = SleekTextPrimary,
+      onSurface = SleekTextPrimary,
+      outline = SleekBorder
+    )
+  }
 
   MaterialTheme(colorScheme = colorScheme, typography = Typography, content = content)
 }

@@ -9,6 +9,7 @@ import com.example.data.*
 import com.example.api.GeminiClient
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import java.util.Locale
 
 data class ChatMessage(
     val text: String,
@@ -103,6 +104,17 @@ class FinanceViewModel(
 
     private val sharedPrefs = getApplication<Application>().getSharedPreferences("finance_prefs", android.content.Context.MODE_PRIVATE)
 
+    // Live Storage and Network/Data Usage states
+    private val _storageSize = MutableStateFlow("0.0 KB")
+    val storageSize: StateFlow<String> = _storageSize.asStateFlow()
+
+    private val _dataSize = MutableStateFlow("0.0 KB")
+    val dataSize: StateFlow<String> = _dataSize.asStateFlow()
+
+    // Map storing Category Name to Material Icon Name (e.g. "Restaurant", "Star", "Pending" during load)
+    private val _categoryIcons = MutableStateFlow<Map<String, String>>(emptyMap())
+    val categoryIcons: StateFlow<Map<String, String>> = _categoryIcons.asStateFlow()
+
     private val _userName = MutableStateFlow<String?>(null)
     val userName: StateFlow<String?> = _userName.asStateFlow()
 
@@ -126,7 +138,77 @@ class FinanceViewModel(
         
         _themeIndex.value = sharedPrefs.getInt("theme_index", 0)
         _customThemeHue.value = sharedPrefs.getFloat("custom_theme_hue", 200f)
+        
+        // Load Dark Mode setting
+        com.example.ui.theme.isDarkModeActive = sharedPrefs.getBoolean("dark_mode_active", false)
         com.example.ui.theme.updateThemeColors(_themeIndex.value, _customThemeHue.value)
+
+        // Load custom category icons
+        val iconsMap = mutableMapOf<String, String>()
+        savedCats.forEach { cat ->
+            iconsMap[cat] = sharedPrefs.getString("cat_icon_$cat", "Star") ?: "Star"
+        }
+        _categoryIcons.value = iconsMap
+
+        // Compute initial storage & network values
+        refreshUsageData()
+    }
+
+    fun toggleDarkMode() {
+        val newMode = !com.example.ui.theme.isDarkModeActive
+        com.example.ui.theme.isDarkModeActive = newMode
+        sharedPrefs.edit().putBoolean("dark_mode_active", newMode).apply()
+        // Re-trigger theme color updates so custom tinter runs
+        com.example.ui.theme.updateThemeColors(_themeIndex.value, _customThemeHue.value)
+    }
+
+    fun refreshUsageData() {
+        val context = getApplication<Application>()
+        
+        // 1. Storage Size
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            val dbFile = context.getDatabasePath("finance_database")
+            var bytes = if (dbFile.exists()) dbFile.length() else 0L
+            val dbJournal = context.getDatabasePath("finance_database-journal")
+            if (dbJournal.exists()) bytes += dbJournal.length()
+            val dbWal = context.getDatabasePath("finance_database-wal")
+            if (dbWal.exists()) bytes += dbWal.length()
+            val dbShm = context.getDatabasePath("finance_database-shm")
+            if (dbShm.exists()) bytes += dbShm.length()
+
+            fun getFolderSize(dir: java.io.File?): Long {
+                if (dir == null || !dir.exists()) return 0
+                if (dir.isFile) return dir.length()
+                var sum = 0L
+                dir.listFiles()?.forEach { sum += getFolderSize(it) }
+                return sum
+            }
+            bytes += getFolderSize(context.filesDir)
+            bytes += getFolderSize(context.cacheDir)
+
+            val kb = bytes / 1024.0
+            val formatted = if (kb < 1024.0) {
+                String.format(Locale.getDefault(), "%.2f KB", kb)
+            } else {
+                String.format(Locale.getDefault(), "%.2f MB", kb / 1024.0)
+            }
+            _storageSize.value = formatted
+        }
+
+        // 2. Data/Network Usage
+        val uid = android.os.Process.myUid()
+        val rx = android.net.TrafficStats.getUidRxBytes(uid)
+        val tx = android.net.TrafficStats.getUidTxBytes(uid)
+        val netBytes = (if (rx == android.net.TrafficStats.UNSUPPORTED.toLong()) 0L else rx) +
+                       (if (tx == android.net.TrafficStats.UNSUPPORTED.toLong()) 0L else tx)
+        
+        val netKb = netBytes / 1024.0
+        val formattedNet = if (netKb < 1024.0) {
+            String.format(Locale.getDefault(), "%.2f KB", netKb)
+        } else {
+            String.format(Locale.getDefault(), "%.2f MB", netKb / 1024.0)
+        }
+        _dataSize.value = formattedNet
     }
 
     fun updateTheme(index: Int) {
@@ -163,17 +245,53 @@ class FinanceViewModel(
         val updated = current + trimmed
         sharedPrefs.edit().putStringSet("custom_categories", updated).apply()
         _customCategories.value = updated.toList().sorted()
+
+        // Set pending icon state in-memory first
+        _categoryIcons.value = _categoryIcons.value + (trimmed to "Pending")
+
+        // Map best Material Icon in background using Gemini API
+        viewModelScope.launch {
+            val prompt = """
+                For a personal finance category named "$trimmed", what is the single best Material Icon name from this list of exact names?
+                List of options:
+                Home, ShoppingCart, DirectionsCar, Restaurant, LocalHospital, School, Work, Flight, SportsEsports, CardGiftcard, MonetizationOn, Settings, Pets, Star, Construction, Fastfood, Movie, FlightTakeoff, Coffee, ElectricBolt, WaterDrop, Checkroom, DirectionsBus, LocalGasStation, FitnessCenter, Event, Spa, Healing
+                
+                Reply with ONLY the exact name of the selected icon from the options, nothing else. No punctuation, no markdown.
+            """.trimIndent()
+            
+            val chosenIcon = try {
+                GeminiClient.getFinancialAdvice(
+                    prompt = prompt,
+                    systemPrompt = "You are a system adapter that maps category keywords to standard Material Icon names. Always output exactly one name."
+                ).trim()
+            } catch (e: Exception) {
+                "Star"
+            }
+
+            val validIcons = listOf(
+                "Home", "ShoppingCart", "DirectionsCar", "Restaurant", "LocalHospital", "School", "Work", "Flight", 
+                "SportsEsports", "CardGiftcard", "MonetizationOn", "Settings", "Pets", "Star", "Construction", "Fastfood", 
+                "Movie", "FlightTakeoff", "Coffee", "ElectricBolt", "WaterDrop", "Checkroom", "DirectionsBus", "LocalGasStation",
+                "FitnessCenter", "Event", "Spa", "Healing"
+            )
+            val finalIcon = if (validIcons.contains(chosenIcon)) chosenIcon else "Star"
+
+            // Save matched icon
+            sharedPrefs.edit().putString("cat_icon_$trimmed", finalIcon).apply()
+            _categoryIcons.value = _categoryIcons.value + (trimmed to finalIcon)
+        }
     }
 
     // DB Operations
-    fun addExpense(amount: Double, category: String, date: Long, note: String?) {
+    fun addExpense(amount: Double, category: String, date: Long, note: String?, imagePath: String? = null) {
         viewModelScope.launch {
             repository.insertExpense(
                 Expense(
                     amount = amount,
                     category = category,
                     date = date,
-                    note = note
+                    note = note,
+                    imagePath = imagePath
                 )
             )
         }

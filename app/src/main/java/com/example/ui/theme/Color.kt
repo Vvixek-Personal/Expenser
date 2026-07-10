@@ -42,6 +42,8 @@ fun getPresetThemeColors(index: Int, customHue: Float): Triple<Color, Color, Col
     }
 }
 
+var isDarkModeActive by mutableStateOf(false)
+
 fun updateThemeColors(index: Int, customHue: Float) {
     val (p, pc, opc) = getPresetThemeColors(index, customHue)
     activeSleekPrimary = p
@@ -49,11 +51,44 @@ fun updateThemeColors(index: Int, customHue: Float) {
     activeSleekOnPrimaryContainer = opc
 }
 
-val SleekBg = Color(0xFFF3F6FA)
-val SleekSurface = Color(0xFFFFFFFF)
-val SleekBorder = Color(0xFFE1E3E8)
-val SleekTextPrimary = Color(0xFF1A1C1E)
-val SleekTextSecondary = Color(0xFF44474E)
+fun mixPrimaryWithColor(primary: Color, base: Color, fraction: Float): Color {
+    return Color(
+        red = (primary.red * fraction + base.red * (1f - fraction)).coerceIn(0f, 1f),
+        green = (primary.green * fraction + base.green * (1f - fraction)).coerceIn(0f, 1f),
+        blue = (primary.blue * fraction + base.blue * (1f - fraction)).coerceIn(0f, 1f),
+        alpha = 1.0f
+    )
+}
+
+val SleekBg: Color get() = if (isDarkModeActive) {
+    mixPrimaryWithColor(activeSleekPrimary, Color(0xFF111215), 0.04f)
+} else {
+    mixPrimaryWithColor(activeSleekPrimary, Color(0xFFFAFAFC), 0.06f)
+}
+
+val SleekSurface: Color get() = if (isDarkModeActive) {
+    mixPrimaryWithColor(activeSleekPrimary, Color(0xFF1C1D21), 0.05f)
+} else {
+    Color(0xFFFFFFFF)
+}
+
+val SleekBorder: Color get() = if (isDarkModeActive) {
+    Color(0xFF2C2F36)
+} else {
+    Color(0xFFE1E3E8)
+}
+
+val SleekTextPrimary: Color get() = if (isDarkModeActive) {
+    Color(0xFFF1F1F5)
+} else {
+    Color(0xFF1A1C1E)
+}
+
+val SleekTextSecondary: Color get() = if (isDarkModeActive) {
+    Color(0xFF9CA3AF)
+} else {
+    Color(0xFF44474E)
+}
 
 val SleekNeutralLight = Color(0xFFE2E2E6)
 
