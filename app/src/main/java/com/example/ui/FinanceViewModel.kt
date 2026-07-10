@@ -223,6 +223,19 @@ class FinanceViewModel(
         com.example.ui.theme.updateThemeColors(_themeIndex.value, hue)
     }
 
+    fun clearCache(context: android.content.Context) {
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            try {
+                context.cacheDir.listFiles()?.forEach { file ->
+                    file.deleteRecursively()
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+            refreshUsageData()
+        }
+    }
+
     fun saveUserName(name: String) {
         val trimmed = name.trim()
         if (trimmed.isNotEmpty()) {
@@ -283,7 +296,7 @@ class FinanceViewModel(
     }
 
     // DB Operations
-    fun addExpense(amount: Double, category: String, date: Long, note: String?, imagePath: String? = null) {
+    fun addExpense(amount: Double, category: String, date: Long, note: String?, imagePath: String? = null, type: String = "EXPENSE") {
         viewModelScope.launch {
             repository.insertExpense(
                 Expense(
@@ -291,9 +304,25 @@ class FinanceViewModel(
                     category = category,
                     date = date,
                     note = note,
-                    imagePath = imagePath
+                    imagePath = imagePath,
+                    type = type
                 )
             )
+        }
+    }
+
+    fun deleteCustomCategory(category: String) {
+        val current = sharedPrefs.getStringSet("custom_categories", emptySet()) ?: emptySet()
+        val updated = current - category
+        sharedPrefs.edit().putStringSet("custom_categories", updated).apply()
+        _customCategories.value = updated.toList().sorted()
+        sharedPrefs.edit().remove("cat_icon_$category").apply()
+        _categoryIcons.value = _categoryIcons.value - category
+    }
+
+    fun updateSavingsGoal(goal: SavingsGoal) {
+        viewModelScope.launch {
+            repository.updateSavingsGoal(goal)
         }
     }
 

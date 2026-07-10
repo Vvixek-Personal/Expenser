@@ -87,6 +87,16 @@ fun ExpenseDetailDialog(
         }
     }
 
+    val cameraPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            cameraLauncher.launch(null)
+        } else {
+            Toast.makeText(context, "Camera permission is required to capture receipts", Toast.LENGTH_LONG).show()
+        }
+    }
+
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
@@ -170,11 +180,14 @@ fun ExpenseDetailDialog(
 
                         Spacer(modifier = Modifier.height(20.dp))
 
+                        val isIncome = expense.type == "INCOME"
+                        val prefix = if (isIncome) "+" else "-"
+                        val textColor = if (isIncome) IncomeGreen else ExpenseRed
                         Text(
-                            text = "-₹${String.format(Locale.getDefault(), "%,.2f", expense.amount)}",
+                            text = "${prefix}₹${String.format(Locale.getDefault(), "%,.2f", expense.amount)}",
                             style = MaterialTheme.typography.headlineLarge,
                             fontWeight = FontWeight.Bold,
-                            color = Color(0xFFEF4444)
+                            color = textColor
                         )
 
                         if (!expense.note.isNullOrBlank()) {
@@ -272,7 +285,14 @@ fun ExpenseDetailDialog(
                                 horizontalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
                                 Button(
-                                    onClick = { cameraLauncher.launch() },
+                                    onClick = {
+                                        val hasCamera = context.checkSelfPermission(android.Manifest.permission.CAMERA) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                                        if (hasCamera) {
+                                            cameraLauncher.launch(null)
+                                        } else {
+                                            cameraPermissionLauncher.launch(android.Manifest.permission.CAMERA)
+                                        }
+                                    },
                                     modifier = Modifier.weight(1f),
                                     colors = ButtonDefaults.buttonColors(containerColor = SleekPrimary),
                                     shape = RoundedCornerShape(12.dp)

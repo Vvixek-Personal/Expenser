@@ -38,30 +38,66 @@ object DataExporter {
             color = Color.BLACK
             textSize = 10f
         }
+        val greenBodyPaint = Paint().apply {
+            color = Color.parseColor("#16A34A")
+            textSize = 10f
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+        }
+        val redBodyPaint = Paint().apply {
+            color = Color.parseColor("#DC2626")
+            textSize = 10f
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+        }
         
-        canvas.drawText("OFFLINE LEDGER - EXPENSE REPORT", 40f, 60f, titlePaint)
+        canvas.drawText("OFFLINE LEDGER - FINANCE STATEMENT", 40f, 60f, titlePaint)
         canvas.drawText("Period: $dateRangeStr   |   Category: $categoryFilter", 40f, 85f, subTitlePaint)
         canvas.drawText("Generated on: ${SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date())}", 40f, 105f, subTitlePaint)
         
         paint.color = Color.LTGRAY
         canvas.drawLine(40f, 120f, 555f, 120f, paint)
         
-        val totalAmount = expenses.sumOf { it.amount }
-        paint.color = Color.parseColor("#F3F4F6")
-        canvas.drawRoundRect(40f, 140f, 555f, 190f, 10f, 10f, paint)
+        val totalIncome = expenses.filter { it.type == "INCOME" }.sumOf { it.amount }
+        val totalExpense = expenses.filter { it.type == "EXPENSE" }.sumOf { it.amount }
+        val netBalance = totalIncome - totalExpense
         
-        val summaryPaint = Paint().apply {
+        paint.color = Color.parseColor("#F3F4F6")
+        canvas.drawRoundRect(40f, 145f, 555f, 215f, 10f, 10f, paint)
+        
+        val summaryLabelPaint = Paint().apply {
+            color = Color.DKGRAY
+            textSize = 10f
+        }
+        val greenSummaryPaint = Paint().apply {
+            color = Color.parseColor("#16A34A")
+            textSize = 14f
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+        }
+        val redSummaryPaint = Paint().apply {
+            color = Color.parseColor("#DC2626")
+            textSize = 14f
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+        }
+        val neutralSummaryPaint = Paint().apply {
             color = Color.parseColor("#1E3A8A")
             textSize = 14f
             typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
         }
-        canvas.drawText("Total Expenses: ₹${String.format(Locale.getDefault(), "%,.2f", totalAmount)}", 60f, 170f, summaryPaint)
         
-        var y = 230f
+        canvas.drawText("Total Income", 60f, 165f, summaryLabelPaint)
+        canvas.drawText("₹${String.format(Locale.getDefault(), "%,.2f", totalIncome)}", 60f, 185f, greenSummaryPaint)
+        
+        canvas.drawText("Total Expense", 220f, 165f, summaryLabelPaint)
+        canvas.drawText("₹${String.format(Locale.getDefault(), "%,.2f", totalExpense)}", 220f, 185f, redSummaryPaint)
+        
+        canvas.drawText("Net Balance", 380f, 165f, summaryLabelPaint)
+        canvas.drawText("₹${String.format(Locale.getDefault(), "%,.2f", netBalance)}", 380f, 185f, if (netBalance >= 0) greenSummaryPaint else redSummaryPaint)
+        
+        var y = 250f
         canvas.drawText("DATE", 45f, y, headerPaint)
         canvas.drawText("CATEGORY", 140f, y, headerPaint)
         canvas.drawText("DESCRIPTION", 260f, y, headerPaint)
-        canvas.drawText("AMOUNT", 480f, y, headerPaint)
+        canvas.drawText("TYPE", 430f, y, headerPaint)
+        canvas.drawText("AMOUNT", 490f, y, headerPaint)
         
         paint.color = Color.DKGRAY
         canvas.drawLine(40f, y + 8, 555f, y + 8, paint)
@@ -73,8 +109,14 @@ object DataExporter {
             val dateStr = sdf.format(Date(item.date))
             canvas.drawText(dateStr, 45f, y, bodyPaint)
             canvas.drawText(item.category, 140f, y, bodyPaint)
-            canvas.drawText((item.note ?: "No description").take(28), 260f, y, bodyPaint)
-            canvas.drawText("₹${String.format(Locale.getDefault(), "%,.2f", item.amount)}", 480f, y, bodyPaint)
+            canvas.drawText((item.note ?: "No description").take(24), 260f, y, bodyPaint)
+            
+            val isIncome = item.type == "INCOME"
+            canvas.drawText(item.type, 430f, y, if (isIncome) greenBodyPaint else redBodyPaint)
+            
+            val prefix = if (isIncome) "+" else "-"
+            val displayAmt = "$prefix₹${String.format(Locale.getDefault(), "%,.2f", item.amount)}"
+            canvas.drawText(displayAmt, 490f, y, if (isIncome) greenBodyPaint else redBodyPaint)
             
             paint.color = Color.parseColor("#E5E7EB")
             canvas.drawLine(40f, y + 6, 555f, y + 6, paint)
@@ -127,14 +169,19 @@ object DataExporter {
             color = Color.parseColor("#9CA3AF")
             textSize = 14f
         }
-        val valuePaint = Paint().apply {
+        val greenValuePaint = Paint().apply {
             color = Color.parseColor("#10B981")
-            textSize = 28f
+            textSize = 24f
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+        }
+        val redValuePaint = Paint().apply {
+            color = Color.parseColor("#EF4444")
+            textSize = 24f
             typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
         }
         
         canvas.drawText("OFFLINE LEDGER", 50f, 70f, titlePaint)
-        canvas.drawText("Expense Statement Summary", 50f, 100f, subTitlePaint)
+        canvas.drawText("Financial Statement Summary", 50f, 100f, subTitlePaint)
         
         paint.color = Color.parseColor("#374151")
         canvas.drawRoundRect(50f, 130f, 550f, 190f, 12f, 12f, paint)
@@ -149,13 +196,27 @@ object DataExporter {
         paint.color = Color.parseColor("#1F2937")
         paint.strokeWidth = 2f
         paint.style = Paint.Style.FILL_AND_STROKE
-        canvas.drawRoundRect(50f, 220f, 550f, 320f, 16f, 16f, paint)
+        canvas.drawRoundRect(50f, 210f, 550f, 320f, 16f, 16f, paint)
         
-        canvas.drawText("Total Spend Sum:", 75f, 255f, subTitlePaint)
-        val totalAmount = expenses.sumOf { it.amount }
-        canvas.drawText("₹${String.format(Locale.getDefault(), "%,.2f", totalAmount)}", 75f, 295f, valuePaint)
+        val totalIncome = expenses.filter { it.type == "INCOME" }.sumOf { it.amount }
+        val totalExpense = expenses.filter { it.type == "EXPENSE" }.sumOf { it.amount }
+        val netBalance = totalIncome - totalExpense
         
-        canvas.drawText("Recent Filtered Items:", 50f, 365f, titlePaint.apply { textSize = 16f })
+        val labelPaint = Paint().apply {
+            color = Color.parseColor("#9CA3AF")
+            textSize = 11f
+        }
+        
+        canvas.drawText("Total Income", 75f, 240f, labelPaint)
+        canvas.drawText("₹${String.format(Locale.getDefault(), "%,.2f", totalIncome)}", 75f, 270f, greenValuePaint.apply { textSize = 16f })
+        
+        canvas.drawText("Total Expense", 230f, 240f, labelPaint)
+        canvas.drawText("₹${String.format(Locale.getDefault(), "%,.2f", totalExpense)}", 230f, 270f, redValuePaint.apply { textSize = 16f })
+        
+        canvas.drawText("Net Balance", 385f, 240f, labelPaint)
+        canvas.drawText("₹${String.format(Locale.getDefault(), "%,.2f", netBalance)}", 385f, 270f, (if (netBalance >= 0) greenValuePaint else redValuePaint).apply { textSize = 16f })
+        
+        canvas.drawText("Recent Activities:", 50f, 360f, titlePaint.apply { textSize = 16f })
         
         val itemPaint = Paint().apply {
             color = Color.WHITE
@@ -166,31 +227,40 @@ object DataExporter {
             color = Color.parseColor("#9CA3AF")
             textSize = 11f
         }
-        val itemAmountPaint = Paint().apply {
+        val itemGreenPaint = Paint().apply {
+            color = Color.parseColor("#10B981")
+            textSize = 13f
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+        }
+        val itemRedPaint = Paint().apply {
             color = Color.parseColor("#EF4444")
             textSize = 13f
             typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
         }
         
-        var y = 400f
+        var y = 390f
         val sdf = SimpleDateFormat("MMM dd, yyyy", Locale.getDefault())
         expenses.take(8).forEach { item ->
             paint.color = Color.parseColor("#1F2937")
             paint.style = Paint.Style.FILL
             canvas.drawRoundRect(50f, y, 550f, y + 42f, 8f, 8f, paint)
             
-            canvas.drawText((item.note ?: "Expense").take(22), 65f, y + 25f, itemPaint)
+            canvas.drawText((item.note ?: item.category).take(22), 65f, y + 25f, itemPaint)
             canvas.drawText("${item.category} • ${sdf.format(Date(item.date))}", 65f, y + 40f, itemSubPaint)
-            canvas.drawText("-₹${String.format(Locale.getDefault(), "%,.2f", item.amount)}", 430f, y + 26f, itemAmountPaint)
+            
+            val isIncome = item.type == "INCOME"
+            val symbol = if (isIncome) "+" else "-"
+            val amtText = "$symbol₹${String.format(Locale.getDefault(), "%,.2f", item.amount)}"
+            canvas.drawText(amtText, 430f, y + 26f, if (isIncome) itemGreenPaint else itemRedPaint)
             
             y += 48f
         }
         
         if (expenses.size > 8) {
-            canvas.drawText("... and ${expenses.size - 8} more items logged", 50f, y + 15f, subTitlePaint)
+            canvas.drawText("... and ${expenses.size - 8} more items logged", 50f, y + 15f, subTitlePaint.apply { textSize = 12f })
         }
         
-        canvas.drawText("Created with Love for Vivek & AI Offline Ledger", 50f, 770f, subTitlePaint.apply { textSize = 11f })
+        canvas.drawText("Created for Vivek & AI Offline Ledger", 50f, 770f, subTitlePaint.apply { textSize = 11f })
         
         val cachePath = File(context.cacheDir, "reports")
         cachePath.mkdirs()
