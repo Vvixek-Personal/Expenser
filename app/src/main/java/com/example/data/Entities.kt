@@ -12,7 +12,7 @@ data class Expense(
     val date: Long,
     val note: String?,
     val imagePath: String? = null,
-    val type: String = "EXPENSE" // "EXPENSE" or "INCOME"
+    val type: String = "EXPENSE"
 )
 
 @Entity(tableName = "accounts")

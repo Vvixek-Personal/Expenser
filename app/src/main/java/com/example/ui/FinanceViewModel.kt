@@ -223,19 +223,6 @@ class FinanceViewModel(
         com.example.ui.theme.updateThemeColors(_themeIndex.value, hue)
     }
 
-    fun clearCache(context: android.content.Context) {
-        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-            try {
-                context.cacheDir.listFiles()?.forEach { file ->
-                    file.deleteRecursively()
-                }
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-            refreshUsageData()
-        }
-    }
-
     fun saveUserName(name: String) {
         val trimmed = name.trim()
         if (trimmed.isNotEmpty()) {
@@ -295,6 +282,62 @@ class FinanceViewModel(
         }
     }
 
+    fun deleteCustomCategory(category: String) {
+        val trimmed = category.trim()
+        val current = sharedPrefs.getStringSet("custom_categories", emptySet()) ?: emptySet()
+        val updated = current - trimmed
+        sharedPrefs.edit()
+            .putStringSet("custom_categories", updated)
+            .remove("cat_icon_$trimmed")
+            .apply()
+        _customCategories.value = updated.toList().sorted()
+        _categoryIcons.value = _categoryIcons.value - trimmed
+        
+        // Update all existing expenses/transactions that belong to the deleted category to "Others"
+        viewModelScope.launch {
+            val allExpensesList = repository.allExpenses.first()
+            allExpensesList.forEach { exp ->
+                if (exp.category == trimmed) {
+                    repository.updateExpense(exp.copy(category = "Others"))
+                }
+            }
+        }
+    }
+
+    fun renameCustomCategory(oldName: String, newName: String) {
+        val trimmedOld = oldName.trim()
+        val trimmedNew = newName.trim()
+        if (trimmedNew.isEmpty() || trimmedOld == trimmedNew) return
+        
+        val current = sharedPrefs.getStringSet("custom_categories", emptySet()) ?: emptySet()
+        if (current.contains(trimmedOld)) {
+            val updated = current - trimmedOld + trimmedNew
+            val savedIcon = sharedPrefs.getString("cat_icon_$trimmedOld", "Star") ?: "Star"
+            sharedPrefs.edit()
+                .putStringSet("custom_categories", updated)
+                .remove("cat_icon_$trimmedOld")
+                .putString("cat_icon_$trimmedNew", savedIcon)
+                .apply()
+            _customCategories.value = updated.toList().sorted()
+            
+            // Update in categoryIcons map
+            val updatedIcons = _categoryIcons.value.toMutableMap()
+            updatedIcons.remove(trimmedOld)
+            updatedIcons[trimmedNew] = savedIcon
+            _categoryIcons.value = updatedIcons
+            
+            // Update all existing expenses/transactions that belong to the old category to the new category name
+            viewModelScope.launch {
+                val allExpensesList = repository.allExpenses.first()
+                allExpensesList.forEach { exp ->
+                    if (exp.category == trimmedOld) {
+                        repository.updateExpense(exp.copy(category = trimmedNew))
+                    }
+                }
+            }
+        }
+    }
+
     // DB Operations
     fun addExpense(amount: Double, category: String, date: Long, note: String?, imagePath: String? = null, type: String = "EXPENSE") {
         viewModelScope.launch {
@@ -308,21 +351,6 @@ class FinanceViewModel(
                     type = type
                 )
             )
-        }
-    }
-
-    fun deleteCustomCategory(category: String) {
-        val current = sharedPrefs.getStringSet("custom_categories", emptySet()) ?: emptySet()
-        val updated = current - category
-        sharedPrefs.edit().putStringSet("custom_categories", updated).apply()
-        _customCategories.value = updated.toList().sorted()
-        sharedPrefs.edit().remove("cat_icon_$category").apply()
-        _categoryIcons.value = _categoryIcons.value - category
-    }
-
-    fun updateSavingsGoal(goal: SavingsGoal) {
-        viewModelScope.launch {
-            repository.updateSavingsGoal(goal)
         }
     }
 
