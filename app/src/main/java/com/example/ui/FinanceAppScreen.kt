@@ -6,6 +6,8 @@ import androidx.compose.foundation.*
 import androidx.compose.foundation.lazy.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -383,6 +385,7 @@ fun FinanceAppScreen(viewModel: FinanceViewModel) {
                     )
                     Screen.Calendar -> CalendarTab(
                         expenses = expenses,
+                        categoryIcons = categoryIcons,
                         onAddExpenseForDate = { date ->
                             prefilledDateForAddDialog = date
                             showAddExpenseDialog = true
@@ -3195,6 +3198,7 @@ fun EditExpenseDialog(
 @Composable
 fun CalendarTab(
     expenses: List<Expense>,
+    categoryIcons: Map<String, String> = emptyMap(),
     onAddExpenseForDate: (Long) -> Unit,
     onEditExpense: (Expense) -> Unit,
     onDeleteExpense: (Expense) -> Unit,
@@ -3202,6 +3206,7 @@ fun CalendarTab(
 ) {
     val today = Calendar.getInstance()
     var navigatedCalendar by remember { mutableStateOf(Calendar.getInstance()) }
+    var swipeDragAmount by remember { mutableStateOf(0f) }
 
     val activeYear = navigatedCalendar.get(Calendar.YEAR)
     val activeMonth = navigatedCalendar.get(Calendar.MONTH)
@@ -3290,7 +3295,34 @@ fun CalendarTab(
             shape = RoundedCornerShape(24.dp),
             colors = CardDefaults.cardColors(containerColor = SleekSurface),
             border = BorderStroke(1.dp, SleekBorder),
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier
+                .fillMaxWidth()
+                .pointerInput(canGoForward) {
+                    detectHorizontalDragGestures(
+                        onDragStart = { swipeDragAmount = 0f },
+                        onDragEnd = {
+                            if (swipeDragAmount > 100f) {
+                                navigatedCalendar = Calendar.getInstance().apply {
+                                    timeInMillis = navigatedCalendar.timeInMillis
+                                    add(Calendar.MONTH, -1)
+                                }
+                                selectedDayOfMonth = 1
+                            } else if (swipeDragAmount < -100f) {
+                                if (canGoForward) {
+                                    navigatedCalendar = Calendar.getInstance().apply {
+                                        timeInMillis = navigatedCalendar.timeInMillis
+                                        add(Calendar.MONTH, 1)
+                                    }
+                                    selectedDayOfMonth = 1
+                                }
+                            }
+                        },
+                        onHorizontalDrag = { change, dragAmount ->
+                            change.consume()
+                            swipeDragAmount += dragAmount
+                        }
+                    )
+                }
         ) {
             Column(
                 modifier = Modifier
@@ -3466,7 +3498,7 @@ fun CalendarTab(
         ) {
             val selectedDateStr = SimpleDateFormat("MMM dd, yyyy", Locale.getDefault()).format(Date(selectedDateMillis))
             Text(
-                text = "Expenses on $selectedDateStr",
+                text = "Transactions on $selectedDateStr",
                 style = MaterialTheme.typography.titleMedium,
                 color = SleekTextPrimary,
                 fontWeight = FontWeight.Bold
@@ -3495,7 +3527,7 @@ fun CalendarTab(
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = "No expenses logged for this day.",
+                    text = "No transactions logged for this day.",
                     color = SleekTextSecondary,
                     style = MaterialTheme.typography.bodyMedium
                 )
@@ -3503,6 +3535,19 @@ fun CalendarTab(
         } else {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 selectedDayExpenses.forEach { expense ->
+                    val isIncome = expense.type == "INCOME"
+                    val catColor = if (isIncome) {
+                        when (expense.category) {
+                            "Salary" -> Color(0xFF10B981)
+                            "Freelance" -> Color(0xFF0D9488)
+                            "Investments" -> Color(0xFF3B82F6)
+                            "Gifts" -> Color(0xFFEC4899)
+                            else -> Color(0xFF10B981)
+                        }
+                    } else {
+                        categoryColors[expense.category] ?: SleekPrimary
+                    }
+
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -3513,7 +3558,6 @@ fun CalendarTab(
                             .padding(14.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        val catColor = categoryColors[expense.category] ?: SleekPrimary
                         Box(
                             modifier = Modifier
                                 .size(36.dp)
@@ -3521,11 +3565,9 @@ fun CalendarTab(
                                 .background(catColor.copy(alpha = 0.15f)),
                             contentAlignment = Alignment.Center
                         ) {
-                            Icon(
-                                imageVector = getCategoryIcon(expense.category),
-                                contentDescription = expense.category,
-                                tint = catColor,
-                                modifier = Modifier.size(18.dp)
+                            Text(
+                                text = getCategoryEmoji(expense.category, categoryIcons),
+                                fontSize = 16.sp
                             )
                         }
 
@@ -3533,7 +3575,7 @@ fun CalendarTab(
 
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = expense.note ?: "Expense",
+                                text = expense.note ?: (if (isIncome) "Income" else "Expense"),
                                 style = MaterialTheme.typography.titleSmall,
                                 color = SleekTextPrimary,
                                 fontWeight = FontWeight.Bold,
@@ -3548,9 +3590,9 @@ fun CalendarTab(
                         }
 
                         Text(
-                            text = String.format("-₹%,.2f", expense.amount),
+                            text = String.format("%s₹%,.2f", if (isIncome) "+" else "-", expense.amount),
                             style = MaterialTheme.typography.bodyMedium,
-                            color = ExpenseRed,
+                            color = if (isIncome) Color(0xFF10B981) else ExpenseRed,
                             fontWeight = FontWeight.Bold
                         )
 
