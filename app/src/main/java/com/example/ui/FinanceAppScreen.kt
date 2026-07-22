@@ -3864,6 +3864,262 @@ fun AdjustBudgetDialog(
 }
 
 @Composable
+fun DateRangeReportModalDialog(
+    initialStartDate: Long,
+    initialEndDate: Long,
+    onDismiss: () -> Unit,
+    onConfirm: (startDate: Long, endDate: Long) -> Unit
+) {
+    var startDate by remember { mutableStateOf(initialStartDate) }
+    var endDate by remember { mutableStateOf(initialEndDate) }
+    val context = LocalContext.current
+    val dateSdf = remember { SimpleDateFormat("dd MMM yyyy", Locale.getDefault()) }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            colors = CardDefaults.cardColors(containerColor = SleekSurface),
+            border = BorderStroke(1.5.dp, SleekPrimary),
+            shape = RoundedCornerShape(24.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag("date_range_picker_modal")
+        ) {
+            Column(
+                modifier = Modifier.padding(20.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            modifier = Modifier
+                                .size(38.dp)
+                                .clip(CircleShape)
+                                .background(SleekPrimary.copy(alpha = 0.15f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                Icons.Default.DateRange,
+                                contentDescription = null,
+                                tint = SleekPrimary,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column {
+                            Text(
+                                "Select Report Period",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = SleekTextPrimary,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                "Pick Start & End Date for report",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = SleekTextSecondary,
+                                fontSize = 11.sp
+                            )
+                        }
+                    }
+                    IconButton(onClick = onDismiss, modifier = Modifier.size(28.dp)) {
+                        Icon(Icons.Default.Close, contentDescription = "Close", tint = SleekTextSecondary)
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(18.dp))
+
+                // Start Date Picker Field
+                Text(
+                    "Start Date",
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = SleekTextSecondary
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = SleekSurface),
+                    border = BorderStroke(1.dp, SleekBorder),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            val cal = Calendar.getInstance().apply { timeInMillis = if (startDate == 0L) System.currentTimeMillis() else startDate }
+                            android.app.DatePickerDialog(
+                                context,
+                                { _, year, month, day ->
+                                    val selCal = Calendar.getInstance().apply {
+                                        set(year, month, day, 0, 0, 0)
+                                        set(Calendar.MILLISECOND, 0)
+                                    }
+                                    startDate = selCal.timeInMillis
+                                },
+                                cal.get(Calendar.YEAR),
+                                cal.get(Calendar.MONTH),
+                                cal.get(Calendar.DAY_OF_MONTH)
+                            ).show()
+                        }
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 14.dp, vertical = 12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.CalendarMonth, contentDescription = null, tint = SleekPrimary, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Text(
+                                text = if (startDate == 0L) "All Time / Beginning" else dateSdf.format(Date(startDate)),
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = SleekTextPrimary
+                            )
+                        }
+                        Text("Pick Date", fontSize = 12.sp, color = SleekPrimary, fontWeight = FontWeight.SemiBold)
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // End Date Picker Field
+                Text(
+                    "End Date",
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = SleekTextSecondary
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = SleekSurface),
+                    border = BorderStroke(1.dp, SleekBorder),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            val cal = Calendar.getInstance().apply { timeInMillis = endDate }
+                            android.app.DatePickerDialog(
+                                context,
+                                { _, year, month, day ->
+                                    val selCal = Calendar.getInstance().apply {
+                                        set(year, month, day, 23, 59, 59)
+                                        set(Calendar.MILLISECOND, 999)
+                                    }
+                                    endDate = selCal.timeInMillis
+                                },
+                                cal.get(Calendar.YEAR),
+                                cal.get(Calendar.MONTH),
+                                cal.get(Calendar.DAY_OF_MONTH)
+                            ).show()
+                        }
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 14.dp, vertical = 12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.CalendarMonth, contentDescription = null, tint = SleekPrimary, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Text(
+                                text = dateSdf.format(Date(endDate)),
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = SleekTextPrimary
+                            )
+                        }
+                        Text("Pick Date", fontSize = 12.sp, color = SleekPrimary, fontWeight = FontWeight.SemiBold)
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Presets
+                Text("Quick Selection", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold, color = SleekTextSecondary)
+                Spacer(modifier = Modifier.height(6.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    val presets = listOf("7 Days", "30 Days", "This Month", "All Time")
+                    presets.forEach { preset ->
+                        FilterChip(
+                            selected = false,
+                            onClick = {
+                                val now = Calendar.getInstance()
+                                when (preset) {
+                                    "7 Days" -> {
+                                        endDate = now.timeInMillis
+                                        startDate = Calendar.getInstance().apply {
+                                            add(Calendar.DAY_OF_MONTH, -7)
+                                            set(Calendar.HOUR_OF_DAY, 0)
+                                            set(Calendar.MINUTE, 0)
+                                        }.timeInMillis
+                                    }
+                                    "30 Days" -> {
+                                        endDate = now.timeInMillis
+                                        startDate = Calendar.getInstance().apply {
+                                            add(Calendar.DAY_OF_MONTH, -30)
+                                            set(Calendar.HOUR_OF_DAY, 0)
+                                            set(Calendar.MINUTE, 0)
+                                        }.timeInMillis
+                                    }
+                                    "This Month" -> {
+                                        endDate = now.timeInMillis
+                                        startDate = Calendar.getInstance().apply {
+                                            set(Calendar.DAY_OF_MONTH, 1)
+                                            set(Calendar.HOUR_OF_DAY, 0)
+                                            set(Calendar.MINUTE, 0)
+                                        }.timeInMillis
+                                    }
+                                    "All Time" -> {
+                                        endDate = now.timeInMillis
+                                        startDate = 0L
+                                    }
+                                }
+                            },
+                            label = { Text(preset, fontSize = 9.sp) },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(20.dp))
+
+                // Action Buttons
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = onDismiss,
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(12.dp),
+                        border = BorderStroke(1.dp, SleekBorder)
+                    ) {
+                        Text("Cancel", color = SleekTextPrimary)
+                    }
+
+                    Button(
+                        onClick = { onConfirm(startDate, endDate) },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = SleekPrimary)
+                    ) {
+                        Text("Apply Range", color = Color.White, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
 fun SidebarDrawerContent(
     viewModel: FinanceViewModel,
     onCloseDrawer: () -> Unit
@@ -3874,6 +4130,8 @@ fun SidebarDrawerContent(
     val storageSize by viewModel.storageSize.collectAsStateWithLifecycle()
     val dataSize by viewModel.dataSize.collectAsStateWithLifecycle()
     val filteredExpenses by viewModel.filteredExpenses.collectAsStateWithLifecycle()
+    val allExpensesList by viewModel.expenses.collectAsStateWithLifecycle()
+    val allCategoriesList by viewModel.allCategories.collectAsStateWithLifecycle()
     
     var showEditNameDialog by remember { mutableStateOf(false) }
 
@@ -4187,9 +4445,33 @@ fun SidebarDrawerContent(
             modifier = Modifier.padding(bottom = 12.dp)
         )
 
-        var exportCategoryFilter by remember { mutableStateOf("All Categories") }
-        var exportRangeWeeks by remember { mutableStateOf(4f) }
-        var exportCatExpanded by remember { mutableStateOf(false) }
+        var exportTransactionType by remember { mutableStateOf("ALL") }
+
+        val defaultStart = remember {
+            Calendar.getInstance().apply {
+                add(Calendar.DAY_OF_MONTH, -30)
+                set(Calendar.HOUR_OF_DAY, 0)
+                set(Calendar.MINUTE, 0)
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
+            }.timeInMillis
+        }
+        val defaultEnd = remember {
+            Calendar.getInstance().apply {
+                set(Calendar.HOUR_OF_DAY, 23)
+                set(Calendar.MINUTE, 59)
+                set(Calendar.SECOND, 59)
+                set(Calendar.MILLISECOND, 999)
+            }.timeInMillis
+        }
+
+        var exportStartDate by remember { mutableStateOf(defaultStart) }
+        var exportEndDate by remember { mutableStateOf(defaultEnd) }
+        var selectedExportCategories by remember { mutableStateOf<Set<String>>(emptySet()) }
+        var showDateRangeModal by remember { mutableStateOf(false) }
+
+        val context = LocalContext.current
+        val dateSdf = remember { SimpleDateFormat("dd MMM yyyy", Locale.getDefault()) }
 
         Card(
             colors = CardDefaults.cardColors(containerColor = SleekSurface),
@@ -4201,74 +4483,57 @@ fun SidebarDrawerContent(
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Text(
-                    "Select Ledger Filters",
+                    "Export & Filter Options",
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.Bold,
                     color = SleekTextPrimary
                 )
                 Spacer(modifier = Modifier.height(12.dp))
 
+                // 1. Transaction Type Selection
                 Text(
-                    "Filter range: Past ${exportRangeWeeks.toInt()} Weeks",
+                    "Transaction Type",
                     style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.SemiBold,
                     color = SleekTextSecondary
                 )
-                Slider(
-                    value = exportRangeWeeks,
-                    onValueChange = { exportRangeWeeks = it },
-                    valueRange = 1f..26f,
-                    colors = SliderDefaults.colors(
-                        thumbColor = SleekPrimary,
-                        activeTrackColor = SleekPrimary,
-                        inactiveTrackColor = SleekBorder
-                    ),
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                Text(
-                    "Category Filter",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = SleekTextSecondary
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Box(modifier = Modifier.fillMaxWidth()) {
-                    OutlinedButton(
-                        onClick = { exportCatExpanded = true },
-                        border = BorderStroke(1.dp, SleekBorder),
-                        shape = RoundedCornerShape(10.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(exportCategoryFilter, color = SleekTextPrimary, fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                            Icon(Icons.Default.ArrowDropDown, contentDescription = null, tint = SleekTextSecondary)
+                Spacer(modifier = Modifier.height(6.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    val types = listOf(
+                        "ALL" to "Full Transactions",
+                        "INCOME" to "Only Income",
+                        "EXPENSE" to "Only Expense"
+                    )
+                    types.forEach { (typeKey, label) ->
+                        val isSelected = exportTransactionType == typeKey
+                        val activeColor = when (typeKey) {
+                            "INCOME" -> Color(0xFF10B981)
+                            "EXPENSE" -> ExpenseRed
+                            else -> SleekPrimary
                         }
-                    }
-                    DropdownMenu(
-                        expanded = exportCatExpanded,
-                        onDismissRequest = { exportCatExpanded = false },
-                        modifier = Modifier.background(SleekSurface)
-                    ) {
-                        DropdownMenuItem(
-                            text = { Text("All Categories", color = SleekTextPrimary, fontWeight = FontWeight.Bold) },
-                            onClick = {
-                                exportCategoryFilter = "All Categories"
-                                exportCatExpanded = false
-                            }
-                        )
-                        val catsList = listOf("Food", "Travel", "Rent", "Utilities", "Entertainment", "Shopping", "Persons", "Others")
-                        catsList.forEach { c ->
-                            DropdownMenuItem(
-                                text = { Text(c, color = SleekTextPrimary) },
-                                onClick = {
-                                    exportCategoryFilter = c
-                                    exportCatExpanded = false
-                                }
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(if (isSelected) activeColor.copy(alpha = 0.15f) else SleekSurface)
+                                .border(
+                                    width = if (isSelected) 1.5.dp else 1.dp,
+                                    color = if (isSelected) activeColor else SleekBorder,
+                                    shape = RoundedCornerShape(10.dp)
+                                )
+                                .clickable { exportTransactionType = typeKey }
+                                .padding(vertical = 10.dp, horizontal = 4.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = label,
+                                fontSize = 11.sp,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                color = if (isSelected) activeColor else SleekTextPrimary,
+                                textAlign = TextAlign.Center
                             )
                         }
                     }
@@ -4276,55 +4541,258 @@ fun SidebarDrawerContent(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
+                // 2. Selected Time Period Card triggering Date Range Modal
+                Text(
+                    "Selected Time Period",
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = SleekTextSecondary
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = SleekPrimaryContainer.copy(alpha = 0.12f)),
+                    border = BorderStroke(2.dp, SleekPrimary),
+                    shape = RoundedCornerShape(14.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { showDateRangeModal = true }
+                        .testTag("open_date_range_modal_button")
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 14.dp, vertical = 12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(
+                                Icons.Default.DateRange,
+                                contentDescription = null,
+                                tint = SleekPrimary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column {
+                                Text(
+                                    text = if (exportStartDate == 0L) "All Time  —  ${dateSdf.format(Date(exportEndDate))}"
+                                           else "${dateSdf.format(Date(exportStartDate))}  —  ${dateSdf.format(Date(exportEndDate))}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = SleekTextPrimary
+                                )
+                                Text(
+                                    text = "Tap to change Start & End Date",
+                                    fontSize = 11.sp,
+                                    color = SleekPrimary,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                        }
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(SleekPrimary.copy(alpha = 0.15f))
+                                .padding(horizontal = 10.dp, vertical = 6.dp)
+                        ) {
+                            Text(
+                                text = "Select Dates",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = SleekPrimary
+                            )
+                        }
+                    }
+                }
+
+                if (showDateRangeModal) {
+                    DateRangeReportModalDialog(
+                        initialStartDate = exportStartDate,
+                        initialEndDate = exportEndDate,
+                        onDismiss = { showDateRangeModal = false },
+                        onConfirm = { selStart, selEnd ->
+                            exportStartDate = selStart
+                            exportEndDate = selEnd
+                            showDateRangeModal = false
+                        }
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // 3. Category Filter Section (Multi-selection for 1, 2, 3, 4, or All categories)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        "Category Filter",
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = SleekTextSecondary
+                    )
+                    Text(
+                        text = if (selectedExportCategories.isEmpty()) "All Categories" else "${selectedExportCategories.size} Selected",
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.Bold,
+                        color = SleekPrimary
+                    )
+                }
+                Spacer(modifier = Modifier.height(6.dp))
+
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    val isAllSelected = selectedExportCategories.isEmpty()
+                    FilterChip(
+                        selected = isAllSelected,
+                        onClick = { selectedExportCategories = emptySet() },
+                        label = { Text("All Categories", fontSize = 11.sp, fontWeight = if (isAllSelected) FontWeight.Bold else FontWeight.Normal) },
+                        leadingIcon = if (isAllSelected) {
+                            { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(12.dp)) }
+                        } else null
+                    )
+
+                    val combinedCats = (allCategoriesList + listOf("Food", "Travel", "Rent", "Utilities", "Entertainment", "Shopping", "Persons", "Salary", "Freelance", "Others")).distinct()
+                    combinedCats.forEach { cat ->
+                        val isCatSelected = selectedExportCategories.contains(cat)
+                        FilterChip(
+                            selected = isCatSelected,
+                            onClick = {
+                                selectedExportCategories = if (isCatSelected) {
+                                    selectedExportCategories - cat
+                                } else {
+                                    selectedExportCategories + cat
+                                }
+                            },
+                            label = { Text(cat, fontSize = 11.sp) },
+                            leadingIcon = if (isCatSelected) {
+                                { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(12.dp)) }
+                            } else null
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(20.dp))
+
+                // Export Buttons Row
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    val context = LocalContext.current
                     Button(
                         onClick = {
-                            val limitTime = System.currentTimeMillis() - (exportRangeWeeks.toInt() * 7 * 24 * 3600 * 1000L)
-                            val filteredList = filteredExpenses.filter {
-                                it.date >= limitTime && (exportCategoryFilter == "All Categories" || it.category == exportCategoryFilter)
+                            val startCal = Calendar.getInstance().apply {
+                                timeInMillis = exportStartDate
+                                set(Calendar.HOUR_OF_DAY, 0)
+                                set(Calendar.MINUTE, 0)
+                                set(Calendar.SECOND, 0)
+                                set(Calendar.MILLISECOND, 0)
                             }
+                            val endCal = Calendar.getInstance().apply {
+                                timeInMillis = exportEndDate
+                                set(Calendar.HOUR_OF_DAY, 23)
+                                set(Calendar.MINUTE, 59)
+                                set(Calendar.SECOND, 59)
+                                set(Calendar.MILLISECOND, 999)
+                            }
+
+                            val filteredList = allExpensesList.filter { item ->
+                                val inDateRange = item.date in startCal.timeInMillis..endCal.timeInMillis
+                                val matchesType = when (exportTransactionType) {
+                                    "INCOME" -> item.type == "INCOME"
+                                    "EXPENSE" -> item.type != "INCOME"
+                                    else -> true
+                                }
+                                val matchesCat = if (selectedExportCategories.isEmpty()) true else selectedExportCategories.contains(item.category)
+                                inDateRange && matchesType && matchesCat
+                            }.sortedByDescending { it.date }
+
+                            val dateRangeLabel = "${dateSdf.format(Date(startCal.timeInMillis))} - ${dateSdf.format(Date(endCal.timeInMillis))}"
+                            val typeLabel = when (exportTransactionType) {
+                                "INCOME" -> "Only Income"
+                                "EXPENSE" -> "Only Expense"
+                                else -> "Full Transactions"
+                            }
+                            val catLabel = if (selectedExportCategories.isEmpty()) "All Categories" else selectedExportCategories.joinToString(", ")
+
                             DataExporter.sharePdfReport(
                                 context = context,
                                 expenses = filteredList,
-                                dateRangeStr = "Past ${exportRangeWeeks.toInt()} Weeks",
-                                categoryFilter = exportCategoryFilter
+                                dateRangeStr = dateRangeLabel,
+                                typeFilterStr = typeLabel,
+                                categoryFilterStr = catLabel
                             )
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = SleekPrimary),
-                        shape = RoundedCornerShape(10.dp),
+                        shape = RoundedCornerShape(12.dp),
                         modifier = Modifier.weight(1f),
-                        contentPadding = PaddingValues(vertical = 10.dp)
+                        contentPadding = PaddingValues(vertical = 12.dp)
                     ) {
                         Icon(Icons.Default.PictureAsPdf, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("Share PDF", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Share PDF", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                     }
 
                     Button(
                         onClick = {
-                            val limitTime = System.currentTimeMillis() - (exportRangeWeeks.toInt() * 7 * 24 * 3600 * 1000L)
-                            val filteredList = filteredExpenses.filter {
-                                it.date >= limitTime && (exportCategoryFilter == "All Categories" || it.category == exportCategoryFilter)
+                            val startCal = Calendar.getInstance().apply {
+                                timeInMillis = exportStartDate
+                                set(Calendar.HOUR_OF_DAY, 0)
+                                set(Calendar.MINUTE, 0)
+                                set(Calendar.SECOND, 0)
+                                set(Calendar.MILLISECOND, 0)
                             }
+                            val endCal = Calendar.getInstance().apply {
+                                timeInMillis = exportEndDate
+                                set(Calendar.HOUR_OF_DAY, 23)
+                                set(Calendar.MINUTE, 59)
+                                set(Calendar.SECOND, 59)
+                                set(Calendar.MILLISECOND, 999)
+                            }
+
+                            val filteredList = allExpensesList.filter { item ->
+                                val inDateRange = item.date in startCal.timeInMillis..endCal.timeInMillis
+                                val matchesType = when (exportTransactionType) {
+                                    "INCOME" -> item.type == "INCOME"
+                                    "EXPENSE" -> item.type != "INCOME"
+                                    else -> true
+                                }
+                                val matchesCat = if (selectedExportCategories.isEmpty()) true else selectedExportCategories.contains(item.category)
+                                inDateRange && matchesType && matchesCat
+                            }.sortedByDescending { it.date }
+
+                            val dateRangeLabel = "${dateSdf.format(Date(startCal.timeInMillis))} - ${dateSdf.format(Date(endCal.timeInMillis))}"
+                            val typeLabel = when (exportTransactionType) {
+                                "INCOME" -> "Only Income"
+                                "EXPENSE" -> "Only Expense"
+                                else -> "Full Transactions"
+                            }
+                            val catLabel = if (selectedExportCategories.isEmpty()) "All Categories" else selectedExportCategories.joinToString(", ")
+
                             DataExporter.shareImageReport(
                                 context = context,
                                 expenses = filteredList,
-                                dateRangeStr = "Past ${exportRangeWeeks.toInt()} Weeks",
-                                categoryFilter = exportCategoryFilter
+                                dateRangeStr = dateRangeLabel,
+                                typeFilterStr = typeLabel,
+                                categoryFilterStr = catLabel
                             )
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = SleekPrimaryContainer),
-                        shape = RoundedCornerShape(10.dp),
+                        shape = RoundedCornerShape(12.dp),
                         modifier = Modifier.weight(1f),
-                        contentPadding = PaddingValues(vertical = 10.dp)
+                        contentPadding = PaddingValues(vertical = 12.dp)
                     ) {
                         Icon(Icons.Default.Photo, contentDescription = null, tint = SleekPrimary, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("Share Card", color = SleekPrimary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Share Card", color = SleekPrimary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                     }
                 }
             }
