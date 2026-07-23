@@ -1896,110 +1896,11 @@ fun AnalyticsTab(viewModel: FinanceViewModel) {
 
                 Spacer(modifier = Modifier.height(24.dp))
 
-                if (distributionTotal == 0.0) {
-                    Box(
-                        modifier = Modifier
-                            .height(180.dp)
-                            .fillMaxWidth(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "No spending in this period.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = SleekTextSecondary
-                        )
-                    }
-                } else {
-                    // Custom Donut/Pie Chart drawn on Canvas
-                    Box(
-                        modifier = Modifier.size(200.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Canvas(modifier = Modifier.fillMaxSize()) {
-                            var startAngle = -90f
-                            categorySums.forEach { (cat, sum) ->
-                                val sweepAngle = ((sum / distributionTotal) * 360f).toFloat()
-                                val color = categoryColors[cat] ?: SleekPrimary
-                                drawArc(
-                                    color = color,
-                                    startAngle = startAngle,
-                                    sweepAngle = sweepAngle,
-                                    useCenter = false,
-                                    size = Size(size.width, size.height),
-                                    style = Stroke(width = 30.dp.toPx(), cap = StrokeCap.Round)
-                                )
-                                startAngle += sweepAngle
-                            }
-                        }
-
-                        // Text in center of Donut Chart
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(
-                                text = "Total Spent",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = SleekTextSecondary
-                            )
-                            Text(
-                                text = String.format("₹%,.0f", distributionTotal),
-                                style = MaterialTheme.typography.titleLarge,
-                                color = SleekTextPrimary,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(24.dp))
-
-                    // Legend & category list
-                    categorySums.forEach { (cat, sum) ->
-                        val catColor = categoryColors[cat] ?: SleekPrimary
-                        val catPct = (sum / distributionTotal) * 100
-
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 4.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(12.dp)
-                                        .clip(CircleShape)
-                                        .background(catColor)
-                                )
-                                Text(
-                                    text = cat,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = SleekTextPrimary,
-                                    fontWeight = FontWeight.Medium
-                                )
-                            }
-                            Row(
-                                horizontalArrangement = Arrangement.spacedBy(16.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = String.format("₹%,.2f", sum),
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = SleekTextPrimary,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Text(
-                                    text = String.format("%.1f%%", catPct),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = SleekTextSecondary,
-                                    modifier = Modifier.width(48.dp),
-                                    textAlign = TextAlign.End
-                                )
-                            }
-                        }
-                    }
-                }
+                CategoryExpensePieChart(
+                    categoryExpenses = categorySums,
+                    categoryColors = categoryColors,
+                    chartRadius = 220.dp
+                )
             }
         }
 
