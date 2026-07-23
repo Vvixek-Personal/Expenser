@@ -1,6 +1,7 @@
 package com.example.ui
 
 import androidx.compose.animation.*
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.*
@@ -824,39 +825,88 @@ fun DashboardTab(
         )
         Spacer(modifier = Modifier.height(8.dp))
 
+        val categorySummaryItems = remember(thisMonthExpenses, expenses) {
+            val sourceList = if (thisMonthExpenses.isNotEmpty()) thisMonthExpenses else expenses
+            val grouped = sourceList.groupBy { it.category }
+                .mapValues { (_, list) ->
+                    val total = list.sumOf { it.amount }
+                    val count = list.size
+                    Pair(total, count)
+                }
+
+            if (grouped.isNotEmpty()) {
+                grouped.entries.sortedByDescending { it.value.first }.take(4)
+            } else {
+                listOf("Food", "Travel", "Rent", "Persons").map { cat ->
+                    java.util.AbstractMap.SimpleEntry(cat, Pair(0.0, 0))
+                }
+            }
+        }
+
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            val uniqueCats = listOf("Food", "Travel", "Rent", "Persons")
-            uniqueCats.forEach { cat ->
-                val catSum = thisMonthExpenses.filter { it.category == cat }.sumOf { it.amount }
+            categorySummaryItems.forEachIndexed { index, entry ->
+                val cat = entry.key
+                val (catSum, catCount) = entry.value
                 val catColor = categoryColors[cat] ?: SleekPrimary
+                val isTopCategory = (index == 0 && catSum > 0)
+
                 Card(
                     shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = SleekSurface),
-                    border = BorderStroke(1.dp, SleekBorder),
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (isTopCategory) catColor.copy(alpha = 0.15f) else SleekSurface
+                    ),
+                    border = BorderStroke(
+                        width = if (isTopCategory) 1.5.dp else 1.dp,
+                        color = if (isTopCategory) catColor else SleekBorder
+                    ),
                     modifier = Modifier.weight(1f)
                 ) {
                     Column(
-                        modifier = Modifier.padding(12.dp),
+                        modifier = Modifier.padding(10.dp),
                         horizontalAlignment = Alignment.Start
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .size(28.dp)
-                                .clip(CircleShape)
-                                .background(catColor.copy(alpha = 0.15f)),
-                            contentAlignment = Alignment.Center
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(
-                                imageVector = getCategoryIcon(cat),
-                                contentDescription = cat,
-                                tint = catColor,
-                                modifier = Modifier.size(14.dp)
-                            )
+                            Box(
+                                modifier = Modifier
+                                    .size(28.dp)
+                                    .clip(CircleShape)
+                                    .background(catColor.copy(alpha = 0.2f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = getCategoryIcon(cat),
+                                    contentDescription = cat,
+                                    tint = catColor,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                            }
+
+                            if (isTopCategory) {
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(catColor)
+                                        .padding(horizontal = 5.dp, vertical = 2.dp)
+                                ) {
+                                    Text(
+                                        text = "Top",
+                                        fontSize = 9.sp,
+                                        color = Color.White,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
                         }
-                        Spacer(modifier = Modifier.height(4.dp))
+
+                        Spacer(modifier = Modifier.height(6.dp))
+
                         Text(
                             text = cat,
                             style = MaterialTheme.typography.labelSmall,
@@ -864,12 +914,23 @@ fun DashboardTab(
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
+
                         Text(
                             text = String.format("₹%,.0f", catSum),
                             style = MaterialTheme.typography.titleSmall,
                             color = SleekTextPrimary,
-                            fontWeight = FontWeight.Bold
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 12.sp
                         )
+
+                        if (catCount > 0) {
+                            Text(
+                                text = "$catCount txns",
+                                fontSize = 9.sp,
+                                color = if (isTopCategory) catColor else SleekTextSecondary,
+                                fontWeight = if (isTopCategory) FontWeight.Bold else FontWeight.Normal
+                            )
+                        }
                     }
                 }
             }
@@ -877,38 +938,49 @@ fun DashboardTab(
 
         Spacer(modifier = Modifier.height(20.dp))
 
-        // Budget Limit & Goal Section (Color coded: Green for Good, Red for Alert with Faded BG)
-        val budgetRatio = if (monthlyBudget > 0) (thisMonthTotal / monthlyBudget).toFloat() else 1.0f
+        // Budget Limit & Goal Section (Progression bar transitions green->red with subtle faded bg)
+        val budgetRatio = if (monthlyBudget > 0) (thisMonthTotal / monthlyBudget).toFloat() else 0.0f
         val animatedBudgetProgress by animateFloatAsState(
             targetValue = budgetRatio.coerceIn(0f, 1f),
             animationSpec = tween(600),
             label = "budgetProgress"
         )
 
-        val (budgetStatusColor, budgetStatusLabel, budgetStatusBg) = remember(budgetRatio) {
-            when {
-                budgetRatio <= 0.80f -> Triple(
-                    Color(0xFF10B981), // Vibrant Green for Good
-                    "Healthy Budget",
-                    Color(0xFF10B981).copy(alpha = 0.14f)
-                )
-                budgetRatio <= 1.0f -> Triple(
-                    Color(0xFFF59E0B), // Warning Amber
-                    "Near Limit (${(budgetRatio * 100).toInt()}%)",
-                    Color(0xFFF59E0B).copy(alpha = 0.14f)
-                )
-                else -> Triple(
-                    Color(0xFFEF4444), // Red for Alert
-                    "Limit Exceeded!",
-                    Color(0xFFEF4444).copy(alpha = 0.18f)
-                )
-            }
+        val targetStatusColor = when {
+            budgetRatio <= 0.60f -> Color(0xFF10B981) // Green (low utilization)
+            budgetRatio <= 0.85f -> Color(0xFFF59E0B) // Warning Amber/Orange
+            else                 -> Color(0xFFEF4444) // Red (high utilization/over-budget)
+        }
+
+        val animatedStatusColor by animateColorAsState(
+            targetValue = targetStatusColor,
+            animationSpec = tween(600),
+            label = "animatedBudgetStatusColor"
+        )
+
+        val animatedBgColor by animateColorAsState(
+            targetValue = animatedStatusColor.copy(alpha = 0.14f),
+            animationSpec = tween(600),
+            label = "animatedBudgetBgColor"
+        )
+
+        val animatedTrackColor by animateColorAsState(
+            targetValue = animatedStatusColor.copy(alpha = 0.22f),
+            animationSpec = tween(600),
+            label = "animatedBudgetTrackColor"
+        )
+
+        val budgetStatusLabel = when {
+            budgetRatio <= 0.60f -> "Low Utilization"
+            budgetRatio <= 0.85f -> "Moderate (${(budgetRatio * 100).toInt()}%)"
+            budgetRatio <= 1.0f  -> "High Alert (${(budgetRatio * 100).toInt()}%)"
+            else                 -> "Budget Overrun!"
         }
 
         Card(
             shape = RoundedCornerShape(24.dp),
-            colors = CardDefaults.cardColors(containerColor = budgetStatusBg),
-            border = BorderStroke(1.5.dp, budgetStatusColor.copy(alpha = 0.4f)),
+            colors = CardDefaults.cardColors(containerColor = animatedBgColor),
+            border = BorderStroke(1.5.dp, animatedStatusColor.copy(alpha = 0.4f)),
             modifier = Modifier
                 .fillMaxWidth()
                 .testTag("budget_cap_card")
@@ -933,13 +1005,13 @@ fun DashboardTab(
                             Box(
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(12.dp))
-                                    .background(budgetStatusColor.copy(alpha = 0.2f))
+                                    .background(animatedStatusColor.copy(alpha = 0.2f))
                                     .padding(horizontal = 8.dp, vertical = 2.dp)
                             ) {
                                 Text(
                                     text = budgetStatusLabel,
                                     fontSize = 10.sp,
-                                    color = budgetStatusColor,
+                                    color = animatedStatusColor,
                                     fontWeight = FontWeight.Bold
                                 )
                             }
@@ -955,14 +1027,14 @@ fun DashboardTab(
                         Text(
                             text = String.format("₹%,.0f Limit", monthlyBudget),
                             style = MaterialTheme.typography.titleMedium,
-                            color = budgetStatusColor,
+                            color = animatedStatusColor,
                             fontWeight = FontWeight.Bold
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Icon(
                             imageVector = Icons.Default.Edit,
                             contentDescription = "Edit Budget",
-                            tint = budgetStatusColor,
+                            tint = animatedStatusColor,
                             modifier = Modifier.size(16.dp)
                         )
                     }
@@ -970,11 +1042,11 @@ fun DashboardTab(
 
                 Spacer(modifier = Modifier.height(14.dp))
 
-                // Faded Progress Indicator Bar
+                // Faded Progress Indicator Bar transitioning from Green to Red
                 LinearProgressIndicator(
                     progress = { animatedBudgetProgress },
-                    color = budgetStatusColor,
-                    trackColor = budgetStatusColor.copy(alpha = 0.2f),
+                    color = animatedStatusColor,
+                    trackColor = animatedTrackColor,
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(10.dp)
@@ -998,7 +1070,7 @@ fun DashboardTab(
                     Text(
                         text = if (remaining >= 0) String.format("₹%,.0f remaining", remaining) else String.format("₹%,.0f over limit!", -remaining),
                         style = MaterialTheme.typography.labelSmall,
-                        color = budgetStatusColor,
+                        color = animatedStatusColor,
                         fontWeight = FontWeight.Bold
                     )
                 }
@@ -1170,7 +1242,12 @@ fun RecentExpenseRow(expense: Expense, categoryIcons: Map<String, String> = empt
                     .background(catColor.copy(alpha = 0.15f)),
                 contentAlignment = Alignment.Center
             ) {
-                Text(getCategoryEmoji(expense.category, categoryIcons), fontSize = 18.sp)
+                Icon(
+                    imageVector = getCategoryIcon(expense.category, categoryIcons),
+                    contentDescription = expense.category,
+                    tint = catColor,
+                    modifier = Modifier.size(20.dp)
+                )
             }
 
             Spacer(modifier = Modifier.width(14.dp))
@@ -1213,6 +1290,7 @@ fun ExpensesTab(
 ) {
     val expenses by viewModel.filteredExpenses.collectAsStateWithLifecycle()
     val selectedDateRange by viewModel.selectedDateRange.collectAsStateWithLifecycle()
+    val categoryIcons by viewModel.categoryIcons.collectAsStateWithLifecycle()
 
     var searchQuery by remember { mutableStateOf("") }
     var selectedCategoryFilter by remember { mutableStateOf("All") }
@@ -1382,6 +1460,7 @@ fun ExpensesTab(
                         InteractiveLedgerRow(
                             expense = expense,
                             isSelected = isSelected,
+                            categoryIcons = categoryIcons,
                             onLongClick = {
                                 selectedExpenseIds = if (isSelected) {
                                     selectedExpenseIds - expense.id
@@ -1493,6 +1572,7 @@ fun ExpensesTab(
 fun InteractiveLedgerRow(
     expense: Expense,
     isSelected: Boolean,
+    categoryIcons: Map<String, String> = emptyMap(),
     onLongClick: () -> Unit,
     onClick: () -> Unit,
     onDeleteClick: () -> Unit
@@ -1542,7 +1622,7 @@ fun InteractiveLedgerRow(
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    imageVector = getCategoryIcon(expense.category),
+                    imageVector = getCategoryIcon(expense.category, categoryIcons),
                     contentDescription = expense.category,
                     tint = catColor,
                     modifier = Modifier.size(22.dp)
