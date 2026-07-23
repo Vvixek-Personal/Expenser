@@ -1,6 +1,7 @@
 package com.example.ui
 
 import androidx.compose.animation.*
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.*
 import androidx.compose.foundation.lazy.*
@@ -436,12 +437,18 @@ fun FinanceAppScreen(viewModel: FinanceViewModel) {
                     viewModel = viewModel,
                     onDismiss = { viewingDetailExpense = null },
                     onEditClick = {
-                        editingExpense = viewingDetailExpense
+                        val target = viewingDetailExpense
                         viewingDetailExpense = null
+                        if (target != null) {
+                            editingExpense = target
+                        }
                     },
                     onDeleteClick = {
-                        viewModel.deleteExpense(viewingDetailExpense!!)
+                        val target = viewingDetailExpense
                         viewingDetailExpense = null
+                        if (target != null) {
+                            viewModel.deleteExpense(target)
+                        }
                     }
                 )
             }
@@ -870,14 +877,43 @@ fun DashboardTab(
 
         Spacer(modifier = Modifier.height(20.dp))
 
-        // Budget Limit & Goal Section
+        // Budget Limit & Goal Section (Color coded: Green for Good, Red for Alert with Faded BG)
+        val budgetRatio = if (monthlyBudget > 0) (thisMonthTotal / monthlyBudget).toFloat() else 1.0f
+        val animatedBudgetProgress by animateFloatAsState(
+            targetValue = budgetRatio.coerceIn(0f, 1f),
+            animationSpec = tween(600),
+            label = "budgetProgress"
+        )
+
+        val (budgetStatusColor, budgetStatusLabel, budgetStatusBg) = remember(budgetRatio) {
+            when {
+                budgetRatio <= 0.80f -> Triple(
+                    Color(0xFF10B981), // Vibrant Green for Good
+                    "Healthy Budget",
+                    Color(0xFF10B981).copy(alpha = 0.14f)
+                )
+                budgetRatio <= 1.0f -> Triple(
+                    Color(0xFFF59E0B), // Warning Amber
+                    "Near Limit (${(budgetRatio * 100).toInt()}%)",
+                    Color(0xFFF59E0B).copy(alpha = 0.14f)
+                )
+                else -> Triple(
+                    Color(0xFFEF4444), // Red for Alert
+                    "Limit Exceeded!",
+                    Color(0xFFEF4444).copy(alpha = 0.18f)
+                )
+            }
+        }
+
         Card(
             shape = RoundedCornerShape(24.dp),
-            colors = CardDefaults.cardColors(containerColor = SleekSurface),
-            border = BorderStroke(1.dp, SleekBorder),
-            modifier = Modifier.fillMaxWidth()
+            colors = CardDefaults.cardColors(containerColor = budgetStatusBg),
+            border = BorderStroke(1.5.dp, budgetStatusColor.copy(alpha = 0.4f)),
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag("budget_cap_card")
         ) {
-            Column(modifier = Modifier.padding(18.dp)) {
+            Column(modifier = Modifier.padding(20.dp)) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -886,54 +922,66 @@ fun DashboardTab(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column {
-                        Text(
-                            text = "Monthly Budget Cap",
-                            style = MaterialTheme.typography.titleSmall,
-                            color = SleekTextPrimary,
-                            fontWeight = FontWeight.Bold
-                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "Monthly Budget Cap",
+                                style = MaterialTheme.typography.titleSmall,
+                                color = SleekTextPrimary,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(budgetStatusColor.copy(alpha = 0.2f))
+                                    .padding(horizontal = 8.dp, vertical = 2.dp)
+                            ) {
+                                Text(
+                                    text = budgetStatusLabel,
+                                    fontSize = 10.sp,
+                                    color = budgetStatusColor,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
                         Text(
                             text = "Tap to adjust limit",
                             style = MaterialTheme.typography.bodySmall,
-                            color = SleekTextSecondary
+                            color = SleekTextSecondary,
+                            fontSize = 11.sp
                         )
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
                             text = String.format("₹%,.0f Limit", monthlyBudget),
                             style = MaterialTheme.typography.titleMedium,
-                            color = SleekPrimary,
+                            color = budgetStatusColor,
                             fontWeight = FontWeight.Bold
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Icon(
                             imageVector = Icons.Default.Edit,
                             contentDescription = "Edit Budget",
-                            tint = SleekPrimary,
+                            tint = budgetStatusColor,
                             modifier = Modifier.size(16.dp)
                         )
                     }
                 }
 
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(14.dp))
 
-                val budgetProgress = if (thisMonthTotal < monthlyBudget) {
-                    (thisMonthTotal / monthlyBudget).toFloat()
-                } else {
-                    1.0f
-                }
-
+                // Faded Progress Indicator Bar
                 LinearProgressIndicator(
-                    progress = { budgetProgress },
-                    color = if (budgetProgress > 0.85f) ExpenseRed else SleekPrimary,
-                    trackColor = SleekNeutralLight,
+                    progress = { animatedBudgetProgress },
+                    color = budgetStatusColor,
+                    trackColor = budgetStatusColor.copy(alpha = 0.2f),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(8.dp)
-                        .clip(RoundedCornerShape(4.dp))
+                        .height(10.dp)
+                        .clip(RoundedCornerShape(6.dp))
                 )
 
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(10.dp))
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -943,13 +991,14 @@ fun DashboardTab(
                     Text(
                         text = String.format("₹%,.0f spent", thisMonthTotal),
                         style = MaterialTheme.typography.labelSmall,
-                        color = SleekTextSecondary
+                        color = SleekTextSecondary,
+                        fontWeight = FontWeight.Medium
                     )
                     val remaining = monthlyBudget - thisMonthTotal
                     Text(
-                        text = if (remaining >= 0) String.format("₹%,.0f remaining", remaining) else "Limit exceeded!",
+                        text = if (remaining >= 0) String.format("₹%,.0f remaining", remaining) else String.format("₹%,.0f over limit!", -remaining),
                         style = MaterialTheme.typography.labelSmall,
-                        color = if (remaining >= 0) SleekTextSecondary else ExpenseRed,
+                        color = budgetStatusColor,
                         fontWeight = FontWeight.Bold
                     )
                 }

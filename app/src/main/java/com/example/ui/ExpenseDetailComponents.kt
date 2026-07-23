@@ -120,8 +120,13 @@ fun ExpenseDetailDialog(
                         fontWeight = FontWeight.Bold,
                         color = SleekTextPrimary
                     )
-                    IconButton(onClick = onDeleteClick) {
-                        Icon(Icons.Default.Delete, contentDescription = "Delete", tint = Color(0xFFEF4444))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        IconButton(onClick = onEditClick) {
+                            Icon(Icons.Default.Edit, contentDescription = "Edit Transaction", tint = SleekPrimary)
+                        }
+                        IconButton(onClick = onDeleteClick) {
+                            Icon(Icons.Default.Delete, contentDescription = "Delete", tint = Color(0xFFEF4444))
+                        }
                     }
                 }
 
@@ -185,6 +190,21 @@ fun ExpenseDetailDialog(
                                 color = SleekTextPrimary,
                                 fontWeight = FontWeight.Normal
                             )
+                        }
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        // Prominent Edit Transaction Button at the TOP of the card
+                        Button(
+                            onClick = onEditClick,
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.buttonColors(containerColor = SleekPrimary),
+                            shape = RoundedCornerShape(12.dp),
+                            contentPadding = PaddingValues(vertical = 12.dp, horizontal = 16.dp)
+                        ) {
+                            Icon(Icons.Default.Edit, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Edit Transaction Details", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
                         }
                     }
                 }
@@ -300,10 +320,7 @@ fun ExpenseDetailDialog(
 
                 // Edit Button
                 Button(
-                    onClick = {
-                        onDismiss()
-                        onEditClick()
-                    },
+                    onClick = onEditClick,
                     modifier = Modifier.fillMaxWidth(),
                     colors = ButtonDefaults.buttonColors(containerColor = SleekPrimary),
                     shape = RoundedCornerShape(16.dp),
