@@ -172,7 +172,6 @@ fun FinanceAppScreen(viewModel: FinanceViewModel) {
 
     var showAddExpenseDialog by remember { mutableStateOf(false) }
     var prefilledDateForAddDialog by remember { mutableStateOf<Long?>(null) }
-    var showAiCoachDialog by remember { mutableStateOf(false) }
     var editingExpense by remember { mutableStateOf<Expense?>(null) }
     var viewingDetailExpense by remember { mutableStateOf<Expense?>(null) }
 
@@ -370,7 +369,6 @@ fun FinanceAppScreen(viewModel: FinanceViewModel) {
                             showAddExpenseDialog = true
                         },
                         onNavigateToExpenses = { currentScreen = Screen.Expenses },
-                        onAiCoachClick = { showAiCoachDialog = true },
                         onProfileClick = { scope.launch { drawerState.open() } },
                         onEditExpenseClick = { viewingDetailExpense = it }
                     )
@@ -393,8 +391,7 @@ fun FinanceAppScreen(viewModel: FinanceViewModel) {
                             showAddExpenseDialog = true
                         },
                         onEditExpense = { viewingDetailExpense = it },
-                        onDeleteExpense = { viewModel.deleteExpense(it) },
-                        onAiCoachClick = { showAiCoachDialog = true }
+                        onDeleteExpense = { viewModel.deleteExpense(it) }
                     )
                 }
             }
@@ -404,6 +401,7 @@ fun FinanceAppScreen(viewModel: FinanceViewModel) {
                     prefilledDate = prefilledDateForAddDialog,
                     categories = allCategories,
                     categoryIcons = categoryIcons,
+                    expenses = expenses,
                     onAddCategory = { viewModel.addCustomCategory(it) },
                     onDeleteCategory = { viewModel.deleteCustomCategory(it) },
                     onEditCategory = { old, new -> viewModel.renameCustomCategory(old, new) },
@@ -421,6 +419,7 @@ fun FinanceAppScreen(viewModel: FinanceViewModel) {
                     expense = editingExpense!!,
                     categories = allCategories,
                     categoryIcons = categoryIcons,
+                    expenses = expenses,
                     onAddCategory = { viewModel.addCustomCategory(it) },
                     onDeleteCategory = { viewModel.deleteCustomCategory(it) },
                     onEditCategory = { old, new -> viewModel.renameCustomCategory(old, new) },
@@ -453,36 +452,6 @@ fun FinanceAppScreen(viewModel: FinanceViewModel) {
                     }
                 )
             }
-
-            // Floating / Dialog Chat Overlay for AI Coach to preserve the feature perfectly
-            if (showAiCoachDialog) {
-                Dialog(onDismissRequest = { showAiCoachDialog = false }) {
-                    Card(
-                        colors = CardDefaults.cardColors(containerColor = SleekBg),
-                        border = BorderStroke(1.dp, SleekBorder),
-                        shape = RoundedCornerShape(24.dp),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .fillMaxHeight(0.85f)
-                    ) {
-                        Box(modifier = Modifier.fillMaxSize()) {
-                            AdvisorTab(viewModel = viewModel)
-                            IconButton(
-                                onClick = { showAiCoachDialog = false },
-                                modifier = Modifier
-                                    .align(Alignment.TopEnd)
-                                    .padding(12.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Close,
-                                    contentDescription = "Close AI Coach",
-                                    tint = SleekTextSecondary
-                                )
-                            }
-                        }
-                    }
-                }
-            }
         }
     }
 }
@@ -505,7 +474,6 @@ fun DashboardTab(
     onUpdateName: (String) -> Unit,
     onAddExpenseClick: () -> Unit,
     onNavigateToExpenses: () -> Unit,
-    onAiCoachClick: () -> Unit,
     onProfileClick: () -> Unit,
     onEditExpenseClick: (Expense) -> Unit
 ) {
@@ -603,45 +571,26 @@ fun DashboardTab(
                 }
             }
 
-            // Quick Add & AI Sparkles Header Action Row
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            // Quick Add Action Button
+            IconButton(
+                onClick = onAddExpenseClick,
+                modifier = Modifier
+                    .size(44.dp)
+                    .clip(CircleShape)
+                    .background(SleekPrimary)
+                    .testTag("dashboard_add_expense_fab")
             ) {
-                IconButton(
-                    onClick = onAiCoachClick,
-                    modifier = Modifier
-                        .size(44.dp)
-                        .clip(CircleShape)
-                        .background(SleekPrimaryContainer)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.AutoAwesome,
-                        contentDescription = "AI Coach",
-                        tint = SleekPrimary
-                    )
-                }
-
-                IconButton(
-                    onClick = onAddExpenseClick,
-                    modifier = Modifier
-                        .size(44.dp)
-                        .clip(CircleShape)
-                        .background(SleekPrimary)
-                        .testTag("dashboard_add_expense_fab")
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Add,
-                        contentDescription = "Add Expense",
-                        tint = Color.White
-                    )
-                }
+                Icon(
+                    imageVector = Icons.Default.Add,
+                    contentDescription = "Add Expense",
+                    tint = Color.White
+                )
             }
         }
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Total Balance Card (Sleek UI Gradient Style)
+        // Total Balance Card (Bank Account Balance Style)
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -677,13 +626,35 @@ fun DashboardTab(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = "MONTHLY NET CASHFLOW",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = Color.White.copy(alpha = 0.8f),
-                        fontWeight = FontWeight.Medium,
-                        letterSpacing = 1.2.sp
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.AccountBalance,
+                            contentDescription = null,
+                            tint = Color.White.copy(alpha = 0.9f),
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "MONTHLY NET CASHFLOW",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = Color.White.copy(alpha = 0.9f),
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 1.2.sp
+                        )
+                    }
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(20.dp))
+                            .background(if (thisMonthNetBalance >= 0) Color(0xFF10B981).copy(alpha = 0.25f) else Color(0xFFEF4444).copy(alpha = 0.25f))
+                            .padding(horizontal = 10.dp, vertical = 4.dp)
+                    ) {
+                        Text(
+                            text = if (thisMonthNetBalance >= 0) "Safe Balance" else "Overdrawn",
+                            color = Color.White,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(8.dp))
@@ -814,127 +785,7 @@ fun DashboardTab(
             }
         }
 
-        Spacer(modifier = Modifier.height(20.dp))
 
-        // Quick Category distribution preview indicators
-        Text(
-            text = "Categories Summary",
-            style = MaterialTheme.typography.titleMedium,
-            color = SleekTextPrimary,
-            fontWeight = FontWeight.Bold
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-
-        val categorySummaryItems = remember(thisMonthExpenses, expenses) {
-            val sourceList = if (thisMonthExpenses.isNotEmpty()) thisMonthExpenses else expenses
-            val grouped = sourceList.groupBy { it.category }
-                .mapValues { (_, list) ->
-                    val total = list.sumOf { it.amount }
-                    val count = list.size
-                    Pair(total, count)
-                }
-
-            if (grouped.isNotEmpty()) {
-                grouped.entries.sortedByDescending { it.value.first }.take(4)
-            } else {
-                listOf("Food", "Travel", "Rent", "Persons").map { cat ->
-                    java.util.AbstractMap.SimpleEntry(cat, Pair(0.0, 0))
-                }
-            }
-        }
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            categorySummaryItems.forEachIndexed { index, entry ->
-                val cat = entry.key
-                val (catSum, catCount) = entry.value
-                val catColor = categoryColors[cat] ?: SleekPrimary
-                val isTopCategory = (index == 0 && catSum > 0)
-
-                Card(
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = if (isTopCategory) catColor.copy(alpha = 0.15f) else SleekSurface
-                    ),
-                    border = BorderStroke(
-                        width = if (isTopCategory) 1.5.dp else 1.dp,
-                        color = if (isTopCategory) catColor else SleekBorder
-                    ),
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Column(
-                        modifier = Modifier.padding(10.dp),
-                        horizontalAlignment = Alignment.Start
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(28.dp)
-                                    .clip(CircleShape)
-                                    .background(catColor.copy(alpha = 0.2f)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = getCategoryIcon(cat),
-                                    contentDescription = cat,
-                                    tint = catColor,
-                                    modifier = Modifier.size(14.dp)
-                                )
-                            }
-
-                            if (isTopCategory) {
-                                Box(
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(8.dp))
-                                        .background(catColor)
-                                        .padding(horizontal = 5.dp, vertical = 2.dp)
-                                ) {
-                                    Text(
-                                        text = "Top",
-                                        fontSize = 9.sp,
-                                        color = Color.White,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(6.dp))
-
-                        Text(
-                            text = cat,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = SleekTextSecondary,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-
-                        Text(
-                            text = String.format("₹%,.0f", catSum),
-                            style = MaterialTheme.typography.titleSmall,
-                            color = SleekTextPrimary,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 12.sp
-                        )
-
-                        if (catCount > 0) {
-                            Text(
-                                text = "$catCount txns",
-                                fontSize = 9.sp,
-                                color = if (isTopCategory) catColor else SleekTextSecondary,
-                                fontWeight = if (isTopCategory) FontWeight.Bold else FontWeight.Normal
-                            )
-                        }
-                    }
-                }
-            }
-        }
 
         Spacer(modifier = Modifier.height(20.dp))
 
@@ -2183,212 +2034,6 @@ fun AnalyticsTab(viewModel: FinanceViewModel) {
 }
 
 // ==========================================
-// 4️⃣ AI ADVISOR COACH TAB (Gemini-powered)
-// ==========================================
-@Composable
-fun AdvisorTab(viewModel: FinanceViewModel) {
-    val chatMessages by viewModel.chatMessages.collectAsStateWithLifecycle()
-    val isChatLoading by viewModel.isChatLoading.collectAsStateWithLifecycle()
-    var inputMessage by remember { mutableStateOf("") }
-    val focusManager = LocalFocusManager.current
-    val listState = rememberLazyListState()
-
-    // Auto scroll chat to bottom when message list changes
-    LaunchedEffect(chatMessages.size) {
-        if (chatMessages.isNotEmpty()) {
-            listState.animateScrollToItem(chatMessages.size - 1)
-        }
-    }
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp)
-    ) {
-        // Tab Header
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column {
-                Text(
-                    text = "AI Financial Coach",
-                    style = MaterialTheme.typography.headlineSmall,
-                    color = SleekTextPrimary,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    text = "Gemini-powered budget analyzer",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = SleekTextSecondary
-                )
-            }
-
-            Box(
-                modifier = Modifier
-                    .size(38.dp)
-                    .clip(CircleShape)
-                    .background(SleekPrimaryContainer),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = SleekPrimary, modifier = Modifier.size(18.dp))
-            }
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Audit Generator Quick Action
-        Card(
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(containerColor = SleekPrimaryContainer),
-            border = BorderStroke(1.dp, SleekPrimary.copy(alpha = 0.2f)),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Instant Expense Audit",
-                        style = MaterialTheme.typography.titleSmall,
-                        color = SleekOnPrimaryContainer,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = "Get real-time feedback on your category limits.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = SleekOnPrimaryContainer.copy(alpha = 0.8f)
-                    )
-                }
-                Spacer(modifier = Modifier.width(8.dp))
-                Button(
-                    onClick = { viewModel.sendChatMessage("Give me a comprehensive audit of my current category expenses and tell me how I can optimize my food and travel budgets.") },
-                    colors = ButtonDefaults.buttonColors(containerColor = SleekPrimary),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Text("Analyze", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Chat Message Log
-        LazyColumn(
-            state = listState,
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            items(chatMessages) { message ->
-                ChatBubble(message = message)
-            }
-
-            if (isChatLoading) {
-                item {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(8.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        CircularProgressIndicator(color = SleekPrimary, modifier = Modifier.size(24.dp))
-                    }
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        // Chat input container
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .navigationBarsPadding(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            OutlinedTextField(
-                value = inputMessage,
-                onValueChange = { inputMessage = it },
-                placeholder = { Text("Ask Coach about your expenses...", color = SleekTextSecondary) },
-                singleLine = true,
-                shape = RoundedCornerShape(24.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = SleekPrimary,
-                    unfocusedBorderColor = SleekBorder,
-                    focusedContainerColor = SleekSurface,
-                    unfocusedContainerColor = SleekSurface
-                ),
-                keyboardOptions = KeyboardOptions(
-                    imeAction = ImeAction.Send
-                ),
-                modifier = Modifier
-                    .weight(1f)
-                    .testTag("ai_coach_chat_input")
-            )
-
-            IconButton(
-                onClick = {
-                    if (inputMessage.isNotBlank()) {
-                        viewModel.sendChatMessage(inputMessage)
-                        inputMessage = ""
-                        focusManager.clearFocus()
-                    }
-                },
-                modifier = Modifier
-                    .size(48.dp)
-                    .clip(CircleShape)
-                    .background(SleekPrimary)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Send,
-                    contentDescription = "Send",
-                    tint = Color.White
-                )
-            }
-        }
-    }
-}
-
-@Composable
-fun ChatBubble(message: ChatMessage) {
-    val bubbleColor = if (message.isUser) SleekPrimary else SleekSurface
-    val textColor = if (message.isUser) Color.White else SleekTextPrimary
-    val align = if (message.isUser) Alignment.End else Alignment.Start
-    val bubbleShape = if (message.isUser) {
-        RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 16.dp, bottomEnd = 0.dp)
-    } else {
-        RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 0.dp, bottomEnd = 16.dp)
-    }
-
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalAlignment = align
-    ) {
-        Card(
-            shape = bubbleShape,
-            colors = CardDefaults.cardColors(containerColor = bubbleColor),
-            border = if (!message.isUser) BorderStroke(1.dp, SleekBorder) else null,
-            modifier = Modifier.widthIn(max = 280.dp)
-        ) {
-            Text(
-                text = message.text,
-                color = textColor,
-                style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.padding(14.dp)
-            )
-        }
-    }
-}
-
-// ==========================================
 // 4️⃣.5️⃣ CATEGORY SELECTOR COMPONENTS
 // ==========================================
 @OptIn(ExperimentalLayoutApi::class, ExperimentalFoundationApi::class)
@@ -2637,6 +2282,7 @@ fun AddExpenseDialog(
     prefilledDate: Long?,
     categories: List<String>,
     categoryIcons: Map<String, String> = emptyMap(),
+    expenses: List<Expense> = emptyList(),
     onAddCategory: (String) -> Unit,
     onDeleteCategory: (String) -> Unit,
     onEditCategory: (String, String) -> Unit,
@@ -2645,6 +2291,17 @@ fun AddExpenseDialog(
 ) {
     var type by remember { mutableStateOf("EXPENSE") }
     var amountStr by remember { mutableStateOf("") }
+
+    val totalIncome = remember(expenses) {
+        expenses.filter { it.type == "INCOME" }.sumOf { it.amount }
+    }
+    val totalExpenses = remember(expenses) {
+        expenses.filter { it.type != "INCOME" }.sumOf { it.amount }
+    }
+    val availableBalance = (totalIncome - totalExpenses).coerceAtLeast(0.0)
+
+    val enteredAmount = amountStr.toDoubleOrNull() ?: 0.0
+    val isExceedingIncome = type == "EXPENSE" && (enteredAmount > availableBalance || totalExpenses + enteredAmount > totalIncome)
     
     val incomeCategories = listOf("Salary", "Freelance", "Investments", "Gifts", "Others")
     val currentCategoriesList = if (type == "INCOME") {
@@ -2807,6 +2464,68 @@ fun AddExpenseDialog(
                         .testTag("expense_amount_input")
                 )
 
+                if (type == "EXPENSE") {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 4.dp, start = 4.dp, end = 4.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = "Available Balance: ₹${String.format(Locale.getDefault(), "%,.2f", availableBalance)}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (isExceedingIncome) ExpenseRed else SleekTextSecondary,
+                            fontWeight = FontWeight.Medium
+                        )
+                        if (totalIncome > 0) {
+                            Text(
+                                text = "Total Income: ₹${String.format(Locale.getDefault(), "%,.2f", totalIncome)}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = SleekTextSecondary
+                            )
+                        }
+                    }
+                    if (isExceedingIncome) {
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = ExpenseRed.copy(alpha = 0.1f)),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 8.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Warning,
+                                    contentDescription = null,
+                                    tint = ExpenseRed,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = if (totalIncome <= 0) 
+                                        "Expense cannot exceed total income. Income is ₹0.00." 
+                                    else 
+                                        "Expense (₹${String.format(Locale.getDefault(), "%,.2f", enteredAmount)}) exceeds available bank balance (₹${String.format(Locale.getDefault(), "%,.2f", availableBalance)}).",
+                                    color = ExpenseRed,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
+                } else {
+                    Text(
+                        text = "Total Income so far: ₹${String.format(Locale.getDefault(), "%,.2f", totalIncome)}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color(0xFF10B981),
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier.padding(top = 4.dp, start = 4.dp)
+                    )
+                }
+
                 Spacer(modifier = Modifier.height(14.dp))
 
                 // Category Selector
@@ -2956,7 +2675,7 @@ fun AddExpenseDialog(
                                 )
                             }
                         },
-                        enabled = note.trim().isNotEmpty() && (amountStr.toDoubleOrNull() ?: 0.0) > 0.0,
+                        enabled = note.trim().isNotEmpty() && enteredAmount > 0.0 && !isExceedingIncome,
                         colors = ButtonDefaults.buttonColors(containerColor = if (type == "INCOME") Color(0xFF10B981) else SleekPrimary),
                         shape = RoundedCornerShape(12.dp),
                         modifier = Modifier.weight(1f)
@@ -2999,6 +2718,7 @@ fun EditExpenseDialog(
     expense: Expense,
     categories: List<String>,
     categoryIcons: Map<String, String> = emptyMap(),
+    expenses: List<Expense> = emptyList(),
     onAddCategory: (String) -> Unit,
     onDeleteCategory: (String) -> Unit,
     onEditCategory: (String, String) -> Unit,
@@ -3007,7 +2727,21 @@ fun EditExpenseDialog(
 ) {
     var type by remember { mutableStateOf(expense.type) }
     var amountStr by remember { mutableStateOf(expense.amount.toString()) }
-    
+
+    val otherExpenses = remember(expenses, expense) {
+        expenses.filter { it.id != expense.id && it.type != "INCOME" }.sumOf { it.amount }
+    }
+    val totalIncome = remember(expenses, expense, amountStr, type) {
+        if (expense.type == "INCOME") {
+            expenses.filter { it.id != expense.id && it.type == "INCOME" }.sumOf { it.amount } + (if (type == "INCOME") (amountStr.toDoubleOrNull() ?: 0.0) else 0.0)
+        } else {
+            expenses.filter { it.type == "INCOME" }.sumOf { it.amount }
+        }
+    }
+    val availableBalanceForEdit = (totalIncome - otherExpenses).coerceAtLeast(0.0)
+    val enteredAmount = amountStr.toDoubleOrNull() ?: 0.0
+    val isExceedingIncome = type == "EXPENSE" && (enteredAmount > availableBalanceForEdit || otherExpenses + enteredAmount > totalIncome)
+
     val incomeCategories = listOf("Salary", "Freelance", "Investments", "Gifts", "Others")
     val currentCategoriesList = if (type == "INCOME") {
         incomeCategories
@@ -3117,6 +2851,68 @@ fun EditExpenseDialog(
                     modifier = Modifier.fillMaxWidth()
                 )
 
+                if (type == "EXPENSE") {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 4.dp, start = 4.dp, end = 4.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = "Available Balance: ₹${String.format(Locale.getDefault(), "%,.2f", availableBalanceForEdit)}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (isExceedingIncome) ExpenseRed else SleekTextSecondary,
+                            fontWeight = FontWeight.Medium
+                        )
+                        if (totalIncome > 0) {
+                            Text(
+                                text = "Total Income: ₹${String.format(Locale.getDefault(), "%,.2f", totalIncome)}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = SleekTextSecondary
+                            )
+                        }
+                    }
+                    if (isExceedingIncome) {
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = ExpenseRed.copy(alpha = 0.1f)),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 8.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Warning,
+                                    contentDescription = null,
+                                    tint = ExpenseRed,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = if (totalIncome <= 0) 
+                                        "Expense cannot exceed total income. Income is ₹0.00." 
+                                    else 
+                                        "Expense (₹${String.format(Locale.getDefault(), "%,.2f", enteredAmount)}) exceeds available balance (₹${String.format(Locale.getDefault(), "%,.2f", availableBalanceForEdit)}).",
+                                    color = ExpenseRed,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
+                } else {
+                    Text(
+                        text = "Total Income: ₹${String.format(Locale.getDefault(), "%,.2f", totalIncome)}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color(0xFF10B981),
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier.padding(top = 4.dp, start = 4.dp)
+                    )
+                }
+
                 Spacer(modifier = Modifier.height(14.dp))
 
                 // Category Selector
@@ -3197,7 +2993,7 @@ fun EditExpenseDialog(
                                 )
                             }
                         },
-                        enabled = note.trim().isNotEmpty() && (amountStr.toDoubleOrNull() ?: 0.0) > 0.0,
+                        enabled = note.trim().isNotEmpty() && enteredAmount > 0.0 && !isExceedingIncome,
                         colors = ButtonDefaults.buttonColors(containerColor = if (type == "INCOME") Color(0xFF10B981) else SleekPrimary),
                         shape = RoundedCornerShape(12.dp),
                         modifier = Modifier.weight(1f)
@@ -3231,8 +3027,7 @@ fun CalendarTab(
     categoryIcons: Map<String, String> = emptyMap(),
     onAddExpenseForDate: (Long) -> Unit,
     onEditExpense: (Expense) -> Unit,
-    onDeleteExpense: (Expense) -> Unit,
-    onAiCoachClick: () -> Unit
+    onDeleteExpense: (Expense) -> Unit
 ) {
     val today = Calendar.getInstance()
     var navigatedCalendar by remember { mutableStateOf(Calendar.getInstance()) }
@@ -3306,16 +3101,6 @@ fun CalendarTab(
                     style = MaterialTheme.typography.bodySmall,
                     color = SleekTextSecondary
                 )
-            }
-
-            IconButton(
-                onClick = onAiCoachClick,
-                modifier = Modifier
-                    .size(38.dp)
-                    .clip(CircleShape)
-                    .background(SleekPrimaryContainer)
-            ) {
-                Icon(Icons.Default.AutoAwesome, contentDescription = "AI Coach", tint = SleekPrimary, modifier = Modifier.size(18.dp))
             }
         }
 
