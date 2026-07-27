@@ -531,6 +531,38 @@ fun ExportDataScreen(
     var selectedExportCategories by remember { mutableStateOf<Set<String>>(emptySet()) }
     val dateSdf = remember { SimpleDateFormat("dd MMM yyyy", Locale.getDefault()) }
 
+    var exportStartDate by remember {
+        mutableStateOf(Calendar.getInstance().apply {
+            add(Calendar.DAY_OF_MONTH, -30)
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }.timeInMillis)
+    }
+    var exportEndDate by remember {
+        mutableStateOf(Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, 23)
+            set(Calendar.MINUTE, 59)
+            set(Calendar.SECOND, 59)
+            set(Calendar.MILLISECOND, 999)
+        }.timeInMillis)
+    }
+    var showDateRangeModal by remember { mutableStateOf(false) }
+
+    if (showDateRangeModal) {
+        DateRangeReportModalDialog(
+            initialStartDate = exportStartDate,
+            initialEndDate = exportEndDate,
+            onDismiss = { showDateRangeModal = false },
+            onConfirm = { selStart, selEnd ->
+                exportStartDate = selStart
+                exportEndDate = selEnd
+                showDateRangeModal = false
+            }
+        )
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -580,6 +612,111 @@ fun ExportDataScreen(
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.padding(bottom = 12.dp)
             )
+
+            // Date Range Card
+            Card(
+                colors = CardDefaults.cardColors(containerColor = SleekSurface),
+                border = BorderStroke(1.dp, SleekBorder),
+                shape = RoundedCornerShape(20.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(18.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Date Range Filter",
+                            style = MaterialTheme.typography.bodySmall,
+                            fontWeight = FontWeight.SemiBold,
+                            color = SleekTextSecondary
+                        )
+                        TextButton(
+                            onClick = { showDateRangeModal = true },
+                            contentPadding = PaddingValues(0.dp)
+                        ) {
+                            Icon(Icons.Default.DateRange, contentDescription = null, modifier = Modifier.size(16.dp), tint = SleekPrimary)
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Change Range", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = SleekPrimary)
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    Surface(
+                        onClick = { showDateRangeModal = true },
+                        shape = RoundedCornerShape(12.dp),
+                        color = SleekBg,
+                        border = BorderStroke(1.dp, SleekBorder),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(14.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.CalendarToday, contentDescription = null, tint = SleekPrimary, modifier = Modifier.size(20.dp))
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Column {
+                                    Text(
+                                        text = "${dateSdf.format(Date(exportStartDate))} — ${dateSdf.format(Date(exportEndDate))}",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = SleekTextPrimary
+                                    )
+                                    Text(
+                                        text = "Tap to pick custom Start & End dates",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = SleekTextSecondary,
+                                        fontSize = 11.sp
+                                    )
+                                }
+                            }
+                            Icon(Icons.Default.Edit, contentDescription = null, tint = SleekTextSecondary, modifier = Modifier.size(16.dp))
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // Quick Date Presets
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        val presets = listOf(
+                            "7 Days" to 7,
+                            "30 Days" to 30,
+                            "90 Days" to 90,
+                            "1 Year" to 365
+                        )
+                        presets.forEach { (label, days) ->
+                            AssistChip(
+                                onClick = {
+                                    val now = Calendar.getInstance()
+                                    now.set(Calendar.HOUR_OF_DAY, 23)
+                                    now.set(Calendar.MINUTE, 59)
+                                    now.set(Calendar.SECOND, 59)
+                                    exportEndDate = now.timeInMillis
+
+                                    val start = Calendar.getInstance()
+                                    start.add(Calendar.DAY_OF_MONTH, -days)
+                                    start.set(Calendar.HOUR_OF_DAY, 0)
+                                    start.set(Calendar.MINUTE, 0)
+                                    start.set(Calendar.SECOND, 0)
+                                    exportStartDate = start.timeInMillis
+                                },
+                                label = { Text(label, fontSize = 11.sp) },
+                                shape = RoundedCornerShape(10.dp),
+                                border = BorderStroke(1.dp, SleekBorder)
+                            )
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
 
             Card(
                 colors = CardDefaults.cardColors(containerColor = SleekSurface),
@@ -683,17 +820,41 @@ fun ExportDataScreen(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(modifier = Modifier.padding(20.dp)) {
-                    val filteredToExport = remember(allExpensesList, exportTransactionType, selectedExportCategories) {
+                    val filteredToExport = remember(allExpensesList, exportTransactionType, selectedExportCategories, exportStartDate, exportEndDate) {
+                        val startCal = Calendar.getInstance().apply {
+                            timeInMillis = exportStartDate
+                            set(Calendar.HOUR_OF_DAY, 0)
+                            set(Calendar.MINUTE, 0)
+                            set(Calendar.SECOND, 0)
+                            set(Calendar.MILLISECOND, 0)
+                        }
+                        val endCal = Calendar.getInstance().apply {
+                            timeInMillis = exportEndDate
+                            set(Calendar.HOUR_OF_DAY, 23)
+                            set(Calendar.MINUTE, 59)
+                            set(Calendar.SECOND, 59)
+                            set(Calendar.MILLISECOND, 999)
+                        }
+
                         allExpensesList.filter { item ->
+                            val inDateRange = item.date in startCal.timeInMillis..endCal.timeInMillis
                             val matchesType = when (exportTransactionType) {
                                 "INCOME" -> item.type == "INCOME"
                                 "EXPENSE" -> item.type != "INCOME"
                                 else -> true
                             }
                             val matchesCat = if (selectedExportCategories.isEmpty()) true else selectedExportCategories.contains(item.category)
-                            matchesType && matchesCat
-                        }
+                            inDateRange && matchesType && matchesCat
+                        }.sortedByDescending { it.date }
                     }
+
+                    val dateRangeLabel = "${dateSdf.format(Date(exportStartDate))} - ${dateSdf.format(Date(exportEndDate))}"
+                    val typeLabel = when (exportTransactionType) {
+                        "INCOME" -> "Only Income"
+                        "EXPENSE" -> "Only Expense"
+                        else -> "Full Ledger"
+                    }
+                    val catLabel = if (selectedExportCategories.isEmpty()) "All Categories" else selectedExportCategories.joinToString(", ")
 
                     Text(
                         text = "Ready to Export: ${filteredToExport.size} Records",
@@ -701,22 +862,22 @@ fun ExportDataScreen(
                         fontWeight = FontWeight.Bold,
                         color = SleekTextPrimary
                     )
+                    Text(
+                        text = "Range: $dateRangeLabel",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = SleekTextSecondary
+                    )
 
                     Spacer(modifier = Modifier.height(16.dp))
 
                     Button(
                         onClick = {
-                            val startCal = Calendar.getInstance().apply {
-                                set(Calendar.HOUR_OF_DAY, 0)
-                                set(Calendar.MINUTE, 0)
-                                set(Calendar.SECOND, 0)
-                            }
                             DataExporter.exportToCSV(
                                 context = context,
                                 expenses = filteredToExport,
-                                dateRangeStr = "All Time",
-                                typeFilterStr = exportTransactionType,
-                                categoryFilterStr = if (selectedExportCategories.isEmpty()) "All Categories" else selectedExportCategories.joinToString(", ")
+                                dateRangeStr = dateRangeLabel,
+                                typeFilterStr = typeLabel,
+                                categoryFilterStr = catLabel
                             )
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = SleekPrimary),
@@ -735,9 +896,9 @@ fun ExportDataScreen(
                             DataExporter.sharePdfReport(
                                 context = context,
                                 expenses = filteredToExport,
-                                dateRangeStr = "All Time",
-                                typeFilterStr = exportTransactionType,
-                                categoryFilterStr = if (selectedExportCategories.isEmpty()) "All Categories" else selectedExportCategories.joinToString(", ")
+                                dateRangeStr = dateRangeLabel,
+                                typeFilterStr = typeLabel,
+                                categoryFilterStr = catLabel
                             )
                         },
                         border = BorderStroke(1.dp, SleekPrimary),
@@ -746,7 +907,28 @@ fun ExportDataScreen(
                     ) {
                         Icon(Icons.Default.PictureAsPdf, contentDescription = null, tint = SleekPrimary)
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Export Formatted PDF/Text Report", color = SleekPrimary, fontWeight = FontWeight.Bold)
+                        Text("Export Formatted PDF Report", color = SleekPrimary, fontWeight = FontWeight.Bold)
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    OutlinedButton(
+                        onClick = {
+                            DataExporter.shareImageReport(
+                                context = context,
+                                expenses = filteredToExport,
+                                dateRangeStr = dateRangeLabel,
+                                typeFilterStr = typeLabel,
+                                categoryFilterStr = catLabel
+                            )
+                        },
+                        border = BorderStroke(1.dp, SleekBorder),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Default.Photo, contentDescription = null, tint = SleekTextPrimary)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Share Visual Card", color = SleekTextPrimary, fontWeight = FontWeight.Bold)
                     }
                 }
             }
