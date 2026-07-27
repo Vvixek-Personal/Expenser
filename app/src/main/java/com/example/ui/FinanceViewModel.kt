@@ -95,6 +95,10 @@ class FinanceViewModel(
     private val _isAuditLoading = MutableStateFlow(false)
     val isAuditLoading: StateFlow<Boolean> = _isAuditLoading.asStateFlow()
 
+    // Selected Language Preference
+    private val _selectedLanguage = MutableStateFlow("English")
+    val selectedLanguage: StateFlow<String> = _selectedLanguage.asStateFlow()
+
     // SharedPreferences for local configuration
     private val _themeIndex = MutableStateFlow(0)
     val themeIndex: StateFlow<Int> = _themeIndex.asStateFlow()
@@ -138,6 +142,7 @@ class FinanceViewModel(
         
         _themeIndex.value = sharedPrefs.getInt("theme_index", 0)
         _customThemeHue.value = sharedPrefs.getFloat("custom_theme_hue", 200f)
+        _selectedLanguage.value = sharedPrefs.getString("selected_language", "English") ?: "English"
         
         // Load Dark Mode setting
         com.example.ui.theme.isDarkModeActive = sharedPrefs.getBoolean("dark_mode_active", false)
@@ -152,6 +157,11 @@ class FinanceViewModel(
 
         // Compute initial storage & network values
         refreshUsageData()
+    }
+
+    fun updateLanguage(language: String) {
+        _selectedLanguage.value = language
+        sharedPrefs.edit().putString("selected_language", language).apply()
     }
 
     fun toggleDarkMode() {

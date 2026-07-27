@@ -266,6 +266,37 @@ object DataExporter {
         context.startActivity(Intent.createChooser(intent, "Share PDF Statement"))
     }
 
+    fun exportToCSV(
+        context: Context,
+        expenses: List<Expense>,
+        dateRangeStr: String,
+        typeFilterStr: String,
+        categoryFilterStr: String
+    ) {
+        val sdf = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
+        val csvHeader = "ID,Date,Category,Amount,Type,Note\n"
+        val csvRows = expenses.joinToString("\n") { expense ->
+            val dateFormatted = sdf.format(Date(expense.date))
+            val noteEscaped = (expense.note ?: "").replace("\"", "\"\"")
+            "${expense.id},\"$dateFormatted\",\"${expense.category}\",${expense.amount},\"${expense.type}\",\"$noteEscaped\""
+        }
+        val csvContent = csvHeader + csvRows
+
+        val cachePath = File(context.cacheDir, "reports")
+        cachePath.mkdirs()
+        val csvFile = File(cachePath, "finance_statement.csv")
+        csvFile.writeText(csvContent)
+
+        val uri = FileProvider.getUriForFile(context, "${context.packageName}.provider", csvFile)
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = "text/csv"
+            putExtra(Intent.EXTRA_STREAM, uri)
+            putExtra(Intent.EXTRA_SUBJECT, "Finance Ledger CSV Statement")
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        context.startActivity(Intent.createChooser(intent, "Share CSV Statement"))
+    }
+
     fun shareImageReport(
         context: Context,
         expenses: List<Expense>,

@@ -175,171 +175,53 @@ fun FinanceAppScreen(viewModel: FinanceViewModel) {
     var editingExpense by remember { mutableStateOf<Expense?>(null) }
     var viewingDetailExpense by remember { mutableStateOf<Expense?>(null) }
 
+    var activeSettingsSubScreen by remember { mutableStateOf<SettingsSubScreen?>(null) }
+
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
 
-    ModalNavigationDrawer(
-        drawerState = drawerState,
-        drawerContent = {
-            ModalDrawerSheet(
-                drawerContainerColor = SleekBg,
-                modifier = Modifier.fillMaxSize()
-            ) {
-                SidebarDrawerContent(
-                    viewModel = viewModel,
-                    onCloseDrawer = { scope.launch { drawerState.close() } }
-                )
+    Box(modifier = Modifier.fillMaxSize()) {
+        ModalNavigationDrawer(
+            drawerState = drawerState,
+            gesturesEnabled = activeSettingsSubScreen == null,
+            drawerContent = {
+                ModalDrawerSheet(
+                    drawerContainerColor = Color.Transparent,
+                    drawerTonalElevation = 0.dp,
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .width(330.dp)
+                        .padding(top = 44.dp, bottom = 44.dp, end = 12.dp)
+                ) {
+                    Surface(
+                        shape = RoundedCornerShape(24.dp),
+                        color = SleekBg,
+                        border = BorderStroke(1.dp, SleekBorder),
+                        shadowElevation = 16.dp,
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        SidebarDrawerContent(
+                            viewModel = viewModel,
+                            onCloseDrawer = { scope.launch { drawerState.close() } },
+                            onOpenSettingsScreen = { subScreen ->
+                                scope.launch { drawerState.close() }
+                                activeSettingsSubScreen = subScreen
+                            }
+                        )
+                    }
+                }
             }
-        }
-    ) {
+        ) {
         Scaffold(
         bottomBar = {
-            NavigationBar(
-                containerColor = SleekSurface,
-                tonalElevation = 8.dp,
-                modifier = Modifier.navigationBarsPadding()
-            ) {
-                // Symmetric 5-slot bottom bar layout
-                // Slot 1: Dashboard
-                val isDash = currentScreen == Screen.Dashboard
-                NavigationBarItem(
-                    selected = isDash,
-                    onClick = { currentScreen = Screen.Dashboard },
-                    icon = {
-                        Icon(
-                            imageVector = Screen.Dashboard.icon,
-                            contentDescription = Screen.Dashboard.title,
-                            tint = if (isDash) SleekPrimary else SleekTextSecondary
-                        )
-                    },
-                    label = {
-                        Text(
-                            text = Screen.Dashboard.title,
-                            color = if (isDash) SleekTextPrimary else SleekTextSecondary,
-                            fontSize = 11.sp,
-                            fontWeight = if (isDash) FontWeight.Bold else FontWeight.Normal
-                        )
-                    },
-                    colors = NavigationBarItemDefaults.colors(
-                        indicatorColor = SleekPrimaryContainer
-                    ),
-                    modifier = Modifier.testTag("nav_item_dashboard")
-                )
-
-                // Slot 2: Expenses Ledger
-                val isLedger = currentScreen == Screen.Expenses
-                NavigationBarItem(
-                    selected = isLedger,
-                    onClick = { currentScreen = Screen.Expenses },
-                    icon = {
-                        Icon(
-                            imageVector = Screen.Expenses.icon,
-                            contentDescription = Screen.Expenses.title,
-                            tint = if (isLedger) SleekPrimary else SleekTextSecondary
-                        )
-                    },
-                    label = {
-                        Text(
-                            text = Screen.Expenses.title,
-                            color = if (isLedger) SleekTextPrimary else SleekTextSecondary,
-                            fontSize = 11.sp,
-                            fontWeight = if (isLedger) FontWeight.Bold else FontWeight.Normal
-                        )
-                    },
-                    colors = NavigationBarItemDefaults.colors(
-                        indicatorColor = SleekPrimaryContainer
-                    ),
-                    modifier = Modifier.testTag("nav_item_expenses")
-                )
-
-                // Slot 3: CENTER ADD BUTTON
-                NavigationBarItem(
-                    selected = false,
-                    onClick = {
-                        prefilledDateForAddDialog = null
-                        showAddExpenseDialog = true
-                    },
-                    icon = {
-                        Box(
-                            modifier = Modifier
-                                .size(44.dp)
-                                .clip(CircleShape)
-                                .background(SleekPrimary),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Add,
-                                contentDescription = "Add Expense",
-                                tint = Color.White
-                            )
-                        }
-                    },
-                    label = {
-                        Text(
-                            text = "Add",
-                            color = SleekPrimary,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    },
-                    colors = NavigationBarItemDefaults.colors(
-                        indicatorColor = Color.Transparent
-                    ),
-                    modifier = Modifier.testTag("nav_item_add")
-                )
-
-                // Slot 4: Analytics
-                val isAnalytics = currentScreen == Screen.Analytics
-                NavigationBarItem(
-                    selected = isAnalytics,
-                    onClick = { currentScreen = Screen.Analytics },
-                    icon = {
-                        Icon(
-                            imageVector = Screen.Analytics.icon,
-                            contentDescription = Screen.Analytics.title,
-                            tint = if (isAnalytics) SleekPrimary else SleekTextSecondary
-                        )
-                    },
-                    label = {
-                        Text(
-                            text = Screen.Analytics.title,
-                            color = if (isAnalytics) SleekTextPrimary else SleekTextSecondary,
-                            fontSize = 11.sp,
-                            fontWeight = if (isAnalytics) FontWeight.Bold else FontWeight.Normal
-                        )
-                    },
-                    colors = NavigationBarItemDefaults.colors(
-                        indicatorColor = SleekPrimaryContainer
-                    ),
-                    modifier = Modifier.testTag("nav_item_analytics")
-                )
-
-                // Slot 5: Live Calendar
-                val isCalendar = currentScreen == Screen.Calendar
-                NavigationBarItem(
-                    selected = isCalendar,
-                    onClick = { currentScreen = Screen.Calendar },
-                    icon = {
-                        Icon(
-                            imageVector = Screen.Calendar.icon,
-                            contentDescription = Screen.Calendar.title,
-                            tint = if (isCalendar) SleekPrimary else SleekTextSecondary
-                        )
-                    },
-                    label = {
-                        Text(
-                            text = Screen.Calendar.title,
-                            color = if (isCalendar) SleekTextPrimary else SleekTextSecondary,
-                            fontSize = 11.sp,
-                            fontWeight = if (isCalendar) FontWeight.Bold else FontWeight.Normal
-                        )
-                    },
-                    colors = NavigationBarItemDefaults.colors(
-                        indicatorColor = SleekPrimaryContainer
-                    ),
-                    modifier = Modifier.testTag("nav_item_calendar")
-                )
-            }
+            FloatingDockBar(
+                currentScreen = currentScreen,
+                onScreenSelected = { currentScreen = it },
+                onAddClick = {
+                    prefilledDateForAddDialog = null
+                    showAddExpenseDialog = true
+                }
+            )
         },
         containerColor = SleekBg
     ) { innerPadding ->
@@ -453,12 +335,35 @@ fun FinanceAppScreen(viewModel: FinanceViewModel) {
                 )
             }
         }
+
+        if (activeSettingsSubScreen != null) {
+            when (activeSettingsSubScreen) {
+                SettingsSubScreen.DataAndStorage -> DataAndStorageScreen(
+                    viewModel = viewModel,
+                    onBack = { activeSettingsSubScreen = null }
+                )
+                SettingsSubScreen.ThemeAndLanguage -> ThemeAndLanguageScreen(
+                    viewModel = viewModel,
+                    onBack = { activeSettingsSubScreen = null }
+                )
+                SettingsSubScreen.Export -> ExportDataScreen(
+                    viewModel = viewModel,
+                    onBack = { activeSettingsSubScreen = null }
+                )
+                SettingsSubScreen.FaqAndHelp -> FaqAndHelpScreen(
+                    viewModel = viewModel,
+                    onBack = { activeSettingsSubScreen = null }
+                )
+                null -> {}
+            }
+        }
     }
-}
 
     if (userName.isNullOrBlank()) {
         OnboardingNameDialog(onSave = { viewModel.saveUserName(it) })
     }
+}
+}
 }
 
 // ==========================================
@@ -3942,27 +3847,76 @@ fun DateRangeReportModalDialog(
     }
 }
 
+@Composable
+fun SidebarSettingsTile(
+    icon: ImageVector,
+    iconBgColor: Color,
+    title: String,
+    subtitle: String,
+    onClick: () -> Unit
+) {
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(16.dp),
+        color = SleekSurface,
+        border = BorderStroke(1.dp, SleekBorder),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(14.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(42.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(iconBgColor.copy(alpha = 0.15f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = iconBgColor,
+                    modifier = Modifier.size(22.dp)
+                )
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = SleekTextPrimary
+                )
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = SleekTextSecondary
+                )
+            }
+            Icon(
+                imageVector = Icons.Default.ChevronRight,
+                contentDescription = null,
+                tint = SleekTextSecondary,
+                modifier = Modifier.size(18.dp)
+            )
+        }
+    }
+}
+
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun SidebarDrawerContent(
     viewModel: FinanceViewModel,
-    onCloseDrawer: () -> Unit
+    onCloseDrawer: () -> Unit,
+    onOpenSettingsScreen: (SettingsSubScreen) -> Unit
 ) {
     val userName by viewModel.userName.collectAsStateWithLifecycle()
-    val themeIndex by viewModel.themeIndex.collectAsStateWithLifecycle()
-    val customHue by viewModel.customThemeHue.collectAsStateWithLifecycle()
-    val storageSize by viewModel.storageSize.collectAsStateWithLifecycle()
-    val dataSize by viewModel.dataSize.collectAsStateWithLifecycle()
-    val filteredExpenses by viewModel.filteredExpenses.collectAsStateWithLifecycle()
-    val allExpensesList by viewModel.expenses.collectAsStateWithLifecycle()
-    val allCategoriesList by viewModel.allCategories.collectAsStateWithLifecycle()
-    
+    val selectedLanguage by viewModel.selectedLanguage.collectAsStateWithLifecycle()
     var showEditNameDialog by remember { mutableStateOf(false) }
 
-    LaunchedEffect(Unit) {
-        viewModel.refreshUsageData()
-    }
-    
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -3970,674 +3924,139 @@ fun SidebarDrawerContent(
             .statusBarsPadding()
             .navigationBarsPadding()
             .verticalScroll(rememberScrollState())
-            .padding(24.dp)
+            .padding(20.dp)
     ) {
-        // Header Row (Close Button)
+        // Top Close Row
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.End
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
+            Text(
+                text = "Settings & Preferences",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+                color = SleekTextSecondary
+            )
             IconButton(onClick = onCloseDrawer) {
-                Icon(Icons.Default.Close, contentDescription = "Close Drawer", tint = SleekTextSecondary)
+                Icon(
+                    imageVector = Icons.Default.Close,
+                    contentDescription = "Close Drawer",
+                    tint = SleekTextSecondary
+                )
             }
         }
         
-        // 1. Name Profile Section
+        // 1. Profile Card
         val initials = if (!userName.isNullOrBlank()) {
             userName!!.split(" ").mapNotNull { it.firstOrNull()?.uppercaseChar() }.joinToString("").take(2)
         } else "U"
-        
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 12.dp)
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(64.dp)
-                    .clip(CircleShape)
-                    .background(SleekPrimaryContainer),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = initials,
-                    style = MaterialTheme.typography.titleLarge,
-                    color = SleekOnPrimaryContainer,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = userName ?: "Guest User",
-                    style = MaterialTheme.typography.titleLarge,
-                    color = SleekTextPrimary,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    text = "Offline Ledger Account",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = SleekTextSecondary
-                )
-            }
-            IconButton(
-                onClick = { showEditNameDialog = true },
-                modifier = Modifier
-                    .size(36.dp)
-                    .background(SleekBorder.copy(alpha = 0.5f), CircleShape)
-            ) {
-                Icon(
-                    imageVector = Icons.Rounded.Edit,
-                    contentDescription = "Edit Name",
-                    tint = SleekPrimary,
-                    modifier = Modifier.size(16.dp)
-                )
-            }
-        }
-        
-        Spacer(modifier = Modifier.height(16.dp))
-        HorizontalDivider(color = SleekBorder)
-        Spacer(modifier = Modifier.height(16.dp))
-        
-        // 2. Data and Storage Section
-        Text(
-            text = "Disk and network usage",
-            style = MaterialTheme.typography.titleSmall,
-            color = Color(0xFF1E3A8A), // Blue theme color header
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(bottom = 8.dp)
-        )
-        
-        Card(
-            colors = CardDefaults.cardColors(containerColor = SleekSurface),
-            border = BorderStroke(1.dp, SleekBorder),
-            shape = RoundedCornerShape(16.dp),
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 16.dp)
-        ) {
-            Column {
-                // Storage Row
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(40.dp)
-                                .clip(CircleShape)
-                                .background(Color(0xFFE0E7FF)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Rounded.Autorenew,
-                                contentDescription = null,
-                                tint = Color(0xFF2563EB),
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-                        Text(
-                            text = "Storage Usage",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = SleekTextPrimary,
-                            fontWeight = FontWeight.Medium
-                        )
-                    }
-                    Text(
-                        text = storageSize,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = Color(0xFF2563EB),
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-                
-                HorizontalDivider(color = SleekBorder.copy(alpha = 0.5f), modifier = Modifier.padding(horizontal = 16.dp))
-                
-                // Data Row
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(40.dp)
-                                .clip(CircleShape)
-                                .background(Color(0xFFDCFCE7)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Rounded.BarChart,
-                                contentDescription = null,
-                                tint = Color(0xFF16A34A),
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-                        Text(
-                            text = "Data Usage",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = SleekTextPrimary,
-                            fontWeight = FontWeight.Medium
-                        )
-                    }
-                    Text(
-                        text = dataSize,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = Color(0xFF16A34A),
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            }
-        }
-        
-        HorizontalDivider(color = SleekBorder)
-        Spacer(modifier = Modifier.height(16.dp))
-        
-        // 3. Colour Themes Section
-        Text(
-            text = "Select Theme Palette",
-            style = MaterialTheme.typography.titleSmall,
-            color = SleekPrimary,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(bottom = 12.dp)
-        )
 
-        // Dark Mode switch card
-        var darkThemeState by remember { mutableStateOf(com.example.ui.theme.isDarkModeActive) }
         Card(
             colors = CardDefaults.cardColors(containerColor = SleekSurface),
             border = BorderStroke(1.dp, SleekBorder),
-            shape = RoundedCornerShape(16.dp),
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 16.dp)
-                .clickable {
-                    viewModel.toggleDarkMode()
-                    darkThemeState = com.example.ui.theme.isDarkModeActive
-                }
+            shape = RoundedCornerShape(20.dp),
+            modifier = Modifier.fillMaxWidth()
         ) {
             Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(16.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                    .padding(16.dp)
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Icon(
-                        imageVector = if (darkThemeState) Icons.Default.DarkMode else Icons.Default.LightMode,
-                        contentDescription = null,
-                        tint = SleekPrimary
-                    )
-                    Text(
-                        text = "Dark Mode Theme",
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = SleekTextPrimary
-                    )
-                }
-                Switch(
-                    checked = darkThemeState,
-                    onCheckedChange = {
-                        viewModel.toggleDarkMode()
-                        darkThemeState = com.example.ui.theme.isDarkModeActive
-                    },
-                    colors = SwitchDefaults.colors(
-                        checkedThumbColor = Color.White,
-                        checkedTrackColor = SleekPrimary
-                    )
-                )
-            }
-        }
-        
-        ColorThemeGrid(
-            selectedThemeIndex = themeIndex,
-            customHue = customHue,
-            onThemeSelected = { index -> viewModel.updateTheme(index) }
-        )
-        
-        if (themeIndex == 15) {
-            Spacer(modifier = Modifier.height(12.dp))
-            Card(
-                colors = CardDefaults.cardColors(containerColor = SleekSurface),
-                border = BorderStroke(1.dp, SleekBorder),
-                shape = RoundedCornerShape(12.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(modifier = Modifier.padding(14.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "Adjust Custom Hue",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = SleekTextPrimary
-                        )
-                        Text(
-                            text = "${customHue.toInt()}°",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = SleekPrimary,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Slider(
-                        value = customHue,
-                        onValueChange = { viewModel.updateCustomThemeHue(it) },
-                        valueRange = 0f..360f,
-                        colors = SliderDefaults.colors(
-                            thumbColor = SleekPrimary,
-                            activeTrackColor = SleekPrimary,
-                            inactiveTrackColor = SleekBorder
-                        ),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-            }
-        }
-        
-        Spacer(modifier = Modifier.height(16.dp))
-        HorizontalDivider(color = SleekBorder)
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // 3.5 Export Ledger Statements Section
-        Text(
-            text = "Export Ledger Statements",
-            style = MaterialTheme.typography.titleSmall,
-            color = SleekPrimary,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(bottom = 12.dp)
-        )
-
-        var exportTransactionType by remember { mutableStateOf("ALL") }
-
-        val defaultStart = remember {
-            Calendar.getInstance().apply {
-                add(Calendar.DAY_OF_MONTH, -30)
-                set(Calendar.HOUR_OF_DAY, 0)
-                set(Calendar.MINUTE, 0)
-                set(Calendar.SECOND, 0)
-                set(Calendar.MILLISECOND, 0)
-            }.timeInMillis
-        }
-        val defaultEnd = remember {
-            Calendar.getInstance().apply {
-                set(Calendar.HOUR_OF_DAY, 23)
-                set(Calendar.MINUTE, 59)
-                set(Calendar.SECOND, 59)
-                set(Calendar.MILLISECOND, 999)
-            }.timeInMillis
-        }
-
-        var exportStartDate by remember { mutableStateOf(defaultStart) }
-        var exportEndDate by remember { mutableStateOf(defaultEnd) }
-        var selectedExportCategories by remember { mutableStateOf<Set<String>>(emptySet()) }
-        var showDateRangeModal by remember { mutableStateOf(false) }
-
-        val context = LocalContext.current
-        val dateSdf = remember { SimpleDateFormat("dd MMM yyyy", Locale.getDefault()) }
-
-        Card(
-            colors = CardDefaults.cardColors(containerColor = SleekSurface),
-            border = BorderStroke(1.dp, SleekBorder),
-            shape = RoundedCornerShape(16.dp),
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 16.dp)
-        ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Text(
-                    "Export & Filter Options",
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = SleekTextPrimary
-                )
-                Spacer(modifier = Modifier.height(12.dp))
-
-                // 1. Transaction Type Selection
-                Text(
-                    "Transaction Type",
-                    style = MaterialTheme.typography.bodySmall,
-                    fontWeight = FontWeight.SemiBold,
-                    color = SleekTextSecondary
-                )
-                Spacer(modifier = Modifier.height(6.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    val types = listOf(
-                        "ALL" to "Full Transactions",
-                        "INCOME" to "Only Income",
-                        "EXPENSE" to "Only Expense"
-                    )
-                    types.forEach { (typeKey, label) ->
-                        val isSelected = exportTransactionType == typeKey
-                        val activeColor = when (typeKey) {
-                            "INCOME" -> Color(0xFF10B981)
-                            "EXPENSE" -> ExpenseRed
-                            else -> SleekPrimary
-                        }
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(if (isSelected) activeColor.copy(alpha = 0.15f) else SleekSurface)
-                                .border(
-                                    width = if (isSelected) 1.5.dp else 1.dp,
-                                    color = if (isSelected) activeColor else SleekBorder,
-                                    shape = RoundedCornerShape(10.dp)
-                                )
-                                .clickable { exportTransactionType = typeKey }
-                                .padding(vertical = 10.dp, horizontal = 4.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = label,
-                                fontSize = 11.sp,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                color = if (isSelected) activeColor else SleekTextPrimary,
-                                textAlign = TextAlign.Center
-                            )
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // 2. Selected Time Period Card triggering Date Range Modal
-                Text(
-                    "Selected Time Period",
-                    style = MaterialTheme.typography.bodySmall,
-                    fontWeight = FontWeight.SemiBold,
-                    color = SleekTextSecondary
-                )
-                Spacer(modifier = Modifier.height(6.dp))
-
-                Card(
-                    colors = CardDefaults.cardColors(containerColor = SleekPrimaryContainer.copy(alpha = 0.12f)),
-                    border = BorderStroke(2.dp, SleekPrimary),
-                    shape = RoundedCornerShape(14.dp),
+                Box(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { showDateRangeModal = true }
-                        .testTag("open_date_range_modal_button")
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 14.dp, vertical = 12.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Icon(
-                                Icons.Default.DateRange,
-                                contentDescription = null,
-                                tint = SleekPrimary,
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Spacer(modifier = Modifier.width(10.dp))
-                            Column {
-                                Text(
-                                    text = if (exportStartDate == 0L) "All Time  —  ${dateSdf.format(Date(exportEndDate))}"
-                                           else "${dateSdf.format(Date(exportStartDate))}  —  ${dateSdf.format(Date(exportEndDate))}",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = SleekTextPrimary
-                                )
-                                Text(
-                                    text = "Tap to change Start & End Date",
-                                    fontSize = 11.sp,
-                                    color = SleekPrimary,
-                                    fontWeight = FontWeight.Medium
-                                )
-                            }
-                        }
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(SleekPrimary.copy(alpha = 0.15f))
-                                .padding(horizontal = 10.dp, vertical = 6.dp)
-                        ) {
-                            Text(
-                                text = "Select Dates",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = SleekPrimary
-                            )
-                        }
-                    }
-                }
-
-                if (showDateRangeModal) {
-                    DateRangeReportModalDialog(
-                        initialStartDate = exportStartDate,
-                        initialEndDate = exportEndDate,
-                        onDismiss = { showDateRangeModal = false },
-                        onConfirm = { selStart, selEnd ->
-                            exportStartDate = selStart
-                            exportEndDate = selEnd
-                            showDateRangeModal = false
-                        }
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // 3. Category Filter Section (Multi-selection for 1, 2, 3, 4, or All categories)
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                        .size(52.dp)
+                        .clip(CircleShape)
+                        .background(SleekPrimaryContainer),
+                    contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        "Category Filter",
+                        text = initials,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = SleekOnPrimaryContainer,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = userName ?: "Guest User",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = SleekTextPrimary,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "Offline Ledger Account",
                         style = MaterialTheme.typography.bodySmall,
-                        fontWeight = FontWeight.SemiBold,
                         color = SleekTextSecondary
                     )
-                    Text(
-                        text = if (selectedExportCategories.isEmpty()) "All Categories" else "${selectedExportCategories.size} Selected",
-                        style = MaterialTheme.typography.bodySmall,
-                        fontWeight = FontWeight.Bold,
-                        color = SleekPrimary
-                    )
                 }
-                Spacer(modifier = Modifier.height(6.dp))
-
-                FlowRow(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                IconButton(
+                    onClick = { showEditNameDialog = true },
+                    modifier = Modifier
+                        .size(36.dp)
+                        .background(SleekBorder.copy(alpha = 0.5f), CircleShape)
                 ) {
-                    val isAllSelected = selectedExportCategories.isEmpty()
-                    FilterChip(
-                        selected = isAllSelected,
-                        onClick = { selectedExportCategories = emptySet() },
-                        label = { Text("All Categories", fontSize = 11.sp, fontWeight = if (isAllSelected) FontWeight.Bold else FontWeight.Normal) },
-                        leadingIcon = if (isAllSelected) {
-                            { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(12.dp)) }
-                        } else null
+                    Icon(
+                        imageVector = Icons.Rounded.Edit,
+                        contentDescription = "Edit Name",
+                        tint = SleekPrimary,
+                        modifier = Modifier.size(16.dp)
                     )
-
-                    val combinedCats = (allCategoriesList + listOf("Food", "Travel", "Rent", "Utilities", "Entertainment", "Shopping", "Persons", "Salary", "Freelance", "Others")).distinct()
-                    combinedCats.forEach { cat ->
-                        val isCatSelected = selectedExportCategories.contains(cat)
-                        FilterChip(
-                            selected = isCatSelected,
-                            onClick = {
-                                selectedExportCategories = if (isCatSelected) {
-                                    selectedExportCategories - cat
-                                } else {
-                                    selectedExportCategories + cat
-                                }
-                            },
-                            label = { Text(cat, fontSize = 11.sp) },
-                            leadingIcon = if (isCatSelected) {
-                                { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(12.dp)) }
-                            } else null
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(20.dp))
-
-                // Export Buttons Row
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Button(
-                        onClick = {
-                            val startCal = Calendar.getInstance().apply {
-                                timeInMillis = exportStartDate
-                                set(Calendar.HOUR_OF_DAY, 0)
-                                set(Calendar.MINUTE, 0)
-                                set(Calendar.SECOND, 0)
-                                set(Calendar.MILLISECOND, 0)
-                            }
-                            val endCal = Calendar.getInstance().apply {
-                                timeInMillis = exportEndDate
-                                set(Calendar.HOUR_OF_DAY, 23)
-                                set(Calendar.MINUTE, 59)
-                                set(Calendar.SECOND, 59)
-                                set(Calendar.MILLISECOND, 999)
-                            }
-
-                            val filteredList = allExpensesList.filter { item ->
-                                val inDateRange = item.date in startCal.timeInMillis..endCal.timeInMillis
-                                val matchesType = when (exportTransactionType) {
-                                    "INCOME" -> item.type == "INCOME"
-                                    "EXPENSE" -> item.type != "INCOME"
-                                    else -> true
-                                }
-                                val matchesCat = if (selectedExportCategories.isEmpty()) true else selectedExportCategories.contains(item.category)
-                                inDateRange && matchesType && matchesCat
-                            }.sortedByDescending { it.date }
-
-                            val dateRangeLabel = "${dateSdf.format(Date(startCal.timeInMillis))} - ${dateSdf.format(Date(endCal.timeInMillis))}"
-                            val typeLabel = when (exportTransactionType) {
-                                "INCOME" -> "Only Income"
-                                "EXPENSE" -> "Only Expense"
-                                else -> "Full Transactions"
-                            }
-                            val catLabel = if (selectedExportCategories.isEmpty()) "All Categories" else selectedExportCategories.joinToString(", ")
-
-                            DataExporter.sharePdfReport(
-                                context = context,
-                                expenses = filteredList,
-                                dateRangeStr = dateRangeLabel,
-                                typeFilterStr = typeLabel,
-                                categoryFilterStr = catLabel
-                            )
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = SleekPrimary),
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.weight(1f),
-                        contentPadding = PaddingValues(vertical = 12.dp)
-                    ) {
-                        Icon(Icons.Default.PictureAsPdf, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("Share PDF", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                    }
-
-                    Button(
-                        onClick = {
-                            val startCal = Calendar.getInstance().apply {
-                                timeInMillis = exportStartDate
-                                set(Calendar.HOUR_OF_DAY, 0)
-                                set(Calendar.MINUTE, 0)
-                                set(Calendar.SECOND, 0)
-                                set(Calendar.MILLISECOND, 0)
-                            }
-                            val endCal = Calendar.getInstance().apply {
-                                timeInMillis = exportEndDate
-                                set(Calendar.HOUR_OF_DAY, 23)
-                                set(Calendar.MINUTE, 59)
-                                set(Calendar.SECOND, 59)
-                                set(Calendar.MILLISECOND, 999)
-                            }
-
-                            val filteredList = allExpensesList.filter { item ->
-                                val inDateRange = item.date in startCal.timeInMillis..endCal.timeInMillis
-                                val matchesType = when (exportTransactionType) {
-                                    "INCOME" -> item.type == "INCOME"
-                                    "EXPENSE" -> item.type != "INCOME"
-                                    else -> true
-                                }
-                                val matchesCat = if (selectedExportCategories.isEmpty()) true else selectedExportCategories.contains(item.category)
-                                inDateRange && matchesType && matchesCat
-                            }.sortedByDescending { it.date }
-
-                            val dateRangeLabel = "${dateSdf.format(Date(startCal.timeInMillis))} - ${dateSdf.format(Date(endCal.timeInMillis))}"
-                            val typeLabel = when (exportTransactionType) {
-                                "INCOME" -> "Only Income"
-                                "EXPENSE" -> "Only Expense"
-                                else -> "Full Transactions"
-                            }
-                            val catLabel = if (selectedExportCategories.isEmpty()) "All Categories" else selectedExportCategories.joinToString(", ")
-
-                            DataExporter.shareImageReport(
-                                context = context,
-                                expenses = filteredList,
-                                dateRangeStr = dateRangeLabel,
-                                typeFilterStr = typeLabel,
-                                categoryFilterStr = catLabel
-                            )
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = SleekPrimaryContainer),
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.weight(1f),
-                        contentPadding = PaddingValues(vertical = 12.dp)
-                    ) {
-                        Icon(Icons.Default.Photo, contentDescription = null, tint = SleekPrimary, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("Share Card", color = SleekPrimary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                    }
                 }
             }
         }
-
-        Spacer(modifier = Modifier.height(16.dp))
-        HorizontalDivider(color = SleekBorder)
-        Spacer(modifier = Modifier.height(16.dp))
         
-        // 4. FAQ & Help Section
+        Spacer(modifier = Modifier.height(20.dp))
+
         Text(
-            text = "FAQ & Help",
-            style = MaterialTheme.typography.titleSmall,
-            color = SleekPrimary,
+            text = "App Configuration",
+            style = MaterialTheme.typography.labelMedium,
             fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(bottom = 12.dp)
+            color = SleekTextSecondary,
+            modifier = Modifier.padding(start = 4.dp, bottom = 8.dp)
         )
         
-        FaqAccordion(viewModel)
-        
-        Spacer(modifier = Modifier.height(32.dp))
+        // 2. Settings Items List
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            // Item 1: Data and Storage (Reference Image 1 Style)
+            SidebarSettingsTile(
+                icon = Icons.Rounded.PieChart,
+                iconBgColor = Color(0xFF3B82F6), // Vibrant Blue Squircle
+                title = "Data and Storage",
+                subtitle = "Media download settings",
+                onClick = { onOpenSettingsScreen(SettingsSubScreen.DataAndStorage) }
+            )
+
+            // Item 2: Theme and Language
+            SidebarSettingsTile(
+                icon = Icons.Rounded.Palette,
+                iconBgColor = Color(0xFF8B5CF6), // Vibrant Violet Squircle
+                title = "Theme and Language",
+                subtitle = "${if (com.example.ui.theme.isDarkModeActive) "Dark" else "Light"} Theme • $selectedLanguage",
+                onClick = { onOpenSettingsScreen(SettingsSubScreen.ThemeAndLanguage) }
+            )
+
+            // Item 3: Exporting
+            SidebarSettingsTile(
+                icon = Icons.Rounded.FileDownload,
+                iconBgColor = Color(0xFF10B981), // Emerald Green Squircle
+                title = "Data Export & Reports",
+                subtitle = "Export transactions to CSV or PDF",
+                onClick = { onOpenSettingsScreen(SettingsSubScreen.Export) }
+            )
+
+            // Item 4: FAQ & Support
+            SidebarSettingsTile(
+                icon = Icons.Rounded.HelpOutline,
+                iconBgColor = Color(0xFFF59E0B), // Amber Squircle
+                title = "FAQ and Help",
+                subtitle = "Guides, formulas & help docs",
+                onClick = { onOpenSettingsScreen(SettingsSubScreen.FaqAndHelp) }
+            )
+        }
+        Spacer(modifier = Modifier.height(24.dp))
         HorizontalDivider(color = SleekBorder)
         Spacer(modifier = Modifier.height(16.dp))
         

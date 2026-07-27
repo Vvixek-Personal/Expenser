@@ -139,6 +139,7 @@ fun ExpenseDetailDialog(
                     border = BorderStroke(1.dp, SleekBorder),
                     modifier = Modifier.fillMaxWidth()
                 ) {
+                    val isIncome = expense.type == "INCOME"
                     Column(modifier = Modifier.padding(24.dp)) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
@@ -148,23 +149,40 @@ fun ExpenseDetailDialog(
                                 modifier = Modifier
                                     .size(48.dp)
                                     .clip(CircleShape)
-                                    .background(SleekPrimaryContainer),
+                                    .background(if (isIncome) Color(0xFF10B981).copy(alpha = 0.15f) else SleekPrimaryContainer),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
                                     imageVector = getCategoryIcon(expense.category, viewModel.categoryIcons.value),
                                     contentDescription = expense.category,
-                                    tint = SleekPrimary,
+                                    tint = if (isIncome) Color(0xFF10B981) else SleekPrimary,
                                     modifier = Modifier.size(24.dp)
                                 )
                             }
                             Column {
-                                Text(
-                                    text = expense.category,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = SleekTextSecondary,
-                                    fontWeight = FontWeight.Medium
-                                )
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        text = expense.category,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = SleekTextSecondary,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                    if (isIncome) {
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Surface(
+                                            color = Color(0xFF10B981).copy(alpha = 0.15f),
+                                            shape = RoundedCornerShape(4.dp)
+                                        ) {
+                                            Text(
+                                                text = "INCOME",
+                                                fontSize = 10.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color(0xFF10B981),
+                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                            )
+                                        }
+                                    }
+                                }
                                 Text(
                                     text = SimpleDateFormat("MMM dd, yyyy • hh:mm a", Locale.getDefault()).format(Date(expense.date)),
                                     style = MaterialTheme.typography.labelMedium,
@@ -176,10 +194,10 @@ fun ExpenseDetailDialog(
                         Spacer(modifier = Modifier.height(20.dp))
 
                         Text(
-                            text = "-₹${String.format(Locale.getDefault(), "%,.2f", expense.amount)}",
+                            text = "${if (isIncome) "+" else "-"}₹${String.format(Locale.getDefault(), "%,.2f", expense.amount)}",
                             style = MaterialTheme.typography.headlineLarge,
                             fontWeight = FontWeight.Bold,
-                            color = Color(0xFFEF4444)
+                            color = if (isIncome) Color(0xFF10B981) else Color(0xFFEF4444)
                         )
 
                         if (!expense.note.isNullOrBlank()) {
