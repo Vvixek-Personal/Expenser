@@ -1841,11 +1841,20 @@ fun AnalyticsTab(viewModel: FinanceViewModel) {
                 fontWeight = FontWeight.Bold
             )
             Text(
-                text = "Dynamic Category Pie & Month comparison charts",
+                text = "Category breakdown, Tag bar chart & Monthly spending trends",
                 style = MaterialTheme.typography.bodySmall,
                 color = SleekTextSecondary
             )
         }
+
+        Spacer(modifier = Modifier.height(20.dp))
+
+        // 🏷️ TAG SPENDING BAR CHART CARD (Canvas-drawn)
+        TagSpendingBarChart(
+            expenses = distributionExpenses,
+            categoryColors = categoryColors,
+            periodLabel = activePeriodLabel
+        )
 
         Spacer(modifier = Modifier.height(20.dp))
 
