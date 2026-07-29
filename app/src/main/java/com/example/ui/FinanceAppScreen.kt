@@ -1,5 +1,7 @@
 package com.example.ui
 
+import com.example.data.SavingsGoal
+
 import androidx.compose.animation.*
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
@@ -253,7 +255,8 @@ fun FinanceAppScreen(viewModel: FinanceViewModel) {
                         },
                         onNavigateToExpenses = { currentScreen = Screen.Expenses },
                         onProfileClick = { scope.launch { drawerState.open() } },
-                        onEditExpenseClick = { viewingDetailExpense = it }
+                        onEditExpenseClick = { viewingDetailExpense = it },
+                        viewModel = viewModel
                     )
                     Screen.Expenses -> ExpensesTab(
                         viewModel = viewModel,
@@ -381,8 +384,16 @@ fun DashboardTab(
     onAddExpenseClick: () -> Unit,
     onNavigateToExpenses: () -> Unit,
     onProfileClick: () -> Unit,
-    onEditExpenseClick: (Expense) -> Unit
+    onEditExpenseClick: (Expense) -> Unit,
+    viewModel: FinanceViewModel
 ) {
+    val savingsGoals by viewModel.savingsGoals.collectAsStateWithLifecycle()
+    val accounts by viewModel.accounts.collectAsStateWithLifecycle()
+    val selectedLanguage by viewModel.selectedLanguage.collectAsStateWithLifecycle()
+
+    var showAddGoalDialog by remember { mutableStateOf(false) }
+    var editingGoal by remember { mutableStateOf<SavingsGoal?>(null) }
+    var depositingGoal by remember { mutableStateOf<SavingsGoal?>(null) }
     val currentCalendar = Calendar.getInstance()
     val currentMonth = currentCalendar.get(Calendar.MONTH)
     val currentYear = currentCalendar.get(Calendar.YEAR)
@@ -836,6 +847,20 @@ fun DashboardTab(
 
         Spacer(modifier = Modifier.height(24.dp))
 
+        // Savings Goals Section (PS5, Gadgets, Trips & Reserves)
+        SavingsGoalsSection(
+            savingsGoals = savingsGoals,
+            accounts = accounts,
+            selectedLanguage = selectedLanguage,
+            onAddGoalClick = { showAddGoalDialog = true },
+            onEditGoalClick = { editingGoal = it },
+            onDeleteGoalClick = { viewModel.deleteSavingsGoal(it) },
+            onDepositGoalClick = { depositingGoal = it },
+            onQuickDeposit = { goal, amt -> viewModel.quickDepositToGoal(goal, amt) }
+        )
+
+        Spacer(modifier = Modifier.height(24.dp))
+
         // Recent Activity List Header
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -957,6 +982,47 @@ fun DashboardTab(
             onConfirm = {
                 onUpdateBudget(it)
                 showAdjustBudgetDialog = false
+            }
+        )
+    }
+
+    if (showAddGoalDialog) {
+        AddEditSavingsGoalDialog(
+            onDismiss = { showAddGoalDialog = false },
+            onSave = { name, target, initial, freq, contribution, isAuto, icon ->
+                viewModel.addSavingsGoal(name, target, initial, 0L, freq, contribution, isAuto, icon)
+            }
+        )
+    }
+
+    val currentEditGoal = editingGoal
+    if (currentEditGoal != null) {
+        AddEditSavingsGoalDialog(
+            goalToEdit = currentEditGoal,
+            onDismiss = { editingGoal = null },
+            onSave = { name, target, initial, freq, contribution, isAuto, icon ->
+                val updated = currentEditGoal.copy(
+                    name = name,
+                    targetAmount = target,
+                    currentAmount = initial,
+                    frequency = freq,
+                    contributionAmount = contribution,
+                    isAutoGap = isAuto,
+                    iconTag = icon
+                )
+                viewModel.updateSavingsGoal(updated)
+            }
+        )
+    }
+
+    val currentDepositGoal = depositingGoal
+    if (currentDepositGoal != null) {
+        DepositToGoalDialog(
+            goal = currentDepositGoal,
+            accounts = accounts,
+            onDismiss = { depositingGoal = null },
+            onConfirmDeposit = { amount, accId ->
+                viewModel.quickDepositToGoal(currentDepositGoal, amount)
             }
         )
     }
@@ -3938,7 +4004,7 @@ fun SidebarDrawerContent(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "Settings & Preferences",
+                text = LanguageManager.tr("Settings & Preferences", selectedLanguage),
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.Bold,
                 color = SleekTextSecondary
@@ -3992,7 +4058,7 @@ fun SidebarDrawerContent(
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = "Offline Ledger Account",
+                        text = LanguageManager.tr("Offline Ledger Account", selectedLanguage),
                         style = MaterialTheme.typography.bodySmall,
                         color = SleekTextSecondary
                     )
@@ -4016,7 +4082,7 @@ fun SidebarDrawerContent(
         Spacer(modifier = Modifier.height(20.dp))
 
         Text(
-            text = "App Configuration",
+            text = LanguageManager.tr("App Configuration", selectedLanguage),
             style = MaterialTheme.typography.labelMedium,
             fontWeight = FontWeight.Bold,
             color = SleekTextSecondary,
@@ -4025,12 +4091,12 @@ fun SidebarDrawerContent(
         
         // 2. Settings Items List
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            // Item 1: Data and Storage (Reference Image 1 Style)
+            // Item 1: Data and Storage
             SidebarSettingsTile(
                 icon = Icons.Rounded.PieChart,
                 iconBgColor = Color(0xFF3B82F6), // Vibrant Blue Squircle
-                title = "Data and Storage",
-                subtitle = "Media download settings",
+                title = LanguageManager.tr("Data and Storage", selectedLanguage),
+                subtitle = LanguageManager.tr("Storage stats & clear cache", selectedLanguage),
                 onClick = { onOpenSettingsScreen(SettingsSubScreen.DataAndStorage) }
             )
 
@@ -4038,7 +4104,7 @@ fun SidebarDrawerContent(
             SidebarSettingsTile(
                 icon = Icons.Rounded.Palette,
                 iconBgColor = Color(0xFF8B5CF6), // Vibrant Violet Squircle
-                title = "Theme and Language",
+                title = LanguageManager.tr("Theme and Language", selectedLanguage),
                 subtitle = "${if (com.example.ui.theme.isDarkModeActive) "Dark" else "Light"} Theme • $selectedLanguage",
                 onClick = { onOpenSettingsScreen(SettingsSubScreen.ThemeAndLanguage) }
             )
@@ -4047,8 +4113,8 @@ fun SidebarDrawerContent(
             SidebarSettingsTile(
                 icon = Icons.Rounded.FileDownload,
                 iconBgColor = Color(0xFF10B981), // Emerald Green Squircle
-                title = "Data Export & Reports",
-                subtitle = "Export transactions to CSV or PDF",
+                title = LanguageManager.tr("Data Export & Reports", selectedLanguage),
+                subtitle = LanguageManager.tr("Export transactions to CSV or PDF", selectedLanguage),
                 onClick = { onOpenSettingsScreen(SettingsSubScreen.Export) }
             )
 
@@ -4056,8 +4122,8 @@ fun SidebarDrawerContent(
             SidebarSettingsTile(
                 icon = Icons.Rounded.HelpOutline,
                 iconBgColor = Color(0xFFF59E0B), // Amber Squircle
-                title = "FAQ and Help",
-                subtitle = "Guides, formulas & help docs",
+                title = LanguageManager.tr("FAQ and Help", selectedLanguage),
+                subtitle = LanguageManager.tr("Guides, formulas & help docs", selectedLanguage),
                 onClick = { onOpenSettingsScreen(SettingsSubScreen.FaqAndHelp) }
             )
         }

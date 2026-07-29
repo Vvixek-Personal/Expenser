@@ -13,7 +13,7 @@ import androidx.room.RoomDatabase
         Budget::class,
         SavingsGoal::class
     ],
-    version = 4,
+    version = 5,
     exportSchema = false
 )
 abstract class FinanceDatabase : RoomDatabase() {

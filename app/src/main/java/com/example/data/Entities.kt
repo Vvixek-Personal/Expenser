@@ -47,7 +47,11 @@ data class SavingsGoal(
     @PrimaryKey(autoGenerate = true) val id: Int = 0,
     val name: String,
     val targetAmount: Double,
-    val currentAmount: Double,
-    val targetDate: Long
+    val currentAmount: Double = 0.0,
+    val targetDate: Long = 0L,
+    val frequency: String = "WEEKLY", // "DAILY", "WEEKLY", "MONTHLY", "MANUAL"
+    val contributionAmount: Double = 0.0,
+    val isAutoGap: Boolean = true,
+    val iconTag: String = "🎮"
 )
 

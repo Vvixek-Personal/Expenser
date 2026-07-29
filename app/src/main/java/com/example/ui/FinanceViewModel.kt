@@ -158,6 +158,39 @@ class FinanceViewModel(
 
         // Compute initial storage & network values
         refreshUsageData()
+
+        // Seed default savings goals once if list is empty
+        val hasSeeded = sharedPrefs.getBoolean("has_seeded_savings_goals", false)
+        if (!hasSeeded) {
+            viewModelScope.launch {
+                val list = savingsGoals.first()
+                if (list.isEmpty()) {
+                    repository.insertSavingsGoal(
+                        SavingsGoal(
+                            name = "PlayStation 5 (PS5)",
+                            targetAmount = 500.0,
+                            currentAmount = 175.0,
+                            frequency = "WEEKLY",
+                            contributionAmount = 25.0,
+                            isAutoGap = false,
+                            iconTag = "🎮"
+                        )
+                    )
+                    repository.insertSavingsGoal(
+                        SavingsGoal(
+                            name = "Emergency Reserve",
+                            targetAmount = 2000.0,
+                            currentAmount = 850.0,
+                            frequency = "MONTHLY",
+                            contributionAmount = 150.0,
+                            isAutoGap = false,
+                            iconTag = "🛡️"
+                        )
+                    )
+                }
+                sharedPrefs.edit().putBoolean("has_seeded_savings_goals", true).apply()
+            }
+        }
     }
 
     fun updateLanguage(language: String) {
@@ -429,9 +462,48 @@ class FinanceViewModel(
         }
     }
 
-    fun addSavingsGoal(name: String, targetAmount: Double, targetDate: Long) {
+    fun addSavingsGoal(
+        name: String,
+        targetAmount: Double,
+        initialAmount: Double = 0.0,
+        targetDate: Long = 0L,
+        frequency: String = "WEEKLY",
+        contributionAmount: Double = 0.0,
+        isAutoGap: Boolean = true,
+        iconTag: String = "🎮"
+    ) {
         viewModelScope.launch {
-            repository.insertSavingsGoal(SavingsGoal(name = name, targetAmount = targetAmount, currentAmount = 0.0, targetDate = targetDate))
+            repository.insertSavingsGoal(
+                SavingsGoal(
+                    name = name,
+                    targetAmount = targetAmount,
+                    currentAmount = initialAmount,
+                    targetDate = targetDate,
+                    frequency = frequency,
+                    contributionAmount = contributionAmount,
+                    isAutoGap = isAutoGap,
+                    iconTag = iconTag
+                )
+            )
+        }
+    }
+
+    fun updateSavingsGoal(goal: SavingsGoal) {
+        viewModelScope.launch {
+            repository.updateSavingsGoal(goal)
+        }
+    }
+
+    fun quickDepositToGoal(goal: SavingsGoal, amount: Double) {
+        if (amount <= 0) return
+        viewModelScope.launch {
+            val updated = goal.copy(currentAmount = goal.currentAmount + amount)
+            repository.updateSavingsGoal(updated)
+            // Deduct from primary bank account if exists
+            val primaryAccount = accounts.value.firstOrNull()
+            if (primaryAccount != null) {
+                repository.allocateToSavingsGoal(goal, primaryAccount, amount)
+            }
         }
     }
 
