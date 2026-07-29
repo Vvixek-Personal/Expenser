@@ -259,12 +259,37 @@ fun SavingsGoalCard(
                                 }
                             }
                         }
-                        Text(
-                            text = "Target Prize: ₹%,.0f".format(goal.targetAmount),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = SleekTextSecondary,
-                            fontSize = 11.sp
-                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "Target: ₹%,.0f".format(goal.targetAmount),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = SleekTextSecondary,
+                                fontSize = 11.sp
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(Color(0xFF3B82F6).copy(alpha = 0.12f))
+                                    .padding(horizontal = 5.dp, vertical = 1.dp)
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Lock,
+                                        contentDescription = "Locked",
+                                        tint = Color(0xFF2563EB),
+                                        modifier = Modifier.size(10.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(3.dp))
+                                    Text(
+                                        text = "Locked: ₹%,.0f".format(goal.currentAmount),
+                                        color = Color(0xFF2563EB),
+                                        fontSize = 9.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
 
@@ -637,9 +662,9 @@ fun AddEditSavingsGoalDialog(
 
                 Spacer(modifier = Modifier.height(14.dp))
 
-                // Saving Schedule / Frequency Selector
+                // Saving Mode: Automatic vs Manual Buttons
                 Text(
-                    text = "Saving Schedule / Frequency",
+                    text = "Saving Mode",
                     style = MaterialTheme.typography.labelSmall,
                     color = SleekTextSecondary,
                     fontWeight = FontWeight.Bold
@@ -648,23 +673,23 @@ fun AddEditSavingsGoalDialog(
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    val frequencies = listOf("DAILY" to "Daily", "WEEKLY" to "Weekly", "MONTHLY" to "Monthly", "MANUAL" to "Manual")
-                    frequencies.forEach { (key, label) ->
-                        val isSel = frequency.equals(key, ignoreCase = true)
+                    val modes = listOf(true to "Automatic ⚡", false to "Manual 🖐️")
+                    modes.forEach { (modeVal, label) ->
+                        val isSel = isAutoGap == modeVal
                         Box(
                             modifier = Modifier
                                 .weight(1f)
-                                .clip(RoundedCornerShape(10.dp))
+                                .clip(RoundedCornerShape(12.dp))
                                 .background(if (isSel) SleekPrimary else SleekBg)
-                                .clickable { frequency = key }
-                                .padding(vertical = 8.dp),
+                                .clickable { isAutoGap = modeVal }
+                                .padding(vertical = 10.dp),
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
                                 text = label,
-                                fontSize = 11.sp,
+                                fontSize = 12.sp,
                                 color = if (isSel) Color.White else SleekTextSecondary,
                                 fontWeight = FontWeight.Bold
                             )
@@ -672,41 +697,43 @@ fun AddEditSavingsGoalDialog(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(14.dp))
-
-                // Entry Gap Mode: Auto vs Manual
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
+                if (isAutoGap) {
+                    Spacer(modifier = Modifier.height(14.dp))
                     Text(
-                        text = "Entry Gap Calculation",
+                        text = "Automatic Deduction Interval",
                         style = MaterialTheme.typography.labelSmall,
                         color = SleekTextSecondary,
                         fontWeight = FontWeight.Bold
                     )
+                    Spacer(modifier = Modifier.height(6.dp))
 
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = if (isAutoGap) "Automatic" else "Manual",
-                            fontSize = 11.sp,
-                            color = SleekPrimary,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Switch(
-                            checked = isAutoGap,
-                            onCheckedChange = { isAutoGap = it },
-                            colors = SwitchDefaults.colors(
-                                checkedThumbColor = Color.White,
-                                checkedTrackColor = SleekPrimary
-                            )
-                        )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        val frequencies = listOf("DAILY" to "Daily", "WEEKLY" to "Weekly", "MONTHLY" to "Monthly")
+                        frequencies.forEach { (key, label) ->
+                            val isSel = frequency.equals(key, ignoreCase = true)
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(if (isSel) SleekPrimaryContainer.copy(alpha = 0.8f) else SleekBg)
+                                    .clickable { frequency = key }
+                                    .padding(vertical = 8.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = label,
+                                    fontSize = 11.sp,
+                                    color = if (isSel) SleekPrimary else SleekTextSecondary,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
                     }
-                }
 
-                if (isAutoGap) {
+                    Spacer(modifier = Modifier.height(10.dp))
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -715,27 +742,29 @@ fun AddEditSavingsGoalDialog(
                             .padding(10.dp)
                     ) {
                         Text(
-                            text = if (targetDouble > 0) "💡 Auto Entry Gap: ~₹%,.0f / %s".format(autoCalculatedGap, frequency.lowercase())
-                            else "Enter target prize to view auto gap estimation",
+                            text = if (targetDouble > 0) "💡 Money will be deducted automatically ~₹%,.0f / %s".format(autoCalculatedGap, frequency.lowercase())
+                            else "Enter target prize to view automatic deduction estimation",
                             fontSize = 11.sp,
                             color = SleekPrimary,
                             fontWeight = FontWeight.Medium
                         )
                     }
                 } else {
-                    OutlinedTextField(
-                        value = manualContributionStr,
-                        onValueChange = { manualContributionStr = it },
-                        label = { Text("Manual Entry Gap Amount (₹)", color = SleekTextSecondary) },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        singleLine = true,
-                        shape = RoundedCornerShape(12.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = SleekPrimary,
-                            unfocusedBorderColor = SleekBorder
-                        ),
-                        modifier = Modifier.fillMaxWidth()
-                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(SleekPrimary.copy(alpha = 0.08f))
+                            .padding(10.dp)
+                    ) {
+                        Text(
+                            text = "💡 Manual saving: You choose when to add money to this goal.",
+                            fontSize = 11.sp,
+                            color = SleekPrimary,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(20.dp))
@@ -858,6 +887,31 @@ fun DepositToGoalDialog(
                         .fillMaxWidth()
                         .testTag("deposit_amount_input")
                 )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(Color(0xFF2563EB).copy(alpha = 0.1f))
+                        .padding(horizontal = 10.dp, vertical = 6.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Lock,
+                        contentDescription = "Lock",
+                        tint = Color(0xFF2563EB),
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "Deposited money will be locked in this goal & deducted from spendable balance.",
+                        fontSize = 11.sp,
+                        color = Color(0xFF2563EB),
+                        fontWeight = FontWeight.Medium
+                    )
+                }
 
                 if (accounts.isNotEmpty()) {
                     Spacer(modifier = Modifier.height(12.dp))

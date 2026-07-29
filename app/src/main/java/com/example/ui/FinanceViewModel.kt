@@ -128,17 +128,41 @@ class FinanceViewModel(
     private val _customCategories = MutableStateFlow<List<String>>(emptyList())
     val customCategories: StateFlow<List<String>> = _customCategories.asStateFlow()
 
-    val defaultCategories = listOf("Food", "Travel", "Rent", "Utilities", "Entertainment", "Shopping", "Persons", "Others")
+    private val _customExpenseCategories = MutableStateFlow<List<String>>(emptyList())
+    val customExpenseCategories: StateFlow<List<String>> = _customExpenseCategories.asStateFlow()
+
+    private val _customIncomeCategories = MutableStateFlow<List<String>>(emptyList())
+    val customIncomeCategories: StateFlow<List<String>> = _customIncomeCategories.asStateFlow()
+
+    val defaultExpenseCategories = listOf("Food", "Travel", "Rent", "Utilities", "Entertainment", "Shopping", "Home", "Others")
+    val defaultIncomeCategories = listOf("Salary", "Freelance", "Investments", "Gifts", "Others")
+    val defaultCategories = (defaultExpenseCategories + defaultIncomeCategories).distinct()
 
     val allCategories = _customCategories.map { custom ->
         (defaultCategories + custom).distinct()
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), defaultCategories)
 
+    val expenseCategories = _customExpenseCategories.map { custom ->
+        (defaultExpenseCategories + custom).distinct()
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), defaultExpenseCategories)
+
+    val incomeCategories = _customIncomeCategories.map { custom ->
+        (defaultIncomeCategories + custom).distinct()
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), defaultIncomeCategories)
+
     init {
         _userName.value = sharedPrefs.getString("user_name", null)
         _monthlyBudget.value = sharedPrefs.getFloat("monthly_budget", 25000.0f).toDouble()
         val savedCats = sharedPrefs.getStringSet("custom_categories", emptySet()) ?: emptySet()
-        _customCategories.value = savedCats.toList().sorted()
+        val savedExpenseCats = sharedPrefs.getStringSet("custom_expense_categories", null)
+        val savedIncomeCats = sharedPrefs.getStringSet("custom_income_categories", null)
+
+        val expSet = savedExpenseCats ?: (savedCats - defaultIncomeCategories.toSet())
+        val incSet = savedIncomeCats ?: emptySet()
+
+        _customExpenseCategories.value = expSet.toList().sorted()
+        _customIncomeCategories.value = incSet.toList().sorted()
+        _customCategories.value = (expSet + incSet + savedCats).distinct().sorted()
         
         _themeIndex.value = sharedPrefs.getInt("theme_index", 0)
         _customThemeHue.value = sharedPrefs.getFloat("custom_theme_hue", 200f)
@@ -283,13 +307,28 @@ class FinanceViewModel(
         }
     }
 
-    fun addCustomCategory(category: String) {
+    fun addCustomCategory(category: String, type: String = "EXPENSE") {
         val trimmed = category.trim()
         if (trimmed.isEmpty()) return
-        val current = sharedPrefs.getStringSet("custom_categories", emptySet()) ?: emptySet()
-        val updated = current + trimmed
-        sharedPrefs.edit().putStringSet("custom_categories", updated).apply()
-        _customCategories.value = updated.toList().sorted()
+
+        val prefKey = if (type == "INCOME") "custom_income_categories" else "custom_expense_categories"
+        val currentTyped = sharedPrefs.getStringSet(prefKey, emptySet()) ?: emptySet()
+        val updatedTyped = currentTyped + trimmed
+
+        val currentLegacy = sharedPrefs.getStringSet("custom_categories", emptySet()) ?: emptySet()
+        val updatedLegacy = currentLegacy + trimmed
+
+        sharedPrefs.edit()
+            .putStringSet(prefKey, updatedTyped)
+            .putStringSet("custom_categories", updatedLegacy)
+            .apply()
+
+        if (type == "INCOME") {
+            _customIncomeCategories.value = updatedTyped.toList().sorted()
+        } else {
+            _customExpenseCategories.value = updatedTyped.toList().sorted()
+        }
+        _customCategories.value = updatedLegacy.toList().sorted()
 
         // Set pending icon state in-memory first
         _categoryIcons.value = _categoryIcons.value + (trimmed to "Pending")
@@ -485,6 +524,17 @@ class FinanceViewModel(
                     iconTag = iconTag
                 )
             )
+            if (initialAmount > 0) {
+                repository.insertExpense(
+                    Expense(
+                        amount = initialAmount,
+                        category = "Locked Savings",
+                        date = System.currentTimeMillis(),
+                        note = "🔒 Initial savings locked in goal: $name",
+                        type = "EXPENSE"
+                    )
+                )
+            }
         }
     }
 
@@ -499,10 +549,23 @@ class FinanceViewModel(
         viewModelScope.launch {
             val updated = goal.copy(currentAmount = goal.currentAmount + amount)
             repository.updateSavingsGoal(updated)
+
+            // Insert Locked Savings transaction to deduct from spendable balance
+            repository.insertExpense(
+                Expense(
+                    amount = amount,
+                    category = "Locked Savings",
+                    date = System.currentTimeMillis(),
+                    note = "🔒 Saved & locked in ${goal.name}",
+                    type = "EXPENSE"
+                )
+            )
+
             // Deduct from primary bank account if exists
             val primaryAccount = accounts.value.firstOrNull()
             if (primaryAccount != null) {
-                repository.allocateToSavingsGoal(goal, primaryAccount, amount)
+                val updatedAcc = primaryAccount.copy(balance = (primaryAccount.balance - amount).coerceAtLeast(0.0))
+                repository.updateAccount(updatedAcc)
             }
         }
     }
@@ -514,14 +577,38 @@ class FinanceViewModel(
     }
 
     fun allocateToGoal(goal: SavingsGoal, account: Account, amount: Double) {
+        if (amount <= 0) return
         viewModelScope.launch {
-            repository.allocateToSavingsGoal(goal, account, amount)
+            val success = repository.allocateToSavingsGoal(goal, account, amount)
+            if (success) {
+                repository.insertExpense(
+                    Expense(
+                        amount = amount,
+                        category = "Locked Savings",
+                        date = System.currentTimeMillis(),
+                        note = "🔒 Saved & locked in ${goal.name}",
+                        type = "EXPENSE"
+                    )
+                )
+            }
         }
     }
 
     fun withdrawFromGoal(goal: SavingsGoal, account: Account, amount: Double) {
+        if (amount <= 0 || goal.currentAmount < amount) return
         viewModelScope.launch {
-            repository.withdrawFromSavingsGoal(goal, account, amount)
+            val success = repository.withdrawFromSavingsGoal(goal, account, amount)
+            if (success) {
+                repository.insertExpense(
+                    Expense(
+                        amount = amount,
+                        category = "Goal Withdrawal",
+                        date = System.currentTimeMillis(),
+                        note = "Unlocked from goal: ${goal.name}",
+                        type = "INCOME"
+                    )
+                )
+            }
         }
     }
 

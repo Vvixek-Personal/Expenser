@@ -170,7 +170,10 @@ fun FinanceAppScreen(viewModel: FinanceViewModel) {
     val userName by viewModel.userName.collectAsStateWithLifecycle()
     val monthlyBudget by viewModel.monthlyBudget.collectAsStateWithLifecycle()
     val allCategories by viewModel.allCategories.collectAsStateWithLifecycle()
+    val expenseCategories by viewModel.expenseCategories.collectAsStateWithLifecycle()
+    val incomeCategories by viewModel.incomeCategories.collectAsStateWithLifecycle()
     val categoryIcons by viewModel.categoryIcons.collectAsStateWithLifecycle()
+    val savingsGoals by viewModel.savingsGoals.collectAsStateWithLifecycle()
 
     var showAddExpenseDialog by remember { mutableStateOf(false) }
     var prefilledDateForAddDialog by remember { mutableStateOf<Long?>(null) }
@@ -286,9 +289,12 @@ fun FinanceAppScreen(viewModel: FinanceViewModel) {
                 AddExpenseDialog(
                     prefilledDate = prefilledDateForAddDialog,
                     categories = allCategories,
+                    expenseCategories = expenseCategories,
+                    incomeCategories = incomeCategories,
                     categoryIcons = categoryIcons,
                     expenses = expenses,
-                    onAddCategory = { viewModel.addCustomCategory(it) },
+                    savingsGoals = savingsGoals,
+                    onAddCategory = { name, catType -> viewModel.addCustomCategory(name, catType) },
                     onDeleteCategory = { viewModel.deleteCustomCategory(it) },
                     onEditCategory = { old, new -> viewModel.renameCustomCategory(old, new) },
                     onDismiss = { showAddExpenseDialog = false },
@@ -304,9 +310,12 @@ fun FinanceAppScreen(viewModel: FinanceViewModel) {
                 EditExpenseDialog(
                     expense = editingExpense!!,
                     categories = allCategories,
+                    expenseCategories = expenseCategories,
+                    incomeCategories = incomeCategories,
                     categoryIcons = categoryIcons,
                     expenses = expenses,
-                    onAddCategory = { viewModel.addCustomCategory(it) },
+                    savingsGoals = savingsGoals,
+                    onAddCategory = { name, catType -> viewModel.addCustomCategory(name, catType) },
                     onDeleteCategory = { viewModel.deleteCustomCategory(it) },
                     onEditCategory = { old, new -> viewModel.renameCustomCategory(old, new) },
                     onDismiss = { editingExpense = null },
@@ -2260,9 +2269,10 @@ fun ManageCategoryDialog(
 
 // ==========================================
 // 5️⃣ ADD EXPENSE DIALOG
+// Defined in AddTransactionFlowComponents.kt
 // ==========================================
 @Composable
-fun AddExpenseDialog(
+private fun AddExpenseDialogOld(
     prefilledDate: Long?,
     categories: List<String>,
     categoryIcons: Map<String, String> = emptyMap(),
@@ -2701,9 +2711,12 @@ fun AddExpenseDialog(
 fun EditExpenseDialog(
     expense: Expense,
     categories: List<String>,
+    expenseCategories: List<String> = emptyList(),
+    incomeCategories: List<String> = emptyList(),
     categoryIcons: Map<String, String> = emptyMap(),
     expenses: List<Expense> = emptyList(),
-    onAddCategory: (String) -> Unit,
+    savingsGoals: List<SavingsGoal> = emptyList(),
+    onAddCategory: (name: String, categoryType: String) -> Unit = { _, _ -> },
     onDeleteCategory: (String) -> Unit,
     onEditCategory: (String, String) -> Unit,
     onDismiss: () -> Unit,
@@ -2722,15 +2735,24 @@ fun EditExpenseDialog(
             expenses.filter { it.type == "INCOME" }.sumOf { it.amount }
         }
     }
-    val availableBalanceForEdit = (totalIncome - otherExpenses).coerceAtLeast(0.0)
+    val totalLockedInGoals = remember(savingsGoals) {
+        savingsGoals.sumOf { it.currentAmount }
+    }
+    val recordedLockedInExpenses = remember(expenses, expense) {
+        expenses.filter { it.id != expense.id && it.category == "Locked Savings" && it.type == "EXPENSE" }.sumOf { it.amount } - expenses.filter { it.id != expense.id && it.category == "Goal Withdrawal" && it.type == "INCOME" }.sumOf { it.amount }
+    }
+    val unrecordedLockedSavings = (totalLockedInGoals - recordedLockedInExpenses).coerceAtLeast(0.0)
+
+    val availableBalanceForEdit = (totalIncome - otherExpenses - unrecordedLockedSavings).coerceAtLeast(0.0)
     val enteredAmount = amountStr.toDoubleOrNull() ?: 0.0
     val isExceedingIncome = type == "EXPENSE" && (enteredAmount > availableBalanceForEdit || otherExpenses + enteredAmount > totalIncome)
 
-    val incomeCategories = listOf("Salary", "Freelance", "Investments", "Gifts", "Others")
+    val defaultExpensePreset = listOf("Food", "Travel", "Rent", "Utilities", "Entertainment", "Shopping", "Home", "Others")
+    val defaultIncomePreset = listOf("Salary", "Freelance", "Investments", "Gifts", "Others")
     val currentCategoriesList = if (type == "INCOME") {
-        incomeCategories
+        (defaultIncomePreset + (if (incomeCategories.isNotEmpty()) incomeCategories else categories.filter { defaultIncomePreset.contains(it) })).distinct()
     } else {
-        categories
+        (defaultExpensePreset + (if (expenseCategories.isNotEmpty()) expenseCategories else categories.filter { !defaultIncomePreset.contains(it) })).distinct()
     }
     
     var category by remember { mutableStateOf(expense.category) }
@@ -2743,7 +2765,7 @@ fun EditExpenseDialog(
         if (firstLoad) {
             firstLoad = false
         } else {
-            category = if (type == "INCOME") "Salary" else (categories.firstOrNull() ?: "Food")
+            category = if (type == "INCOME") (currentCategoriesList.firstOrNull() ?: "Salary") else (currentCategoriesList.firstOrNull() ?: "Food")
         }
     }
 
@@ -2991,9 +3013,10 @@ fun EditExpenseDialog(
 
     if (showCreateCategoryDialog) {
         CreateCategoryDialog(
+            initialType = type,
             onDismiss = { showCreateCategoryDialog = false },
-            onConfirm = { newCat ->
-                onAddCategory(newCat)
+            onConfirm = { newCat, catType ->
+                onAddCategory(newCat, catType)
                 category = newCat
                 showCreateCategoryDialog = false
             }
@@ -3520,10 +3543,14 @@ fun OnboardingNameDialog(
 
 @Composable
 fun CreateCategoryDialog(
+    initialType: String = "EXPENSE",
     onDismiss: () -> Unit,
-    onConfirm: (String) -> Unit
+    onConfirm: (name: String, type: String) -> Unit = { _, _ -> },
+    onConfirmSingle: ((String) -> Unit)? = null
 ) {
     var newCatName by remember { mutableStateOf("") }
+    var selectedType by remember { mutableStateOf(if (initialType == "INCOME") "INCOME" else "EXPENSE") }
+
     Dialog(onDismissRequest = onDismiss) {
         Card(
             colors = CardDefaults.cardColors(containerColor = SleekSurface),
@@ -3541,16 +3568,66 @@ fun CreateCategoryDialog(
                     fontWeight = FontWeight.Bold
                 )
                 Spacer(modifier = Modifier.height(14.dp))
+
+                // Category Type Selector (Expense vs Income)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(SleekBg)
+                        .padding(4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    val isExp = selectedType == "EXPENSE"
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(if (isExp) Color(0xFFEF5350) else Color.Transparent)
+                            .clickable { selectedType = "EXPENSE" }
+                            .padding(vertical = 8.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            "Expense Category",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isExp) Color.White else SleekTextSecondary
+                        )
+                    }
+
+                    val isInc = selectedType == "INCOME"
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(if (isInc) Color(0xFF10B981) else Color.Transparent)
+                            .clickable { selectedType = "INCOME" }
+                            .padding(vertical = 8.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            "Income Category",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isInc) Color.White else SleekTextSecondary
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+
                 OutlinedTextField(
                     value = newCatName,
                     onValueChange = { newCatName = it },
                     label = { Text("Category Name", color = SleekTextSecondary) },
+                    placeholder = { Text(if (selectedType == "INCOME") "e.g., Freelance, Bonus..." else "e.g., Gym, Subscriptions...", color = SleekTextSecondary, fontSize = 12.sp) },
                     singleLine = true,
                     shape = RoundedCornerShape(12.dp),
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = SleekPrimary,
+                        focusedBorderColor = if (selectedType == "INCOME") Color(0xFF10B981) else Color(0xFFEF5350),
                         unfocusedBorderColor = SleekBorder,
-                        focusedLabelColor = SleekPrimary,
+                        focusedLabelColor = if (selectedType == "INCOME") Color(0xFF10B981) else Color(0xFFEF5350),
                         unfocusedLabelColor = SleekTextSecondary
                     ),
                     modifier = Modifier.fillMaxWidth()
@@ -3571,11 +3648,14 @@ fun CreateCategoryDialog(
                     Button(
                         onClick = {
                             if (newCatName.trim().isNotEmpty()) {
-                                onConfirm(newCatName.trim())
+                                onConfirm(newCatName.trim(), selectedType)
+                                onConfirmSingle?.invoke(newCatName.trim())
                             }
                         },
                         enabled = newCatName.trim().isNotEmpty(),
-                        colors = ButtonDefaults.buttonColors(containerColor = SleekPrimary),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (selectedType == "INCOME") Color(0xFF10B981) else Color(0xFFEF5350)
+                        ),
                         shape = RoundedCornerShape(12.dp),
                         modifier = Modifier.weight(1f)
                     ) {
@@ -3585,6 +3665,18 @@ fun CreateCategoryDialog(
             }
         }
     }
+}
+
+@Composable
+fun CreateCategoryDialog(
+    onDismiss: () -> Unit,
+    onConfirm: (String) -> Unit
+) {
+    CreateCategoryDialog(
+        initialType = "EXPENSE",
+        onDismiss = onDismiss,
+        onConfirmSingle = onConfirm
+    )
 }
 
 @Composable
