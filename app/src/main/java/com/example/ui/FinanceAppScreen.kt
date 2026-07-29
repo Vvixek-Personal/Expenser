@@ -561,7 +561,7 @@ fun DashboardTab(
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = "MONTHLY NET CASHFLOW",
+                            text = "TOTAL NET BALANCE",
                             style = MaterialTheme.typography.labelMedium,
                             color = Color.White.copy(alpha = 0.9f),
                             fontWeight = FontWeight.Bold,
@@ -1155,13 +1155,13 @@ fun ExpensesTab(
             ) {
                 Column {
                     Text(
-                        text = "Finance Ledger",
+                        text = "Transaction History",
                         style = MaterialTheme.typography.headlineSmall,
                         color = SleekTextPrimary,
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = "Hold a row to select/edit. Offline safe.",
+                        text = "Hold a row to select or edit transactions.",
                         style = MaterialTheme.typography.bodySmall,
                         color = SleekTextSecondary
                     )
@@ -1755,6 +1755,73 @@ fun DateRangePickerDialog(
     }
 }
 
+@Composable
+fun AnalyticsStatCard(
+    title: String,
+    value: String,
+    subtitle: String? = null,
+    icon: ImageVector,
+    iconColor: Color,
+    bgColor: Color = SleekSurface,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = bgColor),
+        border = BorderStroke(1.dp, SleekBorder),
+        modifier = modifier
+    ) {
+        Column(
+            modifier = Modifier.padding(14.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = SleekTextSecondary,
+                    fontWeight = FontWeight.Medium
+                )
+                Box(
+                    modifier = Modifier
+                        .size(32.dp)
+                        .clip(CircleShape)
+                        .background(iconColor.copy(alpha = 0.15f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        tint = iconColor,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = value,
+                style = MaterialTheme.typography.titleMedium,
+                color = SleekTextPrimary,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            if (subtitle != null) {
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = SleekTextSecondary,
+                    fontSize = 10.sp
+                )
+            }
+        }
+    }
+}
+
 // ==========================================
 // 3️⃣ ANALYTICS TAB (Custom Canvas charts)
 // ==========================================
@@ -1810,6 +1877,18 @@ fun AnalyticsTab(viewModel: FinanceViewModel) {
         SimpleDateFormat("MMMM yyyy", Locale.getDefault()).format(targetCal.time)
     }
 
+    // Comprehensive Stats Calculations
+    val totalTxCount = rawDistributionExpenses.size
+    val totalIncomeVal = rawDistributionExpenses.filter { it.type == "INCOME" }.sumOf { it.amount }
+    val totalExpenseVal = rawDistributionExpenses.filter { it.type != "INCOME" }.sumOf { it.amount }
+    val netCashflowVal = totalIncomeVal - totalExpenseVal
+    val totalCashFlownVal = totalIncomeVal + totalExpenseVal
+    val activeDaysCount = rawDistributionExpenses.map {
+        SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date(it.date))
+    }.distinct().size
+    val avgDailySpend = if (activeDaysCount > 0) totalExpenseVal / activeDaysCount else 0.0
+    val avgTxnVal = if (totalTxCount > 0) totalCashFlownVal / totalTxCount else 0.0
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -1824,10 +1903,84 @@ fun AnalyticsTab(viewModel: FinanceViewModel) {
                 fontWeight = FontWeight.Bold
             )
             Text(
-                text = "Category breakdown, Tag bar chart & Monthly spending trends",
+                text = "Financial summary, Category breakdown & Spending trends for $activePeriodLabel",
                 style = MaterialTheme.typography.bodySmall,
                 color = SleekTextSecondary
             )
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // 📈 FINANCIAL STATS GRID
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            // Row 1: Income & Expense
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                AnalyticsStatCard(
+                    title = "Total Income",
+                    value = "₹%,.2f".format(totalIncomeVal),
+                    subtitle = "Inflow for period",
+                    icon = Icons.Default.TrendingUp,
+                    iconColor = Color(0xFF10B981),
+                    modifier = Modifier.weight(1f)
+                )
+                AnalyticsStatCard(
+                    title = "Total Expense",
+                    value = "₹%,.2f".format(totalExpenseVal),
+                    subtitle = "Outflow for period",
+                    icon = Icons.Default.TrendingDown,
+                    iconColor = Color(0xFFEF4444),
+                    modifier = Modifier.weight(1f)
+                )
+            }
+
+            // Row 2: Net Cashflow & Total Cash Flown
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                AnalyticsStatCard(
+                    title = "Net Cashflow",
+                    value = "₹%,.2f".format(netCashflowVal),
+                    subtitle = if (netCashflowVal >= 0) "Surplus balance" else "Deficit balance",
+                    icon = Icons.Default.AccountBalanceWallet,
+                    iconColor = if (netCashflowVal >= 0) Color(0xFF3B82F6) else Color(0xFFF59E0B),
+                    modifier = Modifier.weight(1f)
+                )
+                AnalyticsStatCard(
+                    title = "Total Cash Flown",
+                    value = "₹%,.2f".format(totalCashFlownVal),
+                    subtitle = "Total volume moved",
+                    icon = Icons.Default.SwapHoriz,
+                    iconColor = Color(0xFF8B5CF6),
+                    modifier = Modifier.weight(1f)
+                )
+            }
+
+            // Row 3: Transactions Count & Active Days
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                AnalyticsStatCard(
+                    title = "Transactions Done",
+                    value = "$totalTxCount txns",
+                    subtitle = "Avg ~₹%,.0f / txn".format(avgTxnVal),
+                    icon = Icons.Default.ReceiptLong,
+                    iconColor = Color(0xFFF59E0B),
+                    modifier = Modifier.weight(1f)
+                )
+                AnalyticsStatCard(
+                    title = "Active Days",
+                    value = "$activeDaysCount days",
+                    subtitle = "Avg ~₹%,.0f / day".format(avgDailySpend),
+                    icon = Icons.Default.DateRange,
+                    iconColor = Color(0xFF06B6D4),
+                    modifier = Modifier.weight(1f)
+                )
+            }
         }
 
         Spacer(modifier = Modifier.height(20.dp))
@@ -3098,7 +3251,7 @@ fun CalendarTab(
         ) {
             Column {
                 Text(
-                    text = "Live Ledger Calendar",
+                    text = "Transaction Calendar",
                     style = MaterialTheme.typography.headlineSmall,
                     color = SleekTextPrimary,
                     fontWeight = FontWeight.Bold
@@ -4150,7 +4303,7 @@ fun SidebarDrawerContent(
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = LanguageManager.tr("Offline Ledger Account", selectedLanguage),
+                        text = LanguageManager.tr("Personal Account", selectedLanguage),
                         style = MaterialTheme.typography.bodySmall,
                         color = SleekTextSecondary
                     )
@@ -4230,7 +4383,7 @@ fun SidebarDrawerContent(
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             Text(
-                text = "Version 1.2.0 (Offline Stable)",
+                text = "Version 1.2.0 (Stable)",
                 style = MaterialTheme.typography.labelMedium,
                 color = SleekTextSecondary
             )
@@ -4388,7 +4541,7 @@ fun FaqAccordion(viewModel: FinanceViewModel) {
         "Is my financial data secure?" to "Yes, all data is stored offline locally on your device and never uploaded to any servers.",
         "How do I set a monthly budget?" to "Click the pencil icon on the monthly card on the Dashboard to set your budget limit.",
         "What are custom categories?" to "Select '+ Add Custom...' in the Category dropdown when adding/editing an expense to add new categories.",
-        "How do I delete or edit transactions?" to "On the Ledger tab, long press or tap on any expense row to select it, then use the floating actions bar to edit or delete."
+        "How do I delete or edit transactions?" to "On the Transactions tab, long press or tap on any expense row to select it, then use the floating actions bar to edit or delete."
     )
     
     var expandedIndex by remember { mutableStateOf<Int?>(null) }

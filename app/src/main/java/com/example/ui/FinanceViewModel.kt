@@ -191,13 +191,13 @@ class FinanceViewModel(
                 if (list.isEmpty()) {
                     repository.insertSavingsGoal(
                         SavingsGoal(
-                            name = "PlayStation 5 (PS5)",
+                            name = "Vacation Trip",
                             targetAmount = 500.0,
                             currentAmount = 175.0,
                             frequency = "WEEKLY",
                             contributionAmount = 25.0,
                             isAutoGap = false,
-                            iconTag = "🎮"
+                            iconTag = "✈️"
                         )
                     )
                     repository.insertSavingsGoal(

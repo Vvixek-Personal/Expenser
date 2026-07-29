@@ -260,7 +260,7 @@ object DataExporter {
         val intent = Intent(Intent.ACTION_SEND).apply {
             type = "application/pdf"
             putExtra(Intent.EXTRA_STREAM, uri)
-            putExtra(Intent.EXTRA_SUBJECT, "Finance Ledger Statement PDF")
+            putExtra(Intent.EXTRA_SUBJECT, "Finance Statement PDF")
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
         context.startActivity(Intent.createChooser(intent, "Share PDF Statement"))
@@ -291,7 +291,7 @@ object DataExporter {
         val intent = Intent(Intent.ACTION_SEND).apply {
             type = "text/csv"
             putExtra(Intent.EXTRA_STREAM, uri)
-            putExtra(Intent.EXTRA_SUBJECT, "Finance Ledger CSV Statement")
+            putExtra(Intent.EXTRA_SUBJECT, "Finance CSV Statement")
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
         context.startActivity(Intent.createChooser(intent, "Share CSV Statement"))
@@ -461,7 +461,7 @@ object DataExporter {
         }
 
         // Footer
-        canvas.drawText("Generated with Finance Ledger App", 50f, 1160f, subTitlePaint)
+        canvas.drawText("Generated with Personal Finance App", 50f, 1160f, subTitlePaint)
 
         val cachePath = File(context.cacheDir, "reports")
         cachePath.mkdirs()
@@ -475,7 +475,7 @@ object DataExporter {
         val intent = Intent(Intent.ACTION_SEND).apply {
             type = "image/jpeg"
             putExtra(Intent.EXTRA_STREAM, uri)
-            putExtra(Intent.EXTRA_SUBJECT, "Finance Ledger Image Statement")
+            putExtra(Intent.EXTRA_SUBJECT, "Finance Image Statement")
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
         context.startActivity(Intent.createChooser(intent, "Share Image Statement"))

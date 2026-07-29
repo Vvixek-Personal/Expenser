@@ -135,8 +135,8 @@ object LanguageManager {
         "Guides, formulas & help docs" to mapOf(
             "en" to "Guides, formulas & help docs", "es" to "Guías, fórmulas y documentos", "hi" to "गाइड, सूत्र और सहायता दस्तावेज", "fr" to "Guides, formules & documents", "de" to "Anleitungen, Formeln & Hilfe", "ja" to "ガイドとヘルプドキュメント"
         ),
-        "Offline Ledger Account" to mapOf(
-            "en" to "Offline Ledger Account", "es" to "Cuenta de Contabilidad Local", "hi" to "ऑफलाइन लेजर खाता", "fr" to "Compte de comptabilité local", "de" to "Lokales Konto", "ja" to "オフライン帳簿アカウント"
+        "Personal Account" to mapOf(
+            "en" to "Personal Account", "es" to "Cuenta Personal", "hi" to "व्यक्तिगत खाता", "fr" to "Compte personnel", "de" to "Persönliches Konto", "ja" to "個人アカウント"
         ),
         "Language Preference" to mapOf(
             "en" to "Language Preference", "es" to "Preferencia de Idioma", "hi" to "भाषा प्राथमिकता", "fr" to "Préférence de langue", "de" to "Sprachauswahl", "ja" to "言語設定"
@@ -165,8 +165,8 @@ object LanguageManager {
         "Refresh Disk Usage Stats" to mapOf(
             "en" to "Refresh Disk Usage Stats", "es" to "Actualizar Estadísticas de Disco", "hi" to "डिस्क उपयोग आँकड़े ताज़ा करें", "fr" to "Actualiser les statistiques du disque", "de" to "Speicherstatistiken aktualisieren", "ja" to "ディスク使用量の再読み込み"
         ),
-        "Export Ledger Statements" to mapOf(
-            "en" to "Export Ledger Statements", "es" to "Exportar Estados de Cuenta", "hi" to "लेजर विवरण निर्यात करें", "fr" to "Exporter los relevés de compte", "de" to "Kontoauszüge exportieren", "ja" to "取引明細の出力"
+        "Export Statements" to mapOf(
+            "en" to "Export Statements", "es" to "Exportar Estados de Cuenta", "hi" to "विवरण निर्यात करें", "fr" to "Exporter les relevés", "de" to "Auszüge exportieren", "ja" to "明細の出力"
         ),
         "Date Range Filter" to mapOf(
             "en" to "Date Range Filter", "es" to "Filtro de Rango de Fechas", "hi" to "तिथि सीमा फ़िल्टर", "fr" to "Filtre de plage de dates", "de" to "Datumsbereichsfilter", "ja" to "日付範囲フィルター"
@@ -177,8 +177,8 @@ object LanguageManager {
         "Transaction Type" to mapOf(
             "en" to "Transaction Type", "es" to "Tipo de Transacción", "hi" to "लेन-देन का प्रकार", "fr" to "Type de transaction", "de" to "Transaktionstyp", "ja" to "取引タイプ"
         ),
-        "Full Ledger" to mapOf(
-            "en" to "Full Ledger", "es" to "Libro Completo", "hi" to "पूरा लेजर", "fr" to "Registre complet", "de" to "Vollständiges Buch", "ja" to "全履歴"
+        "Full Statement" to mapOf(
+            "en" to "Full Statement", "es" to "Estado Completo", "hi" to "पूरा विवरण", "fr" to "Relevé complet", "de" to "Vollständiger Auszug", "ja" to "全明細"
         ),
         "Income Only" to mapOf(
             "en" to "Income Only", "es" to "Solo Ingresos", "hi" to "केवल आय", "fr" to "Revenus seulement", "de" to "Nur Einnahmen", "ja" to "収入のみ"

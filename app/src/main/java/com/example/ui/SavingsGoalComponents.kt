@@ -71,7 +71,7 @@ fun SavingsGoalsSection(
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = "Save for PS5, Gadgets, Trips & Reserves",
+                        text = "Save for major goals, gadgets & reserves",
                         style = MaterialTheme.typography.labelSmall,
                         color = SleekTextSecondary,
                         fontSize = 11.sp
@@ -136,7 +136,7 @@ fun SavingsGoalsSection(
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "Set a target prize (like PS5 or Emergency Fund) and start saving daily, weekly, or monthly!",
+                        text = "Set a target amount and start saving daily, weekly, or monthly!",
                         style = MaterialTheme.typography.bodySmall,
                         color = SleekTextSecondary,
                         fontSize = 12.sp
@@ -508,9 +508,9 @@ fun AddEditSavingsGoalDialog(
     var frequency by remember { mutableStateOf(goalToEdit?.frequency ?: "WEEKLY") }
     var isAutoGap by remember { mutableStateOf(goalToEdit?.isAutoGap ?: true) }
     var manualContributionStr by remember { mutableStateOf(goalToEdit?.contributionAmount?.takeIf { it > 0 }?.let { "%.0f".format(it) } ?: "") }
-    var iconTag by remember { mutableStateOf(goalToEdit?.iconTag ?: "🎮") }
+    var iconTag by remember { mutableStateOf(goalToEdit?.iconTag ?: "📱") }
 
-    val presetTags = listOf("PS5 🎮", "Phone 📱", "Trip ✈️", "Car 🚗", "Emergency 🛡️", "Laptop 💻", "House 🏠")
+    val presetTags = listOf("Phone 📱", "Trip ✈️", "Car 🚗", "Emergency 🛡️", "Laptop 💻", "House 🏠")
     val presetIcons = listOf("🎮", "📱", "✈️", "🚗", "🛡️", "💻", "🏠", "👟", "⌚", "🎸")
 
     val targetDouble = targetAmountStr.toDoubleOrNull() ?: 0.0
@@ -560,7 +560,7 @@ fun AddEditSavingsGoalDialog(
                                 .clip(RoundedCornerShape(8.dp))
                                 .background(SleekPrimary.copy(alpha = 0.1f))
                                 .clickable {
-                                    if (name.isBlank() || name == "PlayStation 5" || name == "New Phone") {
+                                    if (name.isBlank() || name == "New Phone" || name == "Vacation") {
                                         name = textOnly
                                     }
                                     iconTag = emoji
@@ -610,7 +610,7 @@ fun AddEditSavingsGoalDialog(
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
-                    label = { Text("Goal Name (e.g. PS5, iPhone, Japan Trip)", color = SleekTextSecondary) },
+                    label = { Text("Goal Name (e.g. New Phone, Vacation, Emergency)", color = SleekTextSecondary) },
                     singleLine = true,
                     shape = RoundedCornerShape(12.dp),
                     colors = OutlinedTextFieldDefaults.colors(

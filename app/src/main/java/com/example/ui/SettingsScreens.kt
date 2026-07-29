@@ -612,7 +612,7 @@ fun ExportDataScreen(
                 .padding(20.dp)
         ) {
             Text(
-                text = "Export Ledger Statements",
+                text = "Export Statements",
                 style = MaterialTheme.typography.titleSmall,
                 color = SleekPrimary,
                 fontWeight = FontWeight.Bold,
@@ -743,7 +743,7 @@ fun ExportDataScreen(
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         val types = listOf(
-                            "ALL" to "Full Ledger",
+                            "ALL" to "Full Statement",
                             "INCOME" to "Income Only",
                             "EXPENSE" to "Expense Only"
                         )
@@ -858,7 +858,7 @@ fun ExportDataScreen(
                     val typeLabel = when (exportTransactionType) {
                         "INCOME" -> "Only Income"
                         "EXPENSE" -> "Only Expense"
-                        else -> "Full Ledger"
+                        else -> "Full Statement"
                     }
                     val catLabel = if (selectedExportCategories.isEmpty()) "All Categories" else selectedExportCategories.joinToString(", ")
 
@@ -892,7 +892,7 @@ fun ExportDataScreen(
                     ) {
                         Icon(Icons.Default.FileDownload, contentDescription = null, tint = Color.White)
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Export CSV Ledger", color = Color.White, fontWeight = FontWeight.Bold)
+                        Text("Export CSV Statement", color = Color.White, fontWeight = FontWeight.Bold)
                     }
 
                     Spacer(modifier = Modifier.height(10.dp))
