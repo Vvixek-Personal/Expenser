@@ -243,6 +243,7 @@ fun DataAndStorageScreen(
                 }
             }
         }
+        Spacer(modifier = Modifier.height(110.dp))
     }
 }
 
@@ -258,6 +259,7 @@ fun ThemeAndLanguageScreen(
     val customHue by viewModel.customThemeHue.collectAsStateWithLifecycle()
     val selectedLanguage by viewModel.selectedLanguage.collectAsStateWithLifecycle()
     var darkThemeState by remember { mutableStateOf(isDarkModeActive) }
+    val context = LocalContext.current
 
     val languages = listOf(
         Triple("English", "English", "🇬🇧"),
@@ -467,7 +469,10 @@ fun ThemeAndLanguageScreen(
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(12.dp))
                                 .background(if (isSelected) SleekPrimaryContainer.copy(alpha = 0.25f) else Color.Transparent)
-                                .clickable { viewModel.updateLanguage(engName) }
+                                .clickable {
+                                    viewModel.updateLanguage(engName)
+                                    LanguageManager.applyAppLocale(context, engName)
+                                }
                                 .padding(horizontal = 14.dp, vertical = 12.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween
@@ -511,6 +516,7 @@ fun ThemeAndLanguageScreen(
                 }
             }
         }
+        Spacer(modifier = Modifier.height(110.dp))
     }
 }
 
@@ -933,6 +939,7 @@ fun ExportDataScreen(
                 }
             }
         }
+        Spacer(modifier = Modifier.height(110.dp))
     }
 }
 
@@ -1072,5 +1079,6 @@ fun FaqAndHelpScreen(
                 }
             }
         }
+        Spacer(modifier = Modifier.height(110.dp))
     }
 }

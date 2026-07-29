@@ -348,6 +348,7 @@ fun ExpenseDetailDialog(
                     Spacer(modifier = Modifier.width(8.dp))
                     Text("Edit Transaction Details", color = Color.White, fontWeight = FontWeight.Bold)
                 }
+                Spacer(modifier = Modifier.height(110.dp))
             }
         }
     }

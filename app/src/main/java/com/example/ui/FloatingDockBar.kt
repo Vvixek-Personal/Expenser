@@ -51,6 +51,7 @@ fun FloatingDockBar(
     currentScreen: Screen,
     onScreenSelected: (Screen) -> Unit,
     onAddClick: () -> Unit,
+    selectedLanguage: String = "English",
     modifier: Modifier = Modifier
 ) {
     // Theme palette derived colors
@@ -102,7 +103,7 @@ fun FloatingDockBar(
             // Tile 1: Dashboard
             DockTile(
                 icon = Icons.Default.Dashboard,
-                title = "Dashboard",
+                title = LanguageManager.tr("Dashboard", selectedLanguage),
                 isSelected = currentScreen == Screen.Dashboard,
                 testTag = "nav_item_dashboard",
                 modifier = Modifier.weight(1f),
@@ -112,7 +113,7 @@ fun FloatingDockBar(
             // Tile 2: Expenses
             DockTile(
                 icon = Icons.Default.ReceiptLong,
-                title = "Finance",
+                title = LanguageManager.tr("Expenses", selectedLanguage),
                 isSelected = currentScreen == Screen.Expenses,
                 testTag = "nav_item_expenses",
                 modifier = Modifier.weight(1f),
@@ -122,7 +123,7 @@ fun FloatingDockBar(
             // Tile 3: Add (Center Action Tile)
             DockTile(
                 icon = Icons.Default.Add,
-                title = "Add",
+                title = LanguageManager.tr("Add", selectedLanguage),
                 isSelected = false,
                 isActionTile = true,
                 testTag = "nav_item_add",
@@ -133,7 +134,7 @@ fun FloatingDockBar(
             // Tile 4: Analytics
             DockTile(
                 icon = Icons.Default.PieChart,
-                title = "Analytics",
+                title = LanguageManager.tr("Analytics", selectedLanguage),
                 isSelected = currentScreen == Screen.Analytics,
                 testTag = "nav_item_analytics",
                 modifier = Modifier.weight(1f),
@@ -143,7 +144,7 @@ fun FloatingDockBar(
             // Tile 5: Calendar
             DockTile(
                 icon = Icons.Default.CalendarMonth,
-                title = "Calendar",
+                title = LanguageManager.tr("Calendar", selectedLanguage),
                 isSelected = currentScreen == Screen.Calendar,
                 testTag = "nav_item_calendar",
                 modifier = Modifier.weight(1f),

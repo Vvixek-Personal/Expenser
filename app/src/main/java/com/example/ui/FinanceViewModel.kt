@@ -143,6 +143,7 @@ class FinanceViewModel(
         _themeIndex.value = sharedPrefs.getInt("theme_index", 0)
         _customThemeHue.value = sharedPrefs.getFloat("custom_theme_hue", 200f)
         _selectedLanguage.value = sharedPrefs.getString("selected_language", "English") ?: "English"
+        LanguageManager.applyAppLocale(getApplication(), _selectedLanguage.value)
         
         // Load Dark Mode setting
         com.example.ui.theme.isDarkModeActive = sharedPrefs.getBoolean("dark_mode_active", false)
@@ -162,6 +163,7 @@ class FinanceViewModel(
     fun updateLanguage(language: String) {
         _selectedLanguage.value = language
         sharedPrefs.edit().putString("selected_language", language).apply()
+        LanguageManager.applyAppLocale(getApplication(), language)
     }
 
     fun toggleDarkMode() {

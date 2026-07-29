@@ -220,7 +220,8 @@ fun FinanceAppScreen(viewModel: FinanceViewModel) {
                 onAddClick = {
                     prefilledDateForAddDialog = null
                     showAddExpenseDialog = true
-                }
+                },
+                selectedLanguage = viewModel.selectedLanguage.collectAsStateWithLifecycle().value
             )
         },
         containerColor = SleekBg
@@ -946,6 +947,7 @@ fun DashboardTab(
                 }
             }
         }
+        Spacer(modifier = Modifier.height(110.dp))
     }
 
     if (showAdjustBudgetDialog) {
@@ -1209,6 +1211,7 @@ fun ExpensesTab(
                     modifier = Modifier
                         .fillMaxWidth()
                         .weight(1f),
+                    contentPadding = PaddingValues(bottom = 120.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     items(filteredExpenses, key = { it.id }) { expense ->
@@ -1944,6 +1947,7 @@ fun AnalyticsTab(viewModel: FinanceViewModel) {
                 }
             }
         }
+        Spacer(modifier = Modifier.height(110.dp))
     }
 }
 
@@ -3342,6 +3346,7 @@ fun CalendarTab(
                 }
             }
         }
+        Spacer(modifier = Modifier.height(110.dp))
     }
 }
 
@@ -4095,7 +4100,7 @@ fun SidebarDrawerContent(
             }
         }
         
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(110.dp))
     }
     
     if (showEditNameDialog) {
