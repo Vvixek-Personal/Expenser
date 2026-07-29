@@ -18,7 +18,10 @@ object DataExporter {
         expenses: List<Expense>,
         dateRangeStr: String,
         typeFilterStr: String,
-        categoryFilterStr: String
+        categoryFilterStr: String,
+        amountSaved: Double = 0.0,
+        monthsOverBudget: Int = 0,
+        includeDetailedTxns: Boolean = true
     ) {
         val pdfDocument = PdfDocument()
         val pageInfo = PdfDocument.PageInfo.Builder(595, 842, 1).create()
@@ -89,16 +92,20 @@ object DataExporter {
         val totalIncome = expenses.filter { it.type == "INCOME" }.sumOf { it.amount }
         val totalExpense = expenses.filter { it.type != "INCOME" }.sumOf { it.amount }
         val netBalance = totalIncome - totalExpense
+        val totalCashFlown = totalIncome + totalExpense
+        val totalTxCount = expenses.size
+        val activeDaysCount = expenses.map { SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date(it.date)) }.distinct().size
 
         // KPI Cards Summary Box
         var y = 105f
-        canvas.drawText("SUMMARY OVERVIEW", 30f, y, sectionTitlePaint)
+        canvas.drawText("ANALYTICAL STATISTICS & SUMMARY", 30f, y, sectionTitlePaint)
         y += 12f
 
-        // 3 Cards: Income, Expense, Net Balance
+        // 6 Cards across 2 Rows
         val cardWidth = 165f
         val cardHeight = 42f
 
+        // --- ROW 1 ---
         // Card 1: Total Income
         val fillIncome = Paint().apply { color = Color.parseColor("#ECFDF5"); style = Paint.Style.FILL }
         canvas.drawRoundRect(30f, y, 30f + cardWidth, y + cardHeight, 6f, 6f, fillIncome)
@@ -117,15 +124,67 @@ object DataExporter {
             color = Color.parseColor("#DC2626"); textSize = 11f; typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
         })
 
-        // Card 3: Net Balance
+        // Card 3: Net Cashflow
         val netColorHex = if (netBalance >= 0) "#1E40AF" else "#991B1B"
         val netBgHex = if (netBalance >= 0) "#EFF6FF" else "#FEF2F2"
         val fillNet = Paint().apply { color = Color.parseColor(netBgHex); style = Paint.Style.FILL }
         canvas.drawRoundRect(390f, y, 390f + cardWidth, y + cardHeight, 6f, 6f, fillNet)
         canvas.drawRoundRect(390f, y, 390f + cardWidth, y + cardHeight, 6f, 6f, gridPaint)
-        canvas.drawText("Net Balance", 400f, y + 16f, Paint().apply { color = Color.parseColor(netColorHex); textSize = 8f })
+        canvas.drawText("Net Cashflow", 400f, y + 16f, Paint().apply { color = Color.parseColor(netColorHex); textSize = 8f })
         canvas.drawText("₹${String.format(Locale.getDefault(), "%,.2f", netBalance)}", 400f, y + 32f, Paint().apply {
             color = Color.parseColor(netColorHex); textSize = 11f; typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+        })
+
+        y += cardHeight + 8f
+
+        // --- ROW 2 ---
+        // Card 4: Total Cash Flown
+        val fillPurple = Paint().apply { color = Color.parseColor("#F3E8FF"); style = Paint.Style.FILL }
+        canvas.drawRoundRect(30f, y, 30f + cardWidth, y + cardHeight, 6f, 6f, fillPurple)
+        canvas.drawRoundRect(30f, y, 30f + cardWidth, y + cardHeight, 6f, 6f, gridPaint)
+        canvas.drawText("Total Cash Flown", 40f, y + 16f, Paint().apply { color = Color.parseColor("#6B21A8"); textSize = 8f })
+        canvas.drawText("₹${String.format(Locale.getDefault(), "%,.2f", totalCashFlown)}", 40f, y + 32f, Paint().apply {
+            color = Color.parseColor("#7E22CE"); textSize = 11f; typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+        })
+
+        // Card 5: Transactions Done
+        val fillAmber = Paint().apply { color = Color.parseColor("#FEF3C7"); style = Paint.Style.FILL }
+        canvas.drawRoundRect(210f, y, 210f + cardWidth, y + cardHeight, 6f, 6f, fillAmber)
+        canvas.drawRoundRect(210f, y, 210f + cardWidth, y + cardHeight, 6f, 6f, gridPaint)
+        canvas.drawText("Transactions Done", 220f, y + 16f, Paint().apply { color = Color.parseColor("#92400E"); textSize = 8f })
+        canvas.drawText("$totalTxCount txns", 220f, y + 32f, Paint().apply {
+            color = Color.parseColor("#D97706"); textSize = 11f; typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+        })
+
+        // Card 6: Active Days
+        val fillCyan = Paint().apply { color = Color.parseColor("#E0F2FE"); style = Paint.Style.FILL }
+        canvas.drawRoundRect(390f, y, 390f + cardWidth, y + cardHeight, 6f, 6f, fillCyan)
+        canvas.drawRoundRect(390f, y, 390f + cardWidth, y + cardHeight, 6f, 6f, gridPaint)
+        canvas.drawText("Active Days", 400f, y + 16f, Paint().apply { color = Color.parseColor("#075985"); textSize = 8f })
+        canvas.drawText("$activeDaysCount days", 400f, y + 32f, Paint().apply {
+            color = Color.parseColor("#0284C7"); textSize = 11f; typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+        })
+
+        y += cardHeight + 8f
+
+        // --- ROW 3 ---
+        val wideCardWidth = 252f
+        // Card 7: Amount Saved
+        val fillTeal = Paint().apply { color = Color.parseColor("#CCFBF1"); style = Paint.Style.FILL }
+        canvas.drawRoundRect(30f, y, 30f + wideCardWidth, y + cardHeight, 6f, 6f, fillTeal)
+        canvas.drawRoundRect(30f, y, 30f + wideCardWidth, y + cardHeight, 6f, 6f, gridPaint)
+        canvas.drawText("Amount Saved (Savings Goals)", 40f, y + 16f, Paint().apply { color = Color.parseColor("#115E59"); textSize = 8f })
+        canvas.drawText("₹${String.format(Locale.getDefault(), "%,.2f", amountSaved)}", 40f, y + 32f, Paint().apply {
+            color = Color.parseColor("#0D9488"); textSize = 11f; typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+        })
+
+        // Card 8: Months Over Budget
+        val fillRose = Paint().apply { color = Color.parseColor("#FFE4E6"); style = Paint.Style.FILL }
+        canvas.drawRoundRect(302f, y, 302f + wideCardWidth, y + cardHeight, 6f, 6f, fillRose)
+        canvas.drawRoundRect(302f, y, 302f + wideCardWidth, y + cardHeight, 6f, 6f, gridPaint)
+        canvas.drawText("Months Over Budget", 312f, y + 16f, Paint().apply { color = Color.parseColor("#9F1239"); textSize = 8f })
+        canvas.drawText("$monthsOverBudget months", 312f, y + 32f, Paint().apply {
+            color = Color.parseColor("#E11D48"); textSize = 11f; typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
         })
 
         y += cardHeight + 20f
@@ -181,68 +240,70 @@ object DataExporter {
 
         y += 20f
 
-        // Detailed Transactions Section
-        canvas.drawText("DETAILED TRANSACTIONS GRID", 30f, y, sectionTitlePaint)
-        y += 12f
+        if (includeDetailedTxns) {
+            // Detailed Transactions Section
+            canvas.drawText("DETAILED TRANSACTIONS GRID", 30f, y, sectionTitlePaint)
+            y += 12f
 
-        fun drawTxTableHeader(c: Canvas, topY: Float) {
-            c.drawRect(30f, topY, 565f, topY + 22f, tableHeaderBgPaint)
-            c.drawText("DATE", 40f, topY + 15f, tableHeaderTextPaint)
-            c.drawText("CATEGORY", 125f, topY + 15f, tableHeaderTextPaint)
-            c.drawText("TYPE", 225f, topY + 15f, tableHeaderTextPaint)
-            c.drawText("NOTE / DESCRIPTION", 300f, topY + 15f, tableHeaderTextPaint)
-            c.drawText("AMOUNT", 475f, topY + 15f, tableHeaderTextPaint)
-        }
-
-        drawTxTableHeader(canvas, y)
-        y += 22f
-
-        val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-
-        expenses.forEachIndexed { index, item ->
-            if (y > 780f) {
-                pdfDocument.finishPage(page)
-                pageNumber++
-                page = pdfDocument.startPage(PdfDocument.PageInfo.Builder(595, 842, pageNumber).create())
-                canvas = page.canvas
-
-                // Page Header on subsequent pages
-                canvas.drawRect(0f, 0f, 595f, 40f, headerBgPaint)
-                canvas.drawText("FINANCE LEDGER STATEMENT (Cont. Page $pageNumber)", 30f, 25f, headerTitlePaint.apply { textSize = 12f })
-
-                y = 50f
-                drawTxTableHeader(canvas, y)
-                y += 22f
+            fun drawTxTableHeader(c: Canvas, topY: Float) {
+                c.drawRect(30f, topY, 565f, topY + 22f, tableHeaderBgPaint)
+                c.drawText("DATE", 40f, topY + 15f, tableHeaderTextPaint)
+                c.drawText("CATEGORY", 125f, topY + 15f, tableHeaderTextPaint)
+                c.drawText("TYPE", 225f, topY + 15f, tableHeaderTextPaint)
+                c.drawText("NOTE / DESCRIPTION", 300f, topY + 15f, tableHeaderTextPaint)
+                c.drawText("AMOUNT", 475f, topY + 15f, tableHeaderTextPaint)
             }
 
-            val isIncome = item.type == "INCOME"
-            val rowBgColor = if (index % 2 == 0) "#FFFFFF" else "#F8FAFC"
-            val rowBg = Paint().apply { color = Color.parseColor(rowBgColor); style = Paint.Style.FILL }
+            drawTxTableHeader(canvas, y)
+            y += 22f
 
-            canvas.drawRect(30f, y, 565f, y + 20f, rowBg)
-            canvas.drawRect(30f, y, 565f, y + 20f, gridPaint)
+            val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
 
-            // Grid column lines
-            canvas.drawLine(115f, y, 115f, y + 20f, gridPaint)
-            canvas.drawLine(215f, y, 215f, y + 20f, gridPaint)
-            canvas.drawLine(290f, y, 290f, y + 20f, gridPaint)
-            canvas.drawLine(460f, y, 460f, y + 20f, gridPaint)
+            expenses.forEachIndexed { index, item ->
+                if (y > 780f) {
+                    pdfDocument.finishPage(page)
+                    pageNumber++
+                    page = pdfDocument.startPage(PdfDocument.PageInfo.Builder(595, 842, pageNumber).create())
+                    canvas = page.canvas
 
-            canvas.drawText(sdf.format(Date(item.date)), 38f, y + 14f, bodyPaint)
-            canvas.drawText(item.category.take(14), 125f, y + 14f, bodyPaint)
-            canvas.drawText(if (isIncome) "INCOME" else "EXPENSE", 225f, y + 14f, if (isIncome) incomePaint else expensePaint)
-            canvas.drawText((item.note ?: "No note").take(24), 300f, y + 14f, bodyPaint)
+                    // Page Header on subsequent pages
+                    canvas.drawRect(0f, 0f, 595f, 40f, headerBgPaint)
+                    canvas.drawText("FINANCE LEDGER STATEMENT (Cont. Page $pageNumber)", 30f, 25f, headerTitlePaint.apply { textSize = 12f })
 
-            val amtStr = String.format(Locale.getDefault(), "%s₹%,.2f", if (isIncome) "+" else "-", item.amount)
-            canvas.drawText(amtStr, 475f, y + 14f, if (isIncome) incomePaint else expensePaint)
+                    y = 50f
+                    drawTxTableHeader(canvas, y)
+                    y += 22f
+                }
 
-            y += 20f
-        }
+                val isIncome = item.type == "INCOME"
+                val rowBgColor = if (index % 2 == 0) "#FFFFFF" else "#F8FAFC"
+                val rowBg = Paint().apply { color = Color.parseColor(rowBgColor); style = Paint.Style.FILL }
 
-        if (expenses.isEmpty()) {
-            canvas.drawRect(30f, y, 565f, y + 20f, gridPaint)
-            canvas.drawText("No matching transactions found.", 40f, y + 14f, bodyPaint)
-            y += 20f
+                canvas.drawRect(30f, y, 565f, y + 20f, rowBg)
+                canvas.drawRect(30f, y, 565f, y + 20f, gridPaint)
+
+                // Grid column lines
+                canvas.drawLine(115f, y, 115f, y + 20f, gridPaint)
+                canvas.drawLine(215f, y, 215f, y + 20f, gridPaint)
+                canvas.drawLine(290f, y, 290f, y + 20f, gridPaint)
+                canvas.drawLine(460f, y, 460f, y + 20f, gridPaint)
+
+                canvas.drawText(sdf.format(Date(item.date)), 38f, y + 14f, bodyPaint)
+                canvas.drawText(item.category.take(14), 125f, y + 14f, bodyPaint)
+                canvas.drawText(if (isIncome) "INCOME" else "EXPENSE", 225f, y + 14f, if (isIncome) incomePaint else expensePaint)
+                canvas.drawText((item.note ?: "No note").take(24), 300f, y + 14f, bodyPaint)
+
+                val amtStr = String.format(Locale.getDefault(), "%s₹%,.2f", if (isIncome) "+" else "-", item.amount)
+                canvas.drawText(amtStr, 475f, y + 14f, if (isIncome) incomePaint else expensePaint)
+
+                y += 20f
+            }
+
+            if (expenses.isEmpty()) {
+                canvas.drawRect(30f, y, 565f, y + 20f, gridPaint)
+                canvas.drawText("No matching transactions found.", 40f, y + 14f, bodyPaint)
+                y += 20f
+            }
         }
 
         pdfDocument.finishPage(page)

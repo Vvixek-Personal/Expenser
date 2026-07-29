@@ -168,6 +168,9 @@ object LanguageManager {
         "Export Statements" to mapOf(
             "en" to "Export Statements", "es" to "Exportar Estados de Cuenta", "hi" to "विवरण निर्यात करें", "fr" to "Exporter les relevés", "de" to "Auszüge exportieren", "ja" to "明細の出力"
         ),
+        "Export analytics, stats, CSV & PDF reports" to mapOf(
+            "en" to "Export analytics, stats, CSV & PDF reports", "es" to "Exportar análisis, estadísticas, informes CSV y PDF", "hi" to "विश्लेषण, आंकड़े, सीएसवी और पीडीएफ रिपोर्ट निर्यात करें", "fr" to "Exporter analyses, statistiques, rapports CSV et PDF", "de" to "Analysen, Statistiken, CSV- und PDF-Berichte exportieren", "ja" to "分析、統計、CSVおよびPDFレポートの出力"
+        ),
         "Date Range Filter" to mapOf(
             "en" to "Date Range Filter", "es" to "Filtro de Rango de Fechas", "hi" to "तिथि सीमा फ़िल्टर", "fr" to "Filtre de plage de dates", "de" to "Datumsbereichsfilter", "ja" to "日付範囲フィルター"
         ),

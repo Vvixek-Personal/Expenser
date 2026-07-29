@@ -242,8 +242,8 @@ fun DataAndStorageScreen(
                     }
                 }
             }
+            Spacer(modifier = Modifier.height(300.dp))
         }
-        Spacer(modifier = Modifier.height(110.dp))
     }
 }
 
@@ -515,8 +515,8 @@ fun ThemeAndLanguageScreen(
                     }
                 }
             }
+            Spacer(modifier = Modifier.height(300.dp))
         }
-        Spacer(modifier = Modifier.height(110.dp))
     }
 }
 
@@ -531,9 +531,26 @@ fun ExportDataScreen(
 ) {
     val allExpensesList by viewModel.expenses.collectAsStateWithLifecycle()
     val allCategoriesList by viewModel.allCategories.collectAsStateWithLifecycle()
+    val savingsGoalsList by viewModel.savingsGoals.collectAsStateWithLifecycle()
+    val monthlyBudget by viewModel.monthlyBudget.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
-    var exportTransactionType by remember { mutableStateOf("ALL") }
+    val totalAmountSaved = remember(savingsGoalsList) { savingsGoalsList.sumOf { it.currentAmount } }
+    val monthsOverBudgetCount = remember(allExpensesList, monthlyBudget) {
+        if (monthlyBudget <= 0) 0
+        else {
+            allExpensesList.filter { it.type != "INCOME" }
+                .groupBy {
+                    val cal = Calendar.getInstance().apply { timeInMillis = it.date }
+                    "${cal.get(Calendar.YEAR)}-${cal.get(Calendar.MONTH)}"
+                }
+                .mapValues { entry -> entry.value.sumOf { it.amount } }
+                .count { (_, monthTotal) -> monthTotal > monthlyBudget }
+        }
+    }
+
+    // Export Scope Options: ANALYTICS_ONLY, ANALYTICS_AND_ALL, ALL, INCOME, EXPENSE
+    var exportOption by remember { mutableStateOf("ANALYTICS_AND_ALL") }
     var selectedExportCategories by remember { mutableStateOf<Set<String>>(emptySet()) }
     val dateSdf = remember { SimpleDateFormat("dd MMM yyyy", Locale.getDefault()) }
 
@@ -612,14 +629,14 @@ fun ExportDataScreen(
                 .padding(20.dp)
         ) {
             Text(
-                text = "Export Statements",
+                text = "Export Configuration",
                 style = MaterialTheme.typography.titleSmall,
                 color = SleekPrimary,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.padding(bottom = 12.dp)
             )
 
-            // Date Range Card
+            // 1️⃣ EXPORT TYPE / SCOPE OPTION
             Card(
                 colors = CardDefaults.cardColors(containerColor = SleekSurface),
                 border = BorderStroke(1.dp, SleekBorder),
@@ -627,29 +644,100 @@ fun ExportDataScreen(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(modifier = Modifier.padding(18.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "Date Range Filter",
-                            style = MaterialTheme.typography.bodySmall,
-                            fontWeight = FontWeight.SemiBold,
-                            color = SleekTextSecondary
-                        )
-                        TextButton(
-                            onClick = { showDateRangeModal = true },
-                            contentPadding = PaddingValues(0.dp)
-                        ) {
-                            Icon(Icons.Default.DateRange, contentDescription = null, modifier = Modifier.size(16.dp), tint = SleekPrimary)
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("Change Range", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = SleekPrimary)
+                    Text(
+                        text = "1. Export Scope",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = SleekTextPrimary
+                    )
+                    Text(
+                        text = "Choose what financial data to include in your export",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = SleekTextSecondary,
+                        fontSize = 11.sp
+                    )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    val exportScopes = listOf(
+                        "ANALYTICS_ONLY" to ("Analytics" to "Key KPI statistics, budgets, savings & category summary"),
+                        "ANALYTICS_AND_ALL" to ("Analytics + Transactions" to "Comprehensive report with full statistics & complete ledger entries"),
+                        "ALL" to ("Both Income and Expense" to "All income and expense transaction entries"),
+                        "INCOME" to ("Only Income" to "Salary, freelance, investments & cash inflows"),
+                        "EXPENSE" to ("Only Expense" to "Daily bills, shopping, purchases & cash outflows")
+                    )
+
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        exportScopes.forEach { (key, info) ->
+                            val (title, description) = info
+                            val isSelected = exportOption == key
+                            val activeBorderColor = if (isSelected) SleekPrimary else SleekBorder
+                            val activeBgColor = if (isSelected) SleekPrimaryContainer.copy(alpha = 0.25f) else SleekBg
+
+                            Surface(
+                                onClick = { exportOption = key },
+                                shape = RoundedCornerShape(14.dp),
+                                color = activeBgColor,
+                                border = BorderStroke(if (isSelected) 1.5.dp else 1.dp, activeBorderColor),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    RadioButton(
+                                        selected = isSelected,
+                                        onClick = { exportOption = key },
+                                        colors = RadioButtonDefaults.colors(selectedColor = SleekPrimary)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = title,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.SemiBold,
+                                            color = SleekTextPrimary
+                                        )
+                                        Text(
+                                            text = description,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = SleekTextSecondary,
+                                            fontSize = 11.sp
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
+                }
+            }
 
-                    Spacer(modifier = Modifier.height(6.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
+            // 2️⃣ DATE RANGE & PRESETS (JUST BELOW EXPORT SCOPE)
+            Card(
+                colors = CardDefaults.cardColors(containerColor = SleekSurface),
+                border = BorderStroke(1.dp, SleekBorder),
+                shape = RoundedCornerShape(20.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(18.dp)) {
+                    Text(
+                        text = "2. Date Range Filter",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = SleekTextPrimary
+                    )
+                    Text(
+                        text = "Select time period for exported statements",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = SleekTextSecondary,
+                        fontSize = 11.sp
+                    )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // Start to End Day Custom Picker Button
                     Surface(
                         onClick = { showDateRangeModal = true },
                         shape = RoundedCornerShape(12.dp),
@@ -663,7 +751,7 @@ fun ExportDataScreen(
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Default.CalendarToday, contentDescription = null, tint = SleekPrimary, modifier = Modifier.size(20.dp))
+                                Icon(Icons.Default.DateRange, contentDescription = null, tint = SleekPrimary, modifier = Modifier.size(20.dp))
                                 Spacer(modifier = Modifier.width(10.dp))
                                 Column {
                                     Text(
@@ -673,10 +761,11 @@ fun ExportDataScreen(
                                         color = SleekTextPrimary
                                     )
                                     Text(
-                                        text = "Tap to pick custom Start & End dates",
+                                        text = "Start to End Day (Tap to customize)",
                                         style = MaterialTheme.typography.bodySmall,
-                                        color = SleekTextSecondary,
-                                        fontSize = 11.sp
+                                        color = SleekPrimary,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.SemiBold
                                     )
                                 }
                             }
@@ -686,34 +775,68 @@ fun ExportDataScreen(
 
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    // Quick Date Presets
-                    Row(
+                    Text(
+                        text = "Quick Presets:",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = SleekTextSecondary,
+                        fontWeight = FontWeight.Medium
+                    )
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    // Quick Date Presets Row
+                    FlowRow(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        val presets = listOf(
-                            "7 Days" to 7,
-                            "30 Days" to 30,
-                            "90 Days" to 90,
-                            "1 Year" to 365
+                        val presetItems = listOf(
+                            "Today" to 0,
+                            "Last 7 days" to 7,
+                            "This Month" to -1,
+                            "Last 30 days" to 30,
+                            "All Time" to -999
                         )
-                        presets.forEach { (label, days) ->
+
+                        presetItems.forEach { (label, dayCode) ->
                             AssistChip(
                                 onClick = {
                                     val now = Calendar.getInstance()
                                     now.set(Calendar.HOUR_OF_DAY, 23)
                                     now.set(Calendar.MINUTE, 59)
                                     now.set(Calendar.SECOND, 59)
+                                    now.set(Calendar.MILLISECOND, 999)
                                     exportEndDate = now.timeInMillis
 
                                     val start = Calendar.getInstance()
-                                    start.add(Calendar.DAY_OF_MONTH, -days)
-                                    start.set(Calendar.HOUR_OF_DAY, 0)
-                                    start.set(Calendar.MINUTE, 0)
-                                    start.set(Calendar.SECOND, 0)
+                                    when (dayCode) {
+                                        0 -> {
+                                            start.set(Calendar.HOUR_OF_DAY, 0)
+                                            start.set(Calendar.MINUTE, 0)
+                                            start.set(Calendar.SECOND, 0)
+                                            start.set(Calendar.MILLISECOND, 0)
+                                        }
+                                        -1 -> {
+                                            start.set(Calendar.DAY_OF_MONTH, 1)
+                                            start.set(Calendar.HOUR_OF_DAY, 0)
+                                            start.set(Calendar.MINUTE, 0)
+                                            start.set(Calendar.SECOND, 0)
+                                            start.set(Calendar.MILLISECOND, 0)
+                                        }
+                                        -999 -> {
+                                            start.set(2020, Calendar.JANUARY, 1, 0, 0, 0)
+                                        }
+                                        else -> {
+                                            start.add(Calendar.DAY_OF_MONTH, -dayCode)
+                                            start.set(Calendar.HOUR_OF_DAY, 0)
+                                            start.set(Calendar.MINUTE, 0)
+                                            start.set(Calendar.SECOND, 0)
+                                            start.set(Calendar.MILLISECOND, 0)
+                                        }
+                                    }
                                     exportStartDate = start.timeInMillis
                                 },
-                                label = { Text(label, fontSize = 11.sp) },
+                                label = { Text(label, fontSize = 11.sp, fontWeight = FontWeight.SemiBold) },
                                 shape = RoundedCornerShape(10.dp),
                                 border = BorderStroke(1.dp, SleekBorder)
                             )
@@ -724,6 +847,7 @@ fun ExportDataScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
+            // 3️⃣ CATEGORY FILTER CARD
             Card(
                 colors = CardDefaults.cardColors(containerColor = SleekSurface),
                 border = BorderStroke(1.dp, SleekBorder),
@@ -731,62 +855,27 @@ fun ExportDataScreen(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(modifier = Modifier.padding(18.dp)) {
-                    Text(
-                        text = "Transaction Type",
-                        style = MaterialTheme.typography.bodySmall,
-                        fontWeight = FontWeight.SemiBold,
-                        color = SleekTextSecondary
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        val types = listOf(
-                            "ALL" to "Full Statement",
-                            "INCOME" to "Income Only",
-                            "EXPENSE" to "Expense Only"
+                        Text(
+                            text = "3. Category Filter",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = SleekTextPrimary
                         )
-                        types.forEach { (typeKey, label) ->
-                            val isSelected = exportTransactionType == typeKey
-                            val activeColor = when (typeKey) {
-                                "INCOME" -> Color(0xFF10B981)
-                                "EXPENSE" -> Color(0xFFEF4444)
-                                else -> SleekPrimary
-                            }
-                            Box(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(if (isSelected) activeColor.copy(alpha = 0.18f) else SleekSurface)
-                                    .border(
-                                        width = if (isSelected) 1.5.dp else 1.dp,
-                                        color = if (isSelected) activeColor else SleekBorder,
-                                        shape = RoundedCornerShape(12.dp)
-                                    )
-                                    .clickable { exportTransactionType = typeKey }
-                                    .padding(vertical = 12.dp),
-                                contentAlignment = Alignment.Center
+                        if (selectedExportCategories.isNotEmpty()) {
+                            TextButton(
+                                onClick = { selectedExportCategories = emptySet() },
+                                contentPadding = PaddingValues(0.dp)
                             ) {
-                                Text(
-                                    text = label,
-                                    fontSize = 12.sp,
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                    color = if (isSelected) activeColor else SleekTextPrimary,
-                                    textAlign = TextAlign.Center
-                                )
+                                Text("Clear Selection", fontSize = 11.sp, color = SleekPrimary)
                             }
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(20.dp))
-
-                    Text(
-                        text = "Filter Categories",
-                        style = MaterialTheme.typography.bodySmall,
-                        fontWeight = FontWeight.SemiBold,
-                        color = SleekTextSecondary
-                    )
                     Spacer(modifier = Modifier.height(8.dp))
 
                     FlowRow(
@@ -818,7 +907,7 @@ fun ExportDataScreen(
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            // Export Actions
+            // 4️⃣ EXPORT ACTIONS (CSV, PDF, IMAGE)
             Card(
                 colors = CardDefaults.cardColors(containerColor = SleekSurface),
                 border = BorderStroke(1.dp, SleekBorder),
@@ -826,7 +915,7 @@ fun ExportDataScreen(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(modifier = Modifier.padding(20.dp)) {
-                    val filteredToExport = remember(allExpensesList, exportTransactionType, selectedExportCategories, exportStartDate, exportEndDate) {
+                    val filteredToExport = remember(allExpensesList, exportOption, selectedExportCategories, exportStartDate, exportEndDate) {
                         val startCal = Calendar.getInstance().apply {
                             timeInMillis = exportStartDate
                             set(Calendar.HOUR_OF_DAY, 0)
@@ -844,7 +933,7 @@ fun ExportDataScreen(
 
                         allExpensesList.filter { item ->
                             val inDateRange = item.date in startCal.timeInMillis..endCal.timeInMillis
-                            val matchesType = when (exportTransactionType) {
+                            val matchesType = when (exportOption) {
                                 "INCOME" -> item.type == "INCOME"
                                 "EXPENSE" -> item.type != "INCOME"
                                 else -> true
@@ -855,27 +944,31 @@ fun ExportDataScreen(
                     }
 
                     val dateRangeLabel = "${dateSdf.format(Date(exportStartDate))} - ${dateSdf.format(Date(exportEndDate))}"
-                    val typeLabel = when (exportTransactionType) {
+                    val typeLabel = when (exportOption) {
+                        "ANALYTICS_ONLY" -> "Analytics Summary"
+                        "ANALYTICS_AND_ALL" -> "Analytics + Transactions"
+                        "ALL" -> "Both Income & Expense"
                         "INCOME" -> "Only Income"
                         "EXPENSE" -> "Only Expense"
-                        else -> "Full Statement"
+                        else -> "Custom Export"
                     }
                     val catLabel = if (selectedExportCategories.isEmpty()) "All Categories" else selectedExportCategories.joinToString(", ")
 
                     Text(
-                        text = "Ready to Export: ${filteredToExport.size} Records",
+                        text = "4. Select Export Format",
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.Bold,
                         color = SleekTextPrimary
                     )
                     Text(
-                        text = "Range: $dateRangeLabel",
+                        text = "Ready to export ${filteredToExport.size} entries ($dateRangeLabel)",
                         style = MaterialTheme.typography.bodySmall,
                         color = SleekTextSecondary
                     )
 
                     Spacer(modifier = Modifier.height(16.dp))
 
+                    // CSV Export Button
                     Button(
                         onClick = {
                             DataExporter.exportToCSV(
@@ -892,19 +985,24 @@ fun ExportDataScreen(
                     ) {
                         Icon(Icons.Default.FileDownload, contentDescription = null, tint = Color.White)
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Export CSV Statement", color = Color.White, fontWeight = FontWeight.Bold)
+                        Text("Export CSV File", color = Color.White, fontWeight = FontWeight.Bold)
                     }
 
                     Spacer(modifier = Modifier.height(10.dp))
 
+                    // PDF Export Button
                     OutlinedButton(
                         onClick = {
+                            val includeTxns = exportOption != "ANALYTICS_ONLY"
                             DataExporter.sharePdfReport(
                                 context = context,
                                 expenses = filteredToExport,
                                 dateRangeStr = dateRangeLabel,
                                 typeFilterStr = typeLabel,
-                                categoryFilterStr = catLabel
+                                categoryFilterStr = catLabel,
+                                amountSaved = totalAmountSaved,
+                                monthsOverBudget = monthsOverBudgetCount,
+                                includeDetailedTxns = includeTxns
                             )
                         },
                         border = BorderStroke(1.dp, SleekPrimary),
@@ -913,11 +1011,12 @@ fun ExportDataScreen(
                     ) {
                         Icon(Icons.Default.PictureAsPdf, contentDescription = null, tint = SleekPrimary)
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Export Formatted PDF Report", color = SleekPrimary, fontWeight = FontWeight.Bold)
+                        Text("Export PDF Document", color = SleekPrimary, fontWeight = FontWeight.Bold)
                     }
 
                     Spacer(modifier = Modifier.height(10.dp))
 
+                    // Image Export Button
                     OutlinedButton(
                         onClick = {
                             DataExporter.shareImageReport(
@@ -934,12 +1033,13 @@ fun ExportDataScreen(
                     ) {
                         Icon(Icons.Default.Photo, contentDescription = null, tint = SleekTextPrimary)
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Share Visual Card", color = SleekTextPrimary, fontWeight = FontWeight.Bold)
+                        Text("Export Image Statement", color = SleekTextPrimary, fontWeight = FontWeight.Bold)
                     }
                 }
             }
+
+            Spacer(modifier = Modifier.height(300.dp))
         }
-        Spacer(modifier = Modifier.height(110.dp))
     }
 }
 
@@ -1078,7 +1178,7 @@ fun FaqAndHelpScreen(
                     }
                 }
             }
+            Spacer(modifier = Modifier.height(300.dp))
         }
-        Spacer(modifier = Modifier.height(110.dp))
     }
 }

@@ -134,6 +134,51 @@ class FinanceViewModel(
     private val _customIncomeCategories = MutableStateFlow<List<String>>(emptyList())
     val customIncomeCategories: StateFlow<List<String>> = _customIncomeCategories.asStateFlow()
 
+    // GST Auto-Tax Reserve State
+    private val _isGstEnabled = MutableStateFlow(true)
+    val isGstEnabled: StateFlow<Boolean> = _isGstEnabled.asStateFlow()
+
+    private val _gstRatePercent = MutableStateFlow(18.0)
+    val gstRatePercent: StateFlow<Double> = _gstRatePercent.asStateFlow()
+
+    // Monthly ₹50 Safe Vault State
+    private val _isMonthlySafeEnabled = MutableStateFlow(true)
+    val isMonthlySafeEnabled: StateFlow<Boolean> = _isMonthlySafeEnabled.asStateFlow()
+
+    private val _monthlySafeAmount = MutableStateFlow(50.0)
+    val monthlySafeAmount: StateFlow<Double> = _monthlySafeAmount.asStateFlow()
+
+    private val _toastMessage = MutableStateFlow<String?>(null)
+    val toastMessage: StateFlow<String?> = _toastMessage.asStateFlow()
+
+    fun clearToastMessage() {
+        _toastMessage.value = null
+    }
+
+    fun toggleGstEnabled(enabled: Boolean) {
+        _isGstEnabled.value = enabled
+        sharedPrefs.edit().putBoolean("is_gst_enabled", enabled).apply()
+    }
+
+    fun updateGstRate(rate: Double) {
+        if (rate in 0.0..100.0) {
+            _gstRatePercent.value = rate
+            sharedPrefs.edit().putFloat("gst_rate_percent", rate.toFloat()).apply()
+        }
+    }
+
+    fun toggleMonthlySafeEnabled(enabled: Boolean) {
+        _isMonthlySafeEnabled.value = enabled
+        sharedPrefs.edit().putBoolean("is_monthly_safe_enabled", enabled).apply()
+    }
+
+    fun updateMonthlySafeAmount(amount: Double) {
+        if (amount > 0) {
+            _monthlySafeAmount.value = amount
+            sharedPrefs.edit().putFloat("monthly_safe_amount", amount.toFloat()).apply()
+        }
+    }
+
     val defaultExpenseCategories = listOf("Food", "Travel", "Rent", "Utilities", "Entertainment", "Shopping", "Home", "Others")
     val defaultIncomeCategories = listOf("Salary", "Freelance", "Investments", "Gifts", "Others")
     val defaultCategories = (defaultExpenseCategories + defaultIncomeCategories).distinct()
@@ -173,6 +218,12 @@ class FinanceViewModel(
         com.example.ui.theme.isDarkModeActive = sharedPrefs.getBoolean("dark_mode_active", false)
         com.example.ui.theme.updateThemeColors(_themeIndex.value, _customThemeHue.value)
 
+        // Load GST and Monthly Safe settings
+        _isGstEnabled.value = sharedPrefs.getBoolean("is_gst_enabled", true)
+        _gstRatePercent.value = sharedPrefs.getFloat("gst_rate_percent", 18.0f).toDouble()
+        _isMonthlySafeEnabled.value = sharedPrefs.getBoolean("is_monthly_safe_enabled", true)
+        _monthlySafeAmount.value = sharedPrefs.getFloat("monthly_safe_amount", 50.0f).toDouble()
+
         // Load custom category icons
         val iconsMap = mutableMapOf<String, String>()
         savedCats.forEach { cat ->
@@ -182,6 +233,9 @@ class FinanceViewModel(
 
         // Compute initial storage & network values
         refreshUsageData()
+
+        // Check and apply Monthly ₹50 Safe Vault auto-lock
+        checkAndApplyMonthlySafe()
 
         // Seed default savings goals once if list is empty
         val hasSeeded = sharedPrefs.getBoolean("has_seeded_savings_goals", false)
@@ -213,6 +267,50 @@ class FinanceViewModel(
                     )
                 }
                 sharedPrefs.edit().putBoolean("has_seeded_savings_goals", true).apply()
+            }
+        }
+    }
+
+    fun checkAndApplyMonthlySafe() {
+        if (!_isMonthlySafeEnabled.value) return
+        val currentMonth = java.text.SimpleDateFormat("MM-yyyy", java.util.Locale.getDefault()).format(java.util.Date())
+        val lastMonthLocked = sharedPrefs.getString("last_safe_deduction_month", "") ?: ""
+
+        if (lastMonthLocked != currentMonth) {
+            viewModelScope.launch {
+                val safeGoalName = "Monthly Safe Vault 🔐"
+                val allGoals = savingsGoals.first()
+                var safeGoal = allGoals.find { it.name.contains("Monthly Safe", ignoreCase = true) || it.name.contains("Safe Vault", ignoreCase = true) }
+
+                val amountToLock = _monthlySafeAmount.value
+                if (safeGoal == null) {
+                    safeGoal = SavingsGoal(
+                        name = safeGoalName,
+                        targetAmount = 600.0,
+                        currentAmount = amountToLock,
+                        frequency = "MONTHLY",
+                        contributionAmount = amountToLock,
+                        isAutoGap = true,
+                        iconTag = "🔐"
+                    )
+                    repository.insertSavingsGoal(safeGoal)
+                } else {
+                    val updatedGoal = safeGoal.copy(currentAmount = safeGoal.currentAmount + amountToLock)
+                    repository.updateSavingsGoal(updatedGoal)
+                }
+
+                repository.insertExpense(
+                    Expense(
+                        amount = amountToLock,
+                        category = "Locked Savings",
+                        date = System.currentTimeMillis(),
+                        note = "🔐 Automated Monthly Safe Lock (₹%,.0f)".format(amountToLock),
+                        type = "EXPENSE"
+                    )
+                )
+
+                sharedPrefs.edit().putString("last_safe_deduction_month", currentMonth).apply()
+                _toastMessage.value = "🔐 Monthly ₹%,.0f Safe Vault locked for $currentMonth!".format(amountToLock)
             }
         }
     }
@@ -423,7 +521,15 @@ class FinanceViewModel(
     }
 
     // DB Operations
-    fun addExpense(amount: Double, category: String, date: Long, note: String?, imagePath: String? = null, type: String = "EXPENSE") {
+    fun addExpense(
+        amount: Double,
+        category: String,
+        date: Long,
+        note: String?,
+        imagePath: String? = null,
+        type: String = "EXPENSE",
+        gstPercent: Double = 0.0
+    ) {
         viewModelScope.launch {
             repository.insertExpense(
                 Expense(
@@ -435,6 +541,48 @@ class FinanceViewModel(
                     type = type
                 )
             )
+
+            // Auto-reserve GST/Tax amount into GST & Tax Reserve Goal if specified on Income
+            if (type == "INCOME" && gstPercent > 0.0) {
+                val gstAmount = amount * (gstPercent / 100.0)
+                if (gstAmount > 0.0) {
+                    val currentGoals = repository.allSavingsGoals.first()
+                    var gstGoal = currentGoals.find { it.name.contains("GST", ignoreCase = true) || it.name.contains("Tax Reserve", ignoreCase = true) }
+                    if (gstGoal == null) {
+                        val newId = repository.insertSavingsGoal(
+                            SavingsGoal(
+                                name = "GST & Tax Reserve 🏛️",
+                                targetAmount = 100000.0,
+                                currentAmount = 0.0,
+                                frequency = "MONTHLY",
+                                contributionAmount = 0.0,
+                                isAutoGap = true,
+                                iconTag = "🏛️"
+                            )
+                        )
+                        gstGoal = SavingsGoal(
+                            id = newId.toInt(),
+                            name = "GST & Tax Reserve 🏛️",
+                            targetAmount = 100000.0,
+                            currentAmount = 0.0,
+                            iconTag = "🏛️"
+                        )
+                    }
+
+                    val updatedGoal = gstGoal.copy(currentAmount = gstGoal.currentAmount + gstAmount)
+                    repository.updateSavingsGoal(updatedGoal)
+
+                    repository.insertExpense(
+                        Expense(
+                            amount = gstAmount,
+                            category = "Locked Savings",
+                            date = System.currentTimeMillis(),
+                            note = "🏛️ Auto GST Reserve (${gstPercent.toInt()}%) from income ₹%,.0f".format(amount),
+                            type = "EXPENSE"
+                        )
+                    )
+                }
+            }
         }
     }
 
@@ -570,6 +718,81 @@ class FinanceViewModel(
         }
     }
 
+    fun quickDeductFromGoal(goal: SavingsGoal, amount: Double) {
+        if (amount <= 0 || goal.currentAmount <= 0) return
+        val deductAmount = amount.coerceAtMost(goal.currentAmount)
+        viewModelScope.launch {
+            val updated = goal.copy(currentAmount = (goal.currentAmount - deductAmount).coerceAtLeast(0.0))
+            repository.updateSavingsGoal(updated)
+
+            // Insert Goal Withdrawal transaction to add back to spendable balance
+            repository.insertExpense(
+                Expense(
+                    amount = deductAmount,
+                    category = "Goal Withdrawal",
+                    date = System.currentTimeMillis(),
+                    note = "🔓 Deducted/unlocked from ${goal.name}",
+                    type = "INCOME"
+                )
+            )
+
+            // Add back to primary bank account if exists
+            val primaryAccount = accounts.value.firstOrNull()
+            if (primaryAccount != null) {
+                val updatedAcc = primaryAccount.copy(balance = primaryAccount.balance + deductAmount)
+                repository.updateAccount(updatedAcc)
+            }
+        }
+    }
+
+    // Automated Safe Vault (₹50/Month Auto-Reserve Safe)
+    fun processMonthlySafeVault(monthlyRate: Double = 50.0) {
+        val currentMonth = SimpleDateFormat("MM-yyyy", Locale.getDefault()).format(Date())
+        val lastProcessedMonth = sharedPrefs.getString("last_safe_vault_month", "")
+
+        viewModelScope.launch {
+            val currentGoals = repository.allSavingsGoals.first()
+            var safeGoal = currentGoals.find { it.name.contains("Safe Vault", ignoreCase = true) || it.name.contains("Monthly Safe", ignoreCase = true) }
+
+            if (safeGoal == null) {
+                val newId = repository.insertSavingsGoal(
+                    SavingsGoal(
+                        name = "Safe Vault 🔒",
+                        targetAmount = 1200.0,
+                        currentAmount = monthlyRate,
+                        frequency = "MONTHLY",
+                        contributionAmount = monthlyRate,
+                        isAutoGap = false,
+                        iconTag = "🔐"
+                    )
+                )
+                sharedPrefs.edit().putString("last_safe_vault_month", currentMonth).apply()
+                repository.insertExpense(
+                    Expense(
+                        amount = monthlyRate,
+                        category = "Locked Savings",
+                        date = System.currentTimeMillis(),
+                        note = "🔒 Monthly Safe Vault Deposit (₹%,.0f auto-reserved)".format(monthlyRate),
+                        type = "EXPENSE"
+                    )
+                )
+            } else if (lastProcessedMonth != currentMonth) {
+                val updated = safeGoal.copy(currentAmount = safeGoal.currentAmount + monthlyRate)
+                repository.updateSavingsGoal(updated)
+                sharedPrefs.edit().putString("last_safe_vault_month", currentMonth).apply()
+                repository.insertExpense(
+                    Expense(
+                        amount = monthlyRate,
+                        category = "Locked Savings",
+                        date = System.currentTimeMillis(),
+                        note = "🔒 Monthly Safe Vault Deposit (₹%,.0f auto-reserved for $currentMonth)".format(monthlyRate),
+                        type = "EXPENSE"
+                    )
+                )
+            }
+        }
+    }
+
     fun deleteSavingsGoal(goal: SavingsGoal) {
         viewModelScope.launch {
             repository.deleteSavingsGoal(goal)
@@ -608,6 +831,91 @@ class FinanceViewModel(
                         type = "INCOME"
                     )
                 )
+            }
+        }
+    }
+
+    fun deductFromSavingsGoal(goal: SavingsGoal, amountToDeduct: Double, accountId: Int? = null) {
+        if (amountToDeduct <= 0 || goal.currentAmount <= 0) return
+        val actualDeduction = amountToDeduct.coerceAtMost(goal.currentAmount)
+        viewModelScope.launch {
+            val updatedGoal = goal.copy(currentAmount = goal.currentAmount - actualDeduction)
+            repository.updateSavingsGoal(updatedGoal)
+
+            repository.insertExpense(
+                Expense(
+                    amount = actualDeduction,
+                    category = "Goal Withdrawal",
+                    date = System.currentTimeMillis(),
+                    note = "🔓 Unlocked ₹%,.0f from goal: ${goal.name}".format(actualDeduction),
+                    type = "INCOME"
+                )
+            )
+
+            if (accountId != null) {
+                val accList = accounts.value
+                val acc = accList.find { it.id == accountId }
+                if (acc != null) {
+                    repository.updateAccount(acc.copy(balance = acc.balance + actualDeduction))
+                }
+            }
+
+            _toastMessage.value = "🔓 Deducted ₹%,.0f from ${goal.name}".format(actualDeduction)
+        }
+    }
+
+    fun depositToSafe(amount: Double) {
+        if (amount <= 0) return
+        viewModelScope.launch {
+            val allGoals = savingsGoals.first()
+            var safeGoal = allGoals.find { it.name.contains("Monthly Safe", ignoreCase = true) || it.name.contains("Safe Vault", ignoreCase = true) }
+            if (safeGoal == null) {
+                safeGoal = SavingsGoal(
+                    name = "Monthly Safe Vault 🔐",
+                    targetAmount = 600.0,
+                    currentAmount = amount,
+                    frequency = "MONTHLY",
+                    contributionAmount = 50.0,
+                    isAutoGap = true,
+                    iconTag = "🔐"
+                )
+                repository.insertSavingsGoal(safeGoal)
+            } else {
+                repository.updateSavingsGoal(safeGoal.copy(currentAmount = safeGoal.currentAmount + amount))
+            }
+
+            repository.insertExpense(
+                Expense(
+                    amount = amount,
+                    category = "Locked Savings",
+                    date = System.currentTimeMillis(),
+                    note = "🔐 Manual deposit to Safe Vault (₹%,.0f)".format(amount),
+                    type = "EXPENSE"
+                )
+            )
+            _toastMessage.value = "🔐 Deposited ₹%,.0f to Safe Vault".format(amount)
+        }
+    }
+
+    fun withdrawFromSafe(amount: Double) {
+        if (amount <= 0) return
+        viewModelScope.launch {
+            val allGoals = savingsGoals.first()
+            val safeGoal = allGoals.find { it.name.contains("Monthly Safe", ignoreCase = true) || it.name.contains("Safe Vault", ignoreCase = true) }
+            if (safeGoal != null && safeGoal.currentAmount > 0) {
+                val actual = amount.coerceAtMost(safeGoal.currentAmount)
+                repository.updateSavingsGoal(safeGoal.copy(currentAmount = safeGoal.currentAmount - actual))
+
+                repository.insertExpense(
+                    Expense(
+                        amount = actual,
+                        category = "Goal Withdrawal",
+                        date = System.currentTimeMillis(),
+                        note = "🔓 Unlocked ₹%,.0f from Safe Vault".format(actual),
+                        type = "INCOME"
+                    )
+                )
+                _toastMessage.value = "🔓 Unlocked ₹%,.0f from Safe Vault".format(actual)
             }
         }
     }

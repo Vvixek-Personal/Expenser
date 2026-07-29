@@ -1830,6 +1830,8 @@ fun AnalyticsTab(viewModel: FinanceViewModel) {
     val expenses by viewModel.filteredExpenses.collectAsStateWithLifecycle()
     val allExpenses by viewModel.expenses.collectAsStateWithLifecycle()
     val selectedDateRange by viewModel.selectedDateRange.collectAsStateWithLifecycle()
+    val savingsGoals by viewModel.savingsGoals.collectAsStateWithLifecycle()
+    val monthlyBudget by viewModel.monthlyBudget.collectAsStateWithLifecycle()
 
     var monthOffset by remember { mutableStateOf(0) }
 
@@ -1889,24 +1891,46 @@ fun AnalyticsTab(viewModel: FinanceViewModel) {
     val avgDailySpend = if (activeDaysCount > 0) totalExpenseVal / activeDaysCount else 0.0
     val avgTxnVal = if (totalTxCount > 0) totalCashFlownVal / totalTxCount else 0.0
 
+    val totalAmountSaved = remember(savingsGoals) { savingsGoals.sumOf { it.currentAmount } }
+    val monthsOverBudgetCount = remember(allExpenses, monthlyBudget) {
+        if (monthlyBudget <= 0) 0
+        else {
+            allExpenses.filter { it.type != "INCOME" }
+                .groupBy {
+                    val cal = Calendar.getInstance().apply { timeInMillis = it.date }
+                    "${cal.get(Calendar.YEAR)}-${cal.get(Calendar.MONTH)}"
+                }
+                .mapValues { entry -> entry.value.sumOf { it.amount } }
+                .count { (_, monthTotal) -> monthTotal > monthlyBudget }
+        }
+    }
+
+    val context = LocalContext.current
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
             .padding(16.dp)
     ) {
-        Column {
-            Text(
-                text = "Analytics Dashboard",
-                style = MaterialTheme.typography.headlineSmall,
-                color = SleekTextPrimary,
-                fontWeight = FontWeight.Bold
-            )
-            Text(
-                text = "Financial summary, Category breakdown & Spending trends for $activePeriodLabel",
-                style = MaterialTheme.typography.bodySmall,
-                color = SleekTextSecondary
-            )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    text = "Analytics Dashboard",
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = SleekTextPrimary,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = "Financial summary & trends for $activePeriodLabel",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = SleekTextSecondary
+                )
+            }
         }
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -1978,6 +2002,29 @@ fun AnalyticsTab(viewModel: FinanceViewModel) {
                     subtitle = "Avg ~₹%,.0f / day".format(avgDailySpend),
                     icon = Icons.Default.DateRange,
                     iconColor = Color(0xFF06B6D4),
+                    modifier = Modifier.weight(1f)
+                )
+            }
+
+            // Row 4: Amount Saved & Months Over Budget
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                AnalyticsStatCard(
+                    title = "Amount Saved",
+                    value = "₹%,.2f".format(totalAmountSaved),
+                    subtitle = "Across savings goals",
+                    icon = Icons.Default.AccountBalance,
+                    iconColor = Color(0xFF0D9488),
+                    modifier = Modifier.weight(1f)
+                )
+                AnalyticsStatCard(
+                    title = "Months Over Budget",
+                    value = "$monthsOverBudgetCount months",
+                    subtitle = if (monthsOverBudgetCount > 0) "Exceeded ₹%,.0f limit".format(monthlyBudget) else "Within budget limit",
+                    icon = Icons.Default.Warning,
+                    iconColor = Color(0xFFEF4444),
                     modifier = Modifier.weight(1f)
                 )
             }
@@ -4359,7 +4406,7 @@ fun SidebarDrawerContent(
                 icon = Icons.Rounded.FileDownload,
                 iconBgColor = Color(0xFF10B981), // Emerald Green Squircle
                 title = LanguageManager.tr("Data Export & Reports", selectedLanguage),
-                subtitle = LanguageManager.tr("Export transactions to CSV or PDF", selectedLanguage),
+                subtitle = LanguageManager.tr("Export analytics, stats, CSV & PDF reports", selectedLanguage),
                 onClick = { onOpenSettingsScreen(SettingsSubScreen.Export) }
             )
 
