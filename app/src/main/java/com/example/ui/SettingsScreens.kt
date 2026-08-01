@@ -32,10 +32,296 @@ import java.text.SimpleDateFormat
 import java.util.*
 
 enum class SettingsSubScreen {
+    PersonalData,
     DataAndStorage,
     ThemeAndLanguage,
     Export,
     FaqAndHelp
+}
+
+// ==========================================
+// 0️⃣ PERSONAL DATA SCREEN (Reference Image Design)
+// ==========================================
+@Composable
+fun PersonalDataScreen(
+    viewModel: FinanceViewModel,
+    onBack: () -> Unit
+) {
+    val currentName by viewModel.userName.collectAsStateWithLifecycle()
+    val currentDob by viewModel.userDob.collectAsStateWithLifecycle()
+    val currentJob by viewModel.userJob.collectAsStateWithLifecycle()
+    val currentIncome by viewModel.userMonthlyIncome.collectAsStateWithLifecycle()
+    val currentGender by viewModel.userGender.collectAsStateWithLifecycle()
+
+    var nameText by remember { mutableStateOf(currentName ?: "William John Malik") }
+    var dobText by remember { mutableStateOf(currentDob) }
+    var jobText by remember { mutableStateOf(currentJob) }
+    var incomeText by remember { mutableStateOf(currentIncome) }
+    var genderOption by remember { mutableStateOf(currentGender) }
+
+    val context = LocalContext.current
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(SleekBg)
+            .statusBarsPadding()
+            .navigationBarsPadding()
+    ) {
+        // Top Bar
+        Surface(
+            color = SleekSurface,
+            tonalElevation = 2.dp,
+            border = BorderStroke(1.dp, SleekBorder)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = onBack) {
+                        Icon(
+                            imageVector = Icons.Default.ArrowBack,
+                            contentDescription = "Back",
+                            tint = SleekTextPrimary
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Personal Data",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = SleekTextPrimary
+                    )
+                }
+
+                TextButton(onClick = {
+                    viewModel.saveUserProfile(nameText, dobText, jobText, incomeText, genderOption)
+                    Toast.makeText(context, "Profile updated successfully!", Toast.LENGTH_SHORT).show()
+                    onBack()
+                }) {
+                    Text("Save", fontWeight = FontWeight.Bold, color = SleekPrimary)
+                }
+            }
+        }
+
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            // Profile Avatar with Camera badge
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 12.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Box(contentAlignment = Alignment.BottomEnd) {
+                    Box(
+                        modifier = Modifier
+                            .size(96.dp)
+                            .clip(RoundedCornerShape(24.dp))
+                            .background(Color(0xFFE2E8F0)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Person,
+                            contentDescription = "Profile Photo",
+                            tint = Color(0xFF64748B),
+                            modifier = Modifier.size(56.dp)
+                        )
+                    }
+                    Box(
+                        modifier = Modifier
+                            .size(32.dp)
+                            .clip(CircleShape)
+                            .background(Color(0xFF3B82F6))
+                            .clickable {
+                                Toast.makeText(context, "Upload/Change photo tapped", Toast.LENGTH_SHORT).show()
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.PhotoCamera,
+                            contentDescription = "Change Photo",
+                            tint = Color.White,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
+            }
+
+            // Your Name
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(
+                    text = "Your Name",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = SleekTextSecondary,
+                    fontWeight = FontWeight.Medium
+                )
+                OutlinedTextField(
+                    value = nameText,
+                    onValueChange = { nameText = it },
+                    shape = RoundedCornerShape(16.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedContainerColor = SleekSurface,
+                        unfocusedContainerColor = SleekSurface,
+                        focusedBorderColor = SleekPrimary,
+                        unfocusedBorderColor = SleekBorder
+                    ),
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+            }
+
+            // Date of Birth
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(
+                    text = "Date of Birth",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = SleekTextSecondary,
+                    fontWeight = FontWeight.Medium
+                )
+                OutlinedTextField(
+                    value = dobText,
+                    onValueChange = { dobText = it },
+                    shape = RoundedCornerShape(16.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedContainerColor = SleekSurface,
+                        unfocusedContainerColor = SleekSurface,
+                        focusedBorderColor = SleekPrimary,
+                        unfocusedBorderColor = SleekBorder
+                    ),
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    trailingIcon = {
+                        Icon(Icons.Default.ArrowDropDown, contentDescription = null, tint = SleekTextSecondary)
+                    }
+                )
+            }
+
+            // Your Job
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(
+                    text = "Your Job",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = SleekTextSecondary,
+                    fontWeight = FontWeight.Medium
+                )
+                OutlinedTextField(
+                    value = jobText,
+                    onValueChange = { jobText = it },
+                    shape = RoundedCornerShape(16.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedContainerColor = SleekSurface,
+                        unfocusedContainerColor = SleekSurface,
+                        focusedBorderColor = SleekPrimary,
+                        unfocusedBorderColor = SleekBorder
+                    ),
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+            }
+
+            // Monthly Income
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(
+                    text = "Monthly Income",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = SleekTextSecondary,
+                    fontWeight = FontWeight.Medium
+                )
+                OutlinedTextField(
+                    value = incomeText,
+                    onValueChange = { incomeText = it },
+                    shape = RoundedCornerShape(16.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedContainerColor = SleekSurface,
+                        unfocusedContainerColor = SleekSurface,
+                        focusedBorderColor = SleekPrimary,
+                        unfocusedBorderColor = SleekBorder
+                    ),
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    trailingIcon = {
+                        Icon(Icons.Default.ArrowDropDown, contentDescription = null, tint = SleekTextSecondary)
+                    }
+                )
+            }
+
+            // Gender
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(
+                    text = "Gender",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = SleekTextSecondary,
+                    fontWeight = FontWeight.Medium
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    listOf("Male", "Female").forEach { gender ->
+                        val isSelected = genderOption == gender
+                        Surface(
+                            onClick = { genderOption = gender },
+                            shape = RoundedCornerShape(16.dp),
+                            color = SleekSurface,
+                            border = BorderStroke(if (isSelected) 2.dp else 1.dp, if (isSelected) SleekPrimary else SleekBorder),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(16.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                RadioButton(
+                                    selected = isSelected,
+                                    onClick = { genderOption = gender }
+                                )
+                                Text(
+                                    text = gender,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = SleekTextPrimary
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            Button(
+                onClick = {
+                    viewModel.saveUserProfile(nameText, dobText, jobText, incomeText, genderOption)
+                    Toast.makeText(context, "Profile updated successfully!", Toast.LENGTH_SHORT).show()
+                    onBack()
+                },
+                shape = RoundedCornerShape(16.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = SleekPrimary),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp)
+            ) {
+                Text(
+                    text = "Save Changes",
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+            }
+
+            Spacer(modifier = Modifier.height(40.dp))
+        }
+    }
 }
 
 // ==========================================

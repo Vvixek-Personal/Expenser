@@ -10,6 +10,8 @@ import com.example.api.GeminiClient
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.util.Locale
+import java.text.SimpleDateFormat
+import java.util.Date
 
 data class ChatMessage(
     val text: String,
@@ -122,6 +124,18 @@ class FinanceViewModel(
     private val _userName = MutableStateFlow<String?>(null)
     val userName: StateFlow<String?> = _userName.asStateFlow()
 
+    private val _userDob = MutableStateFlow("24 December 1999")
+    val userDob: StateFlow<String> = _userDob.asStateFlow()
+
+    private val _userJob = MutableStateFlow("Successor Designer")
+    val userJob: StateFlow<String> = _userJob.asStateFlow()
+
+    private val _userMonthlyIncome = MutableStateFlow("500 - 3000 / year")
+    val userMonthlyIncome: StateFlow<String> = _userMonthlyIncome.asStateFlow()
+
+    private val _userGender = MutableStateFlow("Male")
+    val userGender: StateFlow<String> = _userGender.asStateFlow()
+
     private val _monthlyBudget = MutableStateFlow(25000.0)
     val monthlyBudget: StateFlow<Double> = _monthlyBudget.asStateFlow()
 
@@ -197,6 +211,10 @@ class FinanceViewModel(
 
     init {
         _userName.value = sharedPrefs.getString("user_name", null)
+        _userDob.value = sharedPrefs.getString("user_dob", "24 December 1999") ?: "24 December 1999"
+        _userJob.value = sharedPrefs.getString("user_job", "Successor Designer") ?: "Successor Designer"
+        _userMonthlyIncome.value = sharedPrefs.getString("user_monthly_income", "500 - 3000 / year") ?: "500 - 3000 / year"
+        _userGender.value = sharedPrefs.getString("user_gender", "Male") ?: "Male"
         _monthlyBudget.value = sharedPrefs.getFloat("monthly_budget", 25000.0f).toDouble()
         val savedCats = sharedPrefs.getStringSet("custom_categories", emptySet()) ?: emptySet()
         val savedExpenseCats = sharedPrefs.getStringSet("custom_expense_categories", null)
@@ -234,9 +252,6 @@ class FinanceViewModel(
         // Compute initial storage & network values
         refreshUsageData()
 
-        // Check and apply Monthly ₹50 Safe Vault auto-lock
-        checkAndApplyMonthlySafe()
-
         // Seed default savings goals once if list is empty
         val hasSeeded = sharedPrefs.getBoolean("has_seeded_savings_goals", false)
         if (!hasSeeded) {
@@ -271,49 +286,7 @@ class FinanceViewModel(
         }
     }
 
-    fun checkAndApplyMonthlySafe() {
-        if (!_isMonthlySafeEnabled.value) return
-        val currentMonth = java.text.SimpleDateFormat("MM-yyyy", java.util.Locale.getDefault()).format(java.util.Date())
-        val lastMonthLocked = sharedPrefs.getString("last_safe_deduction_month", "") ?: ""
 
-        if (lastMonthLocked != currentMonth) {
-            viewModelScope.launch {
-                val safeGoalName = "Monthly Safe Vault 🔐"
-                val allGoals = savingsGoals.first()
-                var safeGoal = allGoals.find { it.name.contains("Monthly Safe", ignoreCase = true) || it.name.contains("Safe Vault", ignoreCase = true) }
-
-                val amountToLock = _monthlySafeAmount.value
-                if (safeGoal == null) {
-                    safeGoal = SavingsGoal(
-                        name = safeGoalName,
-                        targetAmount = 600.0,
-                        currentAmount = amountToLock,
-                        frequency = "MONTHLY",
-                        contributionAmount = amountToLock,
-                        isAutoGap = true,
-                        iconTag = "🔐"
-                    )
-                    repository.insertSavingsGoal(safeGoal)
-                } else {
-                    val updatedGoal = safeGoal.copy(currentAmount = safeGoal.currentAmount + amountToLock)
-                    repository.updateSavingsGoal(updatedGoal)
-                }
-
-                repository.insertExpense(
-                    Expense(
-                        amount = amountToLock,
-                        category = "Locked Savings",
-                        date = System.currentTimeMillis(),
-                        note = "🔐 Automated Monthly Safe Lock (₹%,.0f)".format(amountToLock),
-                        type = "EXPENSE"
-                    )
-                )
-
-                sharedPrefs.edit().putString("last_safe_deduction_month", currentMonth).apply()
-                _toastMessage.value = "🔐 Monthly ₹%,.0f Safe Vault locked for $currentMonth!".format(amountToLock)
-            }
-        }
-    }
 
     fun updateLanguage(language: String) {
         _selectedLanguage.value = language
@@ -395,6 +368,24 @@ class FinanceViewModel(
         if (trimmed.isNotEmpty()) {
             sharedPrefs.edit().putString("user_name", trimmed).apply()
             _userName.value = trimmed
+        }
+    }
+
+    fun saveUserProfile(name: String, dob: String, job: String, income: String, gender: String) {
+        val trimmedName = name.trim()
+        if (trimmedName.isNotEmpty()) {
+            sharedPrefs.edit()
+                .putString("user_name", trimmedName)
+                .putString("user_dob", dob)
+                .putString("user_job", job)
+                .putString("user_monthly_income", income)
+                .putString("user_gender", gender)
+                .apply()
+            _userName.value = trimmedName
+            _userDob.value = dob
+            _userJob.value = job
+            _userMonthlyIncome.value = income
+            _userGender.value = gender
         }
     }
 
@@ -527,8 +518,7 @@ class FinanceViewModel(
         date: Long,
         note: String?,
         imagePath: String? = null,
-        type: String = "EXPENSE",
-        gstPercent: Double = 0.0
+        type: String = "EXPENSE"
     ) {
         viewModelScope.launch {
             repository.insertExpense(
@@ -541,48 +531,6 @@ class FinanceViewModel(
                     type = type
                 )
             )
-
-            // Auto-reserve GST/Tax amount into GST & Tax Reserve Goal if specified on Income
-            if (type == "INCOME" && gstPercent > 0.0) {
-                val gstAmount = amount * (gstPercent / 100.0)
-                if (gstAmount > 0.0) {
-                    val currentGoals = repository.allSavingsGoals.first()
-                    var gstGoal = currentGoals.find { it.name.contains("GST", ignoreCase = true) || it.name.contains("Tax Reserve", ignoreCase = true) }
-                    if (gstGoal == null) {
-                        val newId = repository.insertSavingsGoal(
-                            SavingsGoal(
-                                name = "GST & Tax Reserve 🏛️",
-                                targetAmount = 100000.0,
-                                currentAmount = 0.0,
-                                frequency = "MONTHLY",
-                                contributionAmount = 0.0,
-                                isAutoGap = true,
-                                iconTag = "🏛️"
-                            )
-                        )
-                        gstGoal = SavingsGoal(
-                            id = newId.toInt(),
-                            name = "GST & Tax Reserve 🏛️",
-                            targetAmount = 100000.0,
-                            currentAmount = 0.0,
-                            iconTag = "🏛️"
-                        )
-                    }
-
-                    val updatedGoal = gstGoal.copy(currentAmount = gstGoal.currentAmount + gstAmount)
-                    repository.updateSavingsGoal(updatedGoal)
-
-                    repository.insertExpense(
-                        Expense(
-                            amount = gstAmount,
-                            category = "Locked Savings",
-                            date = System.currentTimeMillis(),
-                            note = "🏛️ Auto GST Reserve (${gstPercent.toInt()}%) from income ₹%,.0f".format(amount),
-                            type = "EXPENSE"
-                        )
-                    )
-                }
-            }
         }
     }
 

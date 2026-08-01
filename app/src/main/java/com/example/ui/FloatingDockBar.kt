@@ -1,8 +1,12 @@
 package com.example.ui
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -25,228 +29,189 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.ui.theme.SleekBorder
 import com.example.ui.theme.SleekPrimary
-import com.example.ui.theme.SleekPrimaryContainer
-import com.example.ui.theme.SleekSurface
-import com.example.ui.theme.SleekTextPrimary
-import com.example.ui.theme.SleekTextSecondary
+import com.example.ui.theme.isDarkModeActive
+import com.example.ui.theme.mixPrimaryWithColor
 
 /**
- * Floating Dock Bar modeled after the macOS/iOS taskbar style,
- * dynamically regulated by the active application Theme Palette.
- * Expanded horizontally across the bottom screen with balanced squircle tiles.
+ * Image-3 Inspired Floating Dock Bar:
+ * Translucent glass container floating at bottom of screen.
+ * Active item expands into a white capsule containing a white circle icon and text label ("Home", etc.).
+ * Inactive items are sleek circular outline buttons with icons.
  */
 @Composable
 fun FloatingDockBar(
     currentScreen: Screen,
     onScreenSelected: (Screen) -> Unit,
-    onAddClick: () -> Unit,
     selectedLanguage: String = "English",
     modifier: Modifier = Modifier
 ) {
-    // Theme palette derived colors
-    val containerBg = SleekSurface
-    val containerBorder = SleekBorder
-    val primaryAccent = SleekPrimary
+    val haptic = LocalHapticFeedback.current
+    // Theme-adaptive translucent glass tint
+    val baseTint = if (isDarkModeActive) Color(0xFF161922) else Color(0xFF1E293B)
+    val dockContainerBg = mixPrimaryWithColor(SleekPrimary, baseTint, 0.45f).copy(alpha = 0.88f)
+    val dockBorderColor = mixPrimaryWithColor(SleekPrimary, Color.White, 0.5f).copy(alpha = 0.4f)
 
     Box(
         modifier = modifier
             .fillMaxWidth()
             .navigationBarsPadding()
-            .padding(horizontal = 12.dp, vertical = 6.dp),
+            .padding(horizontal = 24.dp, vertical = 12.dp),
         contentAlignment = Alignment.Center
     ) {
-        // Expanded Horizontally Theme-Regulated Capsule Container
+        // Translucent Floating Capsule Container (3rd Image Style)
         Row(
             modifier = Modifier
-                .fillMaxWidth()
                 .shadow(
-                    elevation = 16.dp,
-                    shape = RoundedCornerShape(28.dp),
-                    spotColor = primaryAccent.copy(alpha = 0.25f)
+                    elevation = 20.dp,
+                    shape = RoundedCornerShape(40.dp),
+                    spotColor = Color.Black.copy(alpha = 0.3f)
                 )
-                .clip(RoundedCornerShape(28.dp))
-                .background(
-                    brush = Brush.verticalGradient(
-                        colors = listOf(
-                            containerBg,
-                            containerBg.copy(alpha = 0.95f)
-                        )
-                    )
-                )
+                .clip(RoundedCornerShape(40.dp))
+                .background(dockContainerBg)
                 .border(
-                    border = BorderStroke(
-                        width = 1.5.dp,
-                        brush = Brush.verticalGradient(
-                            colors = listOf(
-                                primaryAccent.copy(alpha = 0.3f),
-                                containerBorder
-                            )
-                        )
-                    ),
-                    shape = RoundedCornerShape(28.dp)
+                    border = BorderStroke(1.5.dp, dockBorderColor),
+                    shape = RoundedCornerShape(40.dp)
                 )
-                .padding(horizontal = 8.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.SpaceEvenly,
+                .padding(horizontal = 10.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Tile 1: Dashboard
-            DockTile(
+            // Tab 1: Home (Dashboard)
+            ImageInspiredDockTile(
                 icon = Icons.Default.Dashboard,
-                title = LanguageManager.tr("Dashboard", selectedLanguage),
+                title = LanguageManager.tr("Home", selectedLanguage),
                 isSelected = currentScreen == Screen.Dashboard,
                 testTag = "nav_item_dashboard",
-                modifier = Modifier.weight(1f),
-                onClick = { onScreenSelected(Screen.Dashboard) }
+                onClick = {
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    onScreenSelected(Screen.Dashboard)
+                }
             )
 
-            // Tile 2: Expenses
-            DockTile(
+            // Tab 2: Finance (Expenses)
+            ImageInspiredDockTile(
                 icon = Icons.Default.ReceiptLong,
-                title = LanguageManager.tr("Expenses", selectedLanguage),
+                title = LanguageManager.tr("Transactions", selectedLanguage),
                 isSelected = currentScreen == Screen.Expenses,
                 testTag = "nav_item_expenses",
-                modifier = Modifier.weight(1f),
-                onClick = { onScreenSelected(Screen.Expenses) }
+                onClick = {
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    onScreenSelected(Screen.Expenses)
+                }
             )
 
-            // Tile 3: Add (Center Action Tile)
-            DockTile(
-                icon = Icons.Default.Add,
-                title = LanguageManager.tr("Add", selectedLanguage),
-                isSelected = false,
-                isActionTile = true,
-                testTag = "nav_item_add",
-                modifier = Modifier.weight(1f),
-                onClick = onAddClick
-            )
-
-            // Tile 4: Analytics
-            DockTile(
+            // Tab 3: Analytics
+            ImageInspiredDockTile(
                 icon = Icons.Default.PieChart,
                 title = LanguageManager.tr("Analytics", selectedLanguage),
                 isSelected = currentScreen == Screen.Analytics,
                 testTag = "nav_item_analytics",
-                modifier = Modifier.weight(1f),
-                onClick = { onScreenSelected(Screen.Analytics) }
+                onClick = {
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    onScreenSelected(Screen.Analytics)
+                }
             )
 
-            // Tile 5: Calendar
-            DockTile(
+            // Tab 4: Calendar
+            ImageInspiredDockTile(
                 icon = Icons.Default.CalendarMonth,
                 title = LanguageManager.tr("Calendar", selectedLanguage),
                 isSelected = currentScreen == Screen.Calendar,
                 testTag = "nav_item_calendar",
-                modifier = Modifier.weight(1f),
-                onClick = { onScreenSelected(Screen.Calendar) }
+                onClick = {
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    onScreenSelected(Screen.Calendar)
+                }
             )
         }
     }
 }
 
 @Composable
-private fun DockTile(
+private fun ImageInspiredDockTile(
     icon: ImageVector,
     title: String,
     isSelected: Boolean,
     testTag: String,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier,
     isActionTile: Boolean = false
 ) {
-    val primaryAccent = SleekPrimary
-    val primaryContainer = SleekPrimaryContainer
-    val textSecondary = SleekTextSecondary
-    val surfaceColor = SleekSurface
-    val borderColor = SleekBorder
+    val activeBg = Color.White
+    val inactiveCircleBorder = Color(0xFFC8DCCE).copy(alpha = 0.45f)
+    val inactiveIconColor = Color.White
 
-    val scale by animateFloatAsState(
-        targetValue = if (isSelected) 1.08f else 1.0f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessLow
-        ),
-        label = "dock_scale"
-    )
-
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = modifier.testTag(testTag)
-    ) {
-        Box(
-            modifier = Modifier
-                .scale(scale)
-                .height(44.dp)
-                .fillMaxWidth(0.85f)
-                .clip(RoundedCornerShape(16.dp))
-                .background(
-                    brush = when {
-                        isActionTile -> Brush.linearGradient(
-                            listOf(primaryAccent, primaryAccent.copy(alpha = 0.85f))
-                        )
-                        isSelected -> Brush.linearGradient(
-                            listOf(primaryAccent, primaryAccent.copy(alpha = 0.8f))
-                        )
-                        else -> Brush.linearGradient(
-                            listOf(
-                                primaryContainer.copy(alpha = 0.35f),
-                                surfaceColor.copy(alpha = 0.5f)
-                            )
-                        )
-                    }
-                )
-                .border(
-                    border = BorderStroke(
-                        width = if (isSelected || isActionTile) 1.5.dp else 1.dp,
-                        color = if (isSelected || isActionTile) {
-                            primaryAccent.copy(alpha = 0.9f)
-                        } else {
-                            borderColor.copy(alpha = 0.6f)
-                        }
-                    ),
-                    shape = RoundedCornerShape(16.dp)
-                )
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    onClick = onClick
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.Center,
+        modifier = Modifier
+            .testTag(testTag)
+            .height(48.dp)
+            .clip(CircleShape)
+            .background(if (isSelected) activeBg else Color.Transparent)
+            .border(
+                border = BorderStroke(
+                    width = if (isSelected) 0.dp else 1.dp,
+                    color = if (isSelected) Color.Transparent else inactiveCircleBorder
                 ),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = title,
-                tint = if (isSelected || isActionTile) {
-                    Color.White
-                } else {
-                    textSecondary
-                },
-                modifier = Modifier.size(22.dp)
+                shape = CircleShape
             )
-        }
-
-        Spacer(modifier = Modifier.height(3.dp))
-
-        // macOS Dock Style Active Indicator Dot
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onClick
+            )
+            .padding(
+                horizontal = if (isSelected) 14.dp else 12.dp,
+                vertical = 6.dp
+            )
+    ) {
         if (isSelected) {
+            // White circle icon container with dark icon inside (Matching Image 3 active pill)
             Box(
                 modifier = Modifier
-                    .size(width = 12.dp, height = 3.dp)
+                    .size(34.dp)
                     .clip(CircleShape)
-                    .background(primaryAccent)
+                    .background(Color(0xFF1E293B)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = title,
+                    tint = Color.White,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = title,
+                color = Color(0xFF1E293B),
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold
             )
         } else {
-            Spacer(modifier = Modifier.height(3.dp))
+            // Inactive item: Circular outline button with white icon inside
+            Box(
+                modifier = Modifier.size(34.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = title,
+                    tint = if (isActionTile) SleekPrimary else inactiveIconColor,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
         }
     }
 }
+
