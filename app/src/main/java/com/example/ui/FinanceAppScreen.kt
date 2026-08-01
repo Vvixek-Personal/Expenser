@@ -2205,10 +2205,10 @@ fun AnalyticsTab(viewModel: FinanceViewModel, onAddClick: () -> Unit) {
                                         catBreakdown.forEachIndexed { cIdx, (_, amt) ->
                                             val segFraction = (amt / daySum.coerceAtLeast(1.0)).toFloat()
                                             val segColor = when (cIdx % 4) {
-                                                0 -> Color(0xFF10B981) // Green
-                                                1 -> Color(0xFF3B82F6) // Blue
-                                                2 -> Color(0xFFA78BFA) // Lavender
-                                                else -> Color(0xFFF59E0B) // Orange
+                                                0 -> SleekPrimary
+                                                1 -> SleekPrimaryContainer
+                                                2 -> mixPrimaryWithColor(SleekPrimary, Color.White, 0.5f)
+                                                else -> mixPrimaryWithColor(SleekPrimary, Color.Black, 0.2f)
                                             }
                                             Box(
                                                 modifier = Modifier
@@ -2242,164 +2242,6 @@ fun AnalyticsTab(viewModel: FinanceViewModel, onAddClick: () -> Unit) {
             }
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
-
-
-
-        // 3️⃣ IMAGE 2 INSPIRED CURRENT SPEND RATE CARD (Category Breakdown & Pills)
-        Card(
-            colors = CardDefaults.cardColors(containerColor = Color.White),
-            shape = RoundedCornerShape(24.dp),
-            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(
-                modifier = Modifier.padding(20.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "Current spend rate",
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF0F172A)
-                    )
-                    IconButton(onClick = { /* info */ }, modifier = Modifier.size(32.dp)) {
-                        Icon(
-                            imageVector = Icons.Default.ReceiptLong,
-                            contentDescription = "Details",
-                            tint = Color(0xFF64748B)
-                        )
-                    }
-                }
-
-                val displayCats = if (categoryTotals.isNotEmpty()) {
-                    categoryTotals.map { Pair(it.key, it.value) }
-                } else {
-                    listOf(
-                        Pair("Connections", 450.0),
-                        Pair("Bills", 1200.0),
-                        Pair("Groceries", 850.0),
-                        Pair("Savings", 600.0)
-                    )
-                }
-
-                val sumAll = displayCats.sumOf { it.second }.coerceAtLeast(1.0)
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    displayCats.take(4).forEachIndexed { idx, (catName, amt) ->
-                        val ratio = (amt / sumAll).toFloat()
-                        val pillColor = when (idx % 4) {
-                            0 -> Color(0xFFE2E8F0)
-                            1 -> Color(0xFFFEE2E2)
-                            2 -> Color(0xFFECFDF5)
-                            else -> Color(0xFFE0F2FE)
-                        }
-                        val textColor = when (idx % 4) {
-                            0 -> Color(0xFF475569)
-                            1 -> Color(0xFFDC2626)
-                            2 -> Color(0xFF059669)
-                            else -> Color(0xFF0284C7)
-                        }
-
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .clip(RoundedCornerShape(16.dp))
-                                .background(pillColor)
-                                .padding(vertical = 12.dp, horizontal = 4.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(
-                                    text = catName.take(6),
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = textColor
-                                )
-                                Spacer(modifier = Modifier.height(2.dp))
-                                Text(
-                                    text = "${(ratio * 100).toInt()}%",
-                                    fontSize = 10.sp,
-                                    color = textColor
-                                )
-                            }
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(4.dp))
-
-                displayCats.forEachIndexed { index, (catName, amount) ->
-                    val pct = (amount / sumAll * 100).toInt()
-                    val catColor = when (index % 5) {
-                        0 -> Color(0xFF2563EB)
-                        1 -> Color(0xFF10B981)
-                        2 -> Color(0xFFF59E0B)
-                        3 -> Color(0xFFEC4899)
-                        else -> Color(0xFF8B5CF6)
-                    }
-
-                    Column(modifier = Modifier.fillMaxWidth()) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(10.dp)
-                                        .clip(CircleShape)
-                                        .background(catColor)
-                                )
-                                Text(
-                                    text = catName,
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = Color(0xFF0F172A)
-                                )
-                            }
-
-                            Text(
-                                text = "₹%,.2f  (%d%%)".format(amount, pct),
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color(0xFF0F172A)
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.height(6.dp))
-
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(6.dp)
-                                .clip(CircleShape)
-                                .background(Color(0xFFF1F5F9))
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth((pct / 100f).coerceIn(0.05f, 1f))
-                                    .fillMaxHeight()
-                                    .clip(CircleShape)
-                                    .background(catColor)
-                            )
-                        }
-                    }
-                }
-            }
-        }
 
         Spacer(modifier = Modifier.height(110.dp))
     }
