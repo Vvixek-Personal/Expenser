@@ -487,6 +487,8 @@ fun DashboardTab(
 
     var showChangeNameDialog by remember { mutableStateOf(false) }
     var showAdjustBudgetDialog by remember { mutableStateOf(false) }
+    var showBillsDialog by remember { mutableStateOf(false) }
+    var showReminderDialog by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
@@ -762,8 +764,32 @@ fun DashboardTab(
         QuickServicesCategorySection(
             selectedLanguage = selectedLanguage,
             onNavigateToExpenses = onNavigateToExpenses,
-            onNavigateToAnalytics = onNavigateToAnalytics
+            onNavigateToAnalytics = onNavigateToAnalytics,
+            onBillsClick = { showBillsDialog = true },
+            onReminderClick = { showReminderDialog = true }
         )
+
+        if (showBillsDialog) {
+            BillsDialog(
+                onDismiss = { showBillsDialog = false },
+                onPayBill = { title, amt ->
+                    viewModel.addExpense(
+                        amount = amt,
+                        category = "Bills",
+                        date = System.currentTimeMillis(),
+                        note = "Paid $title",
+                        type = "EXPENSE"
+                    )
+                    showBillsDialog = false
+                }
+            )
+        }
+
+        if (showReminderDialog) {
+            ReminderDialog(
+                onDismiss = { showReminderDialog = false }
+            )
+        }
 
         Spacer(modifier = Modifier.height(24.dp))
 
@@ -902,7 +928,9 @@ fun DashboardTab(
 fun QuickServicesCategorySection(
     selectedLanguage: String = "English",
     onNavigateToExpenses: () -> Unit,
-    onNavigateToAnalytics: () -> Unit
+    onNavigateToAnalytics: () -> Unit,
+    onBillsClick: () -> Unit,
+    onReminderClick: () -> Unit
 ) {
     Card(
         shape = RoundedCornerShape(24.dp),
@@ -914,7 +942,8 @@ fun QuickServicesCategorySection(
             .testTag("quick_services_category_feed")
     ) {
         Column(
-            modifier = Modifier.padding(16.dp)
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -928,8 +957,6 @@ fun QuickServicesCategorySection(
                     fontWeight = FontWeight.Bold
                 )
             }
-
-            Spacer(modifier = Modifier.height(14.dp))
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -951,6 +978,30 @@ fun QuickServicesCategorySection(
                     badge = "Insights",
                     tileColor = Color(0xFF10B981),
                     onClick = onNavigateToAnalytics,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.Top
+            ) {
+                CategoryFeedTile(
+                    icon = Icons.Rounded.Receipt,
+                    label = "Bills",
+                    badge = "Due",
+                    tileColor = Color(0xFFF59E0B),
+                    onClick = onBillsClick,
+                    modifier = Modifier.weight(1f)
+                )
+
+                CategoryFeedTile(
+                    icon = Icons.Rounded.NotificationsActive,
+                    label = "Reminder",
+                    badge = "Alert",
+                    tileColor = Color(0xFFEC4899),
+                    onClick = onReminderClick,
                     modifier = Modifier.weight(1f)
                 )
             }
@@ -3915,6 +3966,190 @@ fun CreateCategoryDialog(
         onDismiss = onDismiss,
         onConfirmSingle = onConfirm
     )
+}
+
+@Composable
+fun BillsDialog(
+    onDismiss: () -> Unit,
+    onPayBill: (String, Double) -> Unit
+) {
+    val context = LocalContext.current
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            colors = CardDefaults.cardColors(containerColor = SleekSurface),
+            border = BorderStroke(1.dp, SleekBorder),
+            shape = RoundedCornerShape(24.dp),
+            modifier = Modifier.fillMaxWidth().testTag("bills_dialog")
+        ) {
+            Column(
+                modifier = Modifier.padding(24.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Text(
+                    text = "Bills & Utilities Manager",
+                    style = MaterialTheme.typography.titleLarge,
+                    color = SleekTextPrimary,
+                    fontWeight = FontWeight.Bold
+                )
+
+                Text(
+                    text = "Manage and log upcoming bills (Electricity, Internet, Rent, etc.)",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = SleekTextSecondary
+                )
+
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf(
+                        Triple("Electricity Bill", 1450.0, "Due in 2 days"),
+                        Triple("High-Speed Internet", 999.0, "Due tomorrow"),
+                        Triple("Apartment Rent", 15000.0, "Due in 5 days")
+                    ).forEach { (title, amt, due) ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(SleekBorder.copy(alpha = 0.2f))
+                                .padding(12.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Text(title, fontWeight = FontWeight.Bold, color = SleekTextPrimary, fontSize = 13.sp)
+                                Text(due, fontSize = 11.sp, color = Color(0xFFF59E0B))
+                            }
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text("₹%,.0f".format(amt), fontWeight = FontWeight.Bold, color = SleekTextPrimary, fontSize = 13.sp)
+                                Button(
+                                    onClick = {
+                                        onPayBill(title, amt)
+                                        Toast.makeText(context, "Logged bill payment for $title", Toast.LENGTH_SHORT).show()
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981)),
+                                    shape = RoundedCornerShape(8.dp),
+                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                    modifier = Modifier.height(32.dp)
+                                ) {
+                                    Text("Pay", fontSize = 11.sp, color = Color.White)
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                OutlinedButton(
+                    onClick = onDismiss,
+                    border = BorderStroke(1.dp, SleekBorder),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Close", color = SleekTextSecondary, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun ReminderDialog(
+    onDismiss: () -> Unit
+) {
+    val context = LocalContext.current
+    var reminderText by remember { mutableStateOf("") }
+    var remindersList = remember {
+        mutableStateOf(
+            mutableListOf(
+                "Check Monthly Budget Cap (85% alert)",
+                "Transfer ₹5000 to Savings Vault",
+                "Review weekly expense insights"
+            )
+        )
+    }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            colors = CardDefaults.cardColors(containerColor = SleekSurface),
+            border = BorderStroke(1.dp, SleekBorder),
+            shape = RoundedCornerShape(24.dp),
+            modifier = Modifier.fillMaxWidth().testTag("reminder_dialog")
+        ) {
+            Column(
+                modifier = Modifier.padding(24.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Text(
+                    text = "Payment & Financial Reminders",
+                    style = MaterialTheme.typography.titleLarge,
+                    color = SleekTextPrimary,
+                    fontWeight = FontWeight.Bold
+                )
+
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    remindersList.value.forEach { rem ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(SleekBorder.copy(alpha = 0.2f))
+                                .padding(12.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.weight(1f)) {
+                                Icon(Icons.Rounded.NotificationsActive, contentDescription = null, tint = Color(0xFFEC4899), modifier = Modifier.size(18.dp))
+                                Text(rem, fontSize = 13.sp, color = SleekTextPrimary, fontWeight = FontWeight.Medium)
+                            }
+                        }
+                    }
+                }
+
+                OutlinedTextField(
+                    value = reminderText,
+                    onValueChange = { reminderText = it },
+                    label = { Text("New Reminder Note", color = SleekTextSecondary) },
+                    singleLine = true,
+                    shape = RoundedCornerShape(12.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = SleekPrimary,
+                        unfocusedBorderColor = SleekBorder,
+                        focusedLabelColor = SleekPrimary,
+                        unfocusedLabelColor = SleekTextSecondary
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = onDismiss,
+                        border = BorderStroke(1.dp, SleekBorder),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("Close", color = SleekTextSecondary, fontWeight = FontWeight.Bold)
+                    }
+                    Button(
+                        onClick = {
+                            if (reminderText.isNotBlank()) {
+                                remindersList.value.add(reminderText.trim())
+                                Toast.makeText(context, "Reminder added successfully!", Toast.LENGTH_SHORT).show()
+                                reminderText = ""
+                            }
+                        },
+                        enabled = reminderText.isNotBlank(),
+                        colors = ButtonDefaults.buttonColors(containerColor = SleekPrimary),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("Add", color = Color.White, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+    }
 }
 
 @Composable
