@@ -960,44 +960,39 @@ fun QuickServicesCategorySection(
 
             Row(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    .fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 CategoryFeedTile(
                     icon = Icons.Rounded.ReceiptLong,
                     label = "Finance",
-                    badge = "Transactions",
                     tileColor = Color(0xFF6366F1),
                     onClick = onNavigateToExpenses,
-                    modifier = Modifier.width(130.dp)
+                    modifier = Modifier.weight(1f)
                 )
 
                 CategoryFeedTile(
                     icon = Icons.Rounded.PieChart,
                     label = "Analytics",
-                    badge = "Insights",
                     tileColor = Color(0xFF10B981),
                     onClick = onNavigateToAnalytics,
-                    modifier = Modifier.width(130.dp)
+                    modifier = Modifier.weight(1f)
                 )
 
                 CategoryFeedTile(
                     icon = Icons.Rounded.Receipt,
                     label = "Bills",
-                    badge = "Due",
                     tileColor = Color(0xFFF59E0B),
                     onClick = onBillsClick,
-                    modifier = Modifier.width(130.dp)
+                    modifier = Modifier.weight(1f)
                 )
 
                 CategoryFeedTile(
                     icon = Icons.Rounded.NotificationsActive,
                     label = "Reminder",
-                    badge = "Alert",
                     tileColor = Color(0xFFEC4899),
                     onClick = onReminderClick,
-                    modifier = Modifier.width(130.dp)
+                    modifier = Modifier.weight(1f)
                 )
             }
         }
@@ -1008,7 +1003,6 @@ fun QuickServicesCategorySection(
 fun CategoryFeedTile(
     icon: ImageVector,
     label: String,
-    badge: String? = null,
     tileColor: Color,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
@@ -1016,54 +1010,34 @@ fun CategoryFeedTile(
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = modifier
-            .clip(RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(12.dp))
             .clickable { onClick() }
-            .padding(vertical = 4.dp, horizontal = 2.dp)
+            .padding(vertical = 2.dp, horizontal = 1.dp)
     ) {
-        Box(contentAlignment = Alignment.TopEnd) {
-            Box(
-                modifier = Modifier
-                    .size(52.dp)
-                    .clip(RoundedCornerShape(18.dp))
-                    .background(tileColor),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = label,
-                    tint = Color.White,
-                    modifier = Modifier.size(24.dp)
-                )
-            }
-
-            if (!badge.isNullOrBlank()) {
-                Box(
-                    modifier = Modifier
-                        .offset(x = 6.dp, y = (-4).dp)
-                        .clip(CircleShape)
-                        .background(Color(0xFF10B981))
-                        .padding(horizontal = 5.dp, vertical = 2.dp)
-                ) {
-                    Text(
-                        text = badge,
-                        color = Color.White,
-                        fontSize = 8.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            }
+        Box(
+            modifier = Modifier
+                .size(42.dp)
+                .clip(RoundedCornerShape(14.dp))
+                .background(tileColor),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = label,
+                tint = Color.White,
+                modifier = Modifier.size(20.dp)
+            )
         }
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(4.dp))
 
         Text(
             text = label,
-            fontSize = 11.sp,
+            fontSize = 10.sp,
             color = SleekTextPrimary,
             fontWeight = FontWeight.SemiBold,
             textAlign = TextAlign.Center,
-            maxLines = 2,
-            lineHeight = 13.sp
+            maxLines = 1
         )
     }
 }
