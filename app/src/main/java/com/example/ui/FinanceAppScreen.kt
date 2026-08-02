@@ -1269,79 +1269,7 @@ fun ExpensesTab(
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            // Card Account Filter Pill (Image 1 Style: [Mastercard Circles] •••• 2872 ⌄)
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.Center
-            ) {
-                val selectedAcc = accounts.find { it.id == selectedAccountIdFilter }
-                val accLabel = selectedAcc?.name ?: "•••• 2872"
 
-                Box {
-                    Row(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(24.dp))
-                            .background(Color(0xFF0F172A))
-                            .clickable { showAccountMenu = true }
-                            .padding(horizontal = 16.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        // Mastercard overlap red/orange circles icon
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(
-                                modifier = Modifier
-                                    .size(14.dp)
-                                    .clip(CircleShape)
-                                    .background(Color(0xFFEB001B))
-                            )
-                            Box(
-                                modifier = Modifier
-                                    .offset(x = (-6).dp)
-                                    .size(14.dp)
-                                    .clip(CircleShape)
-                                    .background(Color(0xFFF79E1B).copy(alpha = 0.9f))
-                            )
-                        }
-
-                        Text(
-                            text = accLabel,
-                            color = Color.White,
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-
-                        Icon(
-                            imageVector = Icons.Default.KeyboardArrowDown,
-                            contentDescription = "Select Card",
-                            tint = Color.White.copy(alpha = 0.8f),
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-
-                    DropdownMenu(
-                        expanded = showAccountMenu,
-                        onDismissRequest = { showAccountMenu = false }
-                    ) {
-                        DropdownMenuItem(
-                            text = { Text("All Accounts") },
-                            onClick = {
-                                selectedAccountIdFilter = null
-                                showAccountMenu = false
-                            }
-                        )
-                        accounts.forEach { acc ->
-                            DropdownMenuItem(
-                                text = { Text(acc.name) },
-                                onClick = {
-                                    selectedAccountIdFilter = acc.id
-                                    showAccountMenu = false
-                                }
-                            )
-                        }
-                    }
-                }
-            }
 
             Spacer(modifier = Modifier.height(12.dp))
 
@@ -5020,13 +4948,13 @@ fun SidebarDrawerContent(
         
         // 2. Settings Items List
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            // Item 0: General Settings
+            // Item 0: App Settings & Customization
             SidebarSettingsTile(
                 icon = Icons.Rounded.Settings,
                 iconBgColor = Color(0xFF6366F1), // Indigo Squircle
-                title = LanguageManager.tr("General Settings", selectedLanguage),
-                subtitle = LanguageManager.tr("Profile, budget, name & preferences", selectedLanguage),
-                onClick = { onOpenSettingsScreen(SettingsSubScreen.PersonalData) }
+                title = LanguageManager.tr("App Settings & Customization", selectedLanguage),
+                subtitle = LanguageManager.tr("Theme hue, dark mode, currency & UI preferences", selectedLanguage),
+                onClick = { onOpenSettingsScreen(SettingsSubScreen.ThemeAndLanguage) }
             )
 
             // Item 1: Data and Storage
