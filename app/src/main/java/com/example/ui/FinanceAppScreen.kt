@@ -487,8 +487,54 @@ fun DashboardTab(
 
     var showChangeNameDialog by remember { mutableStateOf(false) }
     var showAdjustBudgetDialog by remember { mutableStateOf(false) }
-    var showBillsDialog by remember { mutableStateOf(false) }
-    var showReminderDialog by remember { mutableStateOf(false) }
+    var showBillsScreen by remember { mutableStateOf(false) }
+    var showRemindersScreen by remember { mutableStateOf(false) }
+    var showStartupReminder by remember { mutableStateOf(true) }
+
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(5000)
+        showStartupReminder = false
+    }
+
+    if (showStartupReminder) {
+        AlertDialog(
+            onDismissRequest = { showStartupReminder = false },
+            title = { Text("🔔 Today's Reminder Alert", fontWeight = FontWeight.Bold, color = SleekTextPrimary) },
+            text = { Text("Check Monthly Budget Cap (85% alert) is due today. Please review your expenses.", color = SleekTextSecondary) },
+            confirmButton = {
+                Button(
+                    onClick = { showStartupReminder = false },
+                    colors = ButtonDefaults.buttonColors(containerColor = SleekPrimary)
+                ) {
+                    Text("OK", color = Color.White)
+                }
+            },
+            containerColor = SleekSurface
+        )
+    }
+
+    if (showBillsScreen) {
+        BillsFullScreen(
+            onBack = { showBillsScreen = false },
+            onPayBill = { title, amt ->
+                viewModel.addExpense(
+                    amount = amt,
+                    category = "Bills",
+                    date = System.currentTimeMillis(),
+                    note = "Paid $title",
+                    type = "EXPENSE"
+                )
+            }
+        )
+        return
+    }
+
+    if (showRemindersScreen) {
+        RemindersFullScreen(
+            onBack = { showRemindersScreen = false }
+        )
+        return
+    }
 
     Column(
         modifier = Modifier
@@ -765,31 +811,9 @@ fun DashboardTab(
             selectedLanguage = selectedLanguage,
             onNavigateToExpenses = onNavigateToExpenses,
             onNavigateToAnalytics = onNavigateToAnalytics,
-            onBillsClick = { showBillsDialog = true },
-            onReminderClick = { showReminderDialog = true }
+            onBillsClick = { showBillsScreen = true },
+            onReminderClick = { showRemindersScreen = true }
         )
-
-        if (showBillsDialog) {
-            BillsDialog(
-                onDismiss = { showBillsDialog = false },
-                onPayBill = { title, amt ->
-                    viewModel.addExpense(
-                        amount = amt,
-                        category = "Bills",
-                        date = System.currentTimeMillis(),
-                        note = "Paid $title",
-                        type = "EXPENSE"
-                    )
-                    showBillsDialog = false
-                }
-            )
-        }
-
-        if (showReminderDialog) {
-            ReminderDialog(
-                onDismiss = { showReminderDialog = false }
-            )
-        }
 
         Spacer(modifier = Modifier.height(24.dp))
 
@@ -3940,16 +3964,16 @@ fun CreateCategoryDialog(
 data class BillEntry(var id: String, var title: String, var amount: Double, var dueDate: String)
 
 @Composable
-fun BillsDialog(
-    onDismiss: () -> Unit,
+fun BillsFullScreen(
+    onBack: () -> Unit,
     onPayBill: (String, Double) -> Unit
 ) {
     val context = LocalContext.current
     val billsList = remember {
         mutableStateListOf(
-            BillEntry("1", "Electricity Bill", 1450.0, "Due Today"),
-            BillEntry("2", "High-Speed Internet", 999.0, "Due Tomorrow"),
-            BillEntry("3", "Apartment Rent", 15000.0, "Due in 5 days")
+            BillEntry("1", "Electricity Bill", 1450.0, "15/08/2026"),
+            BillEntry("2", "High-Speed Internet", 999.0, "16/08/2026"),
+            BillEntry("3", "Apartment Rent", 15000.0, "20/08/2026")
         )
     }
 
@@ -3957,31 +3981,61 @@ fun BillsDialog(
     var editingBill by remember { mutableStateOf<BillEntry?>(null) }
     var billTitle by remember { mutableStateOf("") }
     var billAmount by remember { mutableStateOf("") }
-    var billDueDate by remember { mutableStateOf("Due Today") }
-    var showAlertPopup by remember { mutableStateOf<BillEntry?>(null) }
+    var billDueDate by remember { mutableStateOf("15/08/2026") }
+    var selectedBillForAction by remember { mutableStateOf<BillEntry?>(null) }
 
-    if (showAlertPopup != null) {
-        val bill = showAlertPopup!!
+    BackHandler { onBack() }
+
+    if (selectedBillForAction != null) {
+        val bill = selectedBillForAction!!
         AlertDialog(
-            onDismissRequest = { showAlertPopup = null },
-            title = { Text("⚠️ Bill Due Alert!", fontWeight = FontWeight.Bold, color = SleekTextPrimary) },
-            text = { Text("Your bill '${bill.title}' of ₹%,.0f is ${bill.dueDate}! Please clear payment to avoid late fees.".format(bill.amount), color = SleekTextSecondary) },
+            onDismissRequest = { selectedBillForAction = null },
+            title = { Text(bill.title, fontWeight = FontWeight.Bold, color = SleekTextPrimary) },
+            text = { Text("Amount: ₹%.0f | Due: ${bill.dueDate}\nChoose an action:".format(bill.amount), color = SleekTextSecondary) },
             confirmButton = {
-                Button(
-                    onClick = {
-                        onPayBill(bill.title, bill.amount)
-                        billsList.remove(bill)
-                        showAlertPopup = null
-                        Toast.makeText(context, "Paid ${bill.title} successfully!", Toast.LENGTH_SHORT).show()
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981))
-                ) {
-                    Text("Pay Now", color = Color.White)
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                    Button(
+                        onClick = {
+                            onPayBill(bill.title, bill.amount)
+                            billsList.remove(bill)
+                            selectedBillForAction = null
+                            Toast.makeText(context, "Paid ${bill.title} successfully!", Toast.LENGTH_SHORT).show()
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Pay Bill Now", color = Color.White)
+                    }
+                    Button(
+                        onClick = {
+                            editingBill = bill
+                            billTitle = bill.title
+                            billAmount = bill.amount.toString()
+                            billDueDate = bill.dueDate
+                            selectedBillForAction = null
+                            showAddEditDialog = true
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = SleekPrimary),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Edit Bill", color = Color.White)
+                    }
+                    OutlinedButton(
+                        onClick = {
+                            billsList.remove(bill)
+                            selectedBillForAction = null
+                            Toast.makeText(context, "Deleted ${bill.title}", Toast.LENGTH_SHORT).show()
+                        },
+                        border = BorderStroke(1.dp, Color(0xFFEF4444)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Delete Bill", color = Color(0xFFEF4444))
+                    }
                 }
             },
             dismissButton = {
-                OutlinedButton(onClick = { showAlertPopup = null }) {
-                    Text("Dismiss", color = SleekTextSecondary)
+                TextButton(onClick = { selectedBillForAction = null }) {
+                    Text("Cancel", color = SleekTextSecondary)
                 }
             },
             containerColor = SleekSurface
@@ -4025,14 +4079,26 @@ fun BillsDialog(
                         modifier = Modifier.fillMaxWidth()
                     )
 
-                    OutlinedTextField(
-                        value = billDueDate,
-                        onValueChange = { billDueDate = it },
-                        label = { Text("Due Date (e.g. Due Today, Tomorrow)", color = SleekTextSecondary) },
-                        singleLine = true,
+                    OutlinedButton(
+                        onClick = {
+                            val cal = java.util.Calendar.getInstance()
+                            android.app.DatePickerDialog(
+                                context,
+                                { _, year, month, dayOfMonth ->
+                                    billDueDate = String.format("%02d/%02d/%d", dayOfMonth, month + 1, year)
+                                },
+                                cal.get(java.util.Calendar.YEAR),
+                                cal.get(java.util.Calendar.MONTH),
+                                cal.get(java.util.Calendar.DAY_OF_MONTH)
+                            ).show()
+                        },
                         shape = RoundedCornerShape(12.dp),
                         modifier = Modifier.fillMaxWidth()
-                    )
+                    ) {
+                        Icon(Icons.Default.DateRange, contentDescription = null, tint = SleekPrimary)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Due Date: $billDueDate", color = SleekTextPrimary)
+                    }
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -4052,11 +4118,11 @@ fun BillsDialog(
                                 if (billTitle.isNotBlank() && amt > 0) {
                                     val currentEditing = editingBill
                                     if (currentEditing == null) {
-                                        billsList.add(BillEntry(System.currentTimeMillis().toString(), billTitle.trim(), amt, billDueDate.ifBlank { "Due Today" }))
+                                        billsList.add(BillEntry(System.currentTimeMillis().toString(), billTitle.trim(), amt, billDueDate))
                                     } else {
                                         currentEditing.title = billTitle.trim()
                                         currentEditing.amount = amt
-                                        currentEditing.dueDate = billDueDate.ifBlank { "Due Today" }
+                                        currentEditing.dueDate = billDueDate
                                     }
                                     showAddEditDialog = false
                                     Toast.makeText(context, "Saved bill successfully!", Toast.LENGTH_SHORT).show()
@@ -4074,117 +4140,98 @@ fun BillsDialog(
         }
     }
 
-    Dialog(onDismissRequest = onDismiss) {
-        Card(
-            colors = CardDefaults.cardColors(containerColor = SleekSurface),
-            border = BorderStroke(1.dp, SleekBorder),
-            shape = RoundedCornerShape(24.dp),
-            modifier = Modifier.fillMaxWidth().testTag("bills_dialog")
+    Surface(
+        modifier = Modifier.fillMaxSize(),
+        color = SleekSurface
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Column(
-                modifier = Modifier.padding(24.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = SleekTextPrimary)
+                    }
                     Text(
-                        text = "Bills & Utilities Manager",
+                        text = "Bills & Utilities",
                         style = MaterialTheme.typography.titleLarge,
                         color = SleekTextPrimary,
                         fontWeight = FontWeight.Bold
                     )
-                    IconButton(
-                        onClick = {
-                            editingBill = null
-                            billTitle = ""
-                            billAmount = ""
-                            billDueDate = "Due Today"
-                            showAddEditDialog = true
-                        },
-                        modifier = Modifier.size(36.dp)
-                    ) {
-                        Icon(Icons.Default.Add, contentDescription = "Add Bill", tint = SleekPrimary)
-                    }
                 }
+                IconButton(
+                    onClick = {
+                        editingBill = null
+                        billTitle = ""
+                        billAmount = ""
+                        billDueDate = "15/08/2026"
+                        showAddEditDialog = true
+                    }
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = "Add Bill", tint = SleekPrimary)
+                }
+            }
 
-                Text(
-                    text = "Manage, add, edit, or delete upcoming bills with due date alerts",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = SleekTextSecondary
-                )
+            Text(
+                text = "Swipe left-to-right on any bill to pay instantly. Tap any bill for options.",
+                style = MaterialTheme.typography.bodySmall,
+                color = SleekTextSecondary
+            )
 
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    billsList.forEach { bill ->
+            LazyColumn(
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier.fillMaxSize()
+            ) {
+                items(billsList, key = { it.id }) { bill ->
+                    var offsetX by remember { mutableStateOf(0f) }
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .pointerInput(bill.id) {
+                                detectHorizontalDragGestures(
+                                    onDragEnd = {
+                                        if (offsetX > 120f) {
+                                            onPayBill(bill.title, bill.amount)
+                                            billsList.remove(bill)
+                                            Toast.makeText(context, "Paid ${bill.title} via swipe!", Toast.LENGTH_SHORT).show()
+                                        }
+                                        offsetX = 0f
+                                    },
+                                    onHorizontalDrag = { change, dragAmount ->
+                                        change.consume()
+                                        offsetX += dragAmount
+                                    }
+                                )
+                            }
+                            .offset { androidx.compose.ui.unit.IntOffset(offsetX.coerceAtLeast(0f).toInt(), 0) }
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(SleekBorder.copy(alpha = 0.25f))
+                            .clickable { selectedBillForAction = bill }
+                            .padding(16.dp)
+                    ) {
                         Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(SleekBorder.copy(alpha = 0.2f))
-                                .clickable { showAlertPopup = bill }
-                                .padding(12.dp),
+                            modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Column(modifier = Modifier.weight(1f)) {
-                                Text(bill.title, fontWeight = FontWeight.Bold, color = SleekTextPrimary, fontSize = 13.sp)
-                                Text(bill.dueDate, fontSize = 11.sp, color = Color(0xFFF59E0B), fontWeight = FontWeight.SemiBold)
+                                Text(bill.title, fontWeight = FontWeight.Bold, color = SleekTextPrimary, fontSize = 15.sp)
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text("Due: ${bill.dueDate}", fontSize = 12.sp, color = Color(0xFFF59E0B), fontWeight = FontWeight.SemiBold)
                             }
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                Text("₹%,.0f".format(bill.amount), fontWeight = FontWeight.Bold, color = SleekTextPrimary, fontSize = 13.sp)
-                                
-                                IconButton(
-                                    onClick = {
-                                        editingBill = bill
-                                        billTitle = bill.title
-                                        billAmount = bill.amount.toString()
-                                        billDueDate = bill.dueDate
-                                        showAddEditDialog = true
-                                    },
-                                    modifier = Modifier.size(28.dp)
-                                ) {
-                                    Icon(Icons.Default.Edit, contentDescription = "Edit", tint = SleekTextSecondary, modifier = Modifier.size(16.dp))
-                                }
-
-                                IconButton(
-                                    onClick = {
-                                        billsList.remove(bill)
-                                        Toast.makeText(context, "Deleted bill", Toast.LENGTH_SHORT).show()
-                                    },
-                                    modifier = Modifier.size(28.dp)
-                                ) {
-                                    Icon(Icons.Default.Delete, contentDescription = "Delete", tint = Color(0xFFEF4444), modifier = Modifier.size(16.dp))
-                                }
-
-                                Button(
-                                    onClick = {
-                                        onPayBill(bill.title, bill.amount)
-                                        billsList.remove(bill)
-                                        Toast.makeText(context, "Logged bill payment for ${bill.title}", Toast.LENGTH_SHORT).show()
-                                    },
-                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981)),
-                                    shape = RoundedCornerShape(8.dp),
-                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
-                                    modifier = Modifier.height(30.dp)
-                                ) {
-                                    Text("Pay", fontSize = 10.sp, color = Color.White)
-                                }
-                            }
+                            Text("₹%,.0f".format(bill.amount), fontWeight = FontWeight.Bold, color = SleekTextPrimary, fontSize = 16.sp)
                         }
                     }
-                }
-
-                Spacer(modifier = Modifier.height(4.dp))
-
-                OutlinedButton(
-                    onClick = onDismiss,
-                    border = BorderStroke(1.dp, SleekBorder),
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("Close", color = SleekTextSecondary, fontWeight = FontWeight.Bold)
                 }
             }
         }
@@ -4194,39 +4241,63 @@ fun BillsDialog(
 data class ReminderEntry(var id: String, var text: String, var dueDate: String)
 
 @Composable
-fun ReminderDialog(
-    onDismiss: () -> Unit
+fun RemindersFullScreen(
+    onBack: () -> Unit
 ) {
     val context = LocalContext.current
     val remindersList = remember {
         mutableStateListOf(
-            ReminderEntry("1", "Check Monthly Budget Cap (85% alert)", "Due Today"),
-            ReminderEntry("2", "Transfer ₹5000 to Savings Vault", "Due Tomorrow"),
-            ReminderEntry("3", "Review weekly expense insights", "Due in 3 days")
+            ReminderEntry("1", "Check Monthly Budget Cap (85% alert)", "15/08/2026"),
+            ReminderEntry("2", "Transfer ₹5000 to Savings Vault", "16/08/2026"),
+            ReminderEntry("3", "Review weekly expense insights", "18/08/2026")
         )
     }
 
     var showAddEditDialog by remember { mutableStateOf(false) }
     var editingReminder by remember { mutableStateOf<ReminderEntry?>(null) }
     var reminderText by remember { mutableStateOf("") }
-    var reminderDueDate by remember { mutableStateOf("Due Today") }
-    var showAlertPopup by remember { mutableStateOf<ReminderEntry?>(null) }
+    var reminderDueDate by remember { mutableStateOf("15/08/2026") }
+    var selectedReminderForAction by remember { mutableStateOf<ReminderEntry?>(null) }
 
-    if (showAlertPopup != null) {
-        val rem = showAlertPopup!!
+    BackHandler { onBack() }
+
+    if (selectedReminderForAction != null) {
+        val rem = selectedReminderForAction!!
         AlertDialog(
-            onDismissRequest = { showAlertPopup = null },
-            title = { Text("🔔 Reminder Alert!", fontWeight = FontWeight.Bold, color = SleekTextPrimary) },
-            text = { Text("Reminder: '${rem.text}' is scheduled for ${rem.dueDate}.", color = SleekTextSecondary) },
+            onDismissRequest = { selectedReminderForAction = null },
+            title = { Text("Reminder Options", fontWeight = FontWeight.Bold, color = SleekTextPrimary) },
+            text = { Text("'${rem.text}'\nDue: ${rem.dueDate}", color = SleekTextSecondary) },
             confirmButton = {
-                Button(
-                    onClick = {
-                        showAlertPopup = null
-                        Toast.makeText(context, "Acknowledged reminder!", Toast.LENGTH_SHORT).show()
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = SleekPrimary)
-                ) {
-                    Text("Got it", color = Color.White)
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                    Button(
+                        onClick = {
+                            editingReminder = rem
+                            reminderText = rem.text
+                            reminderDueDate = rem.dueDate
+                            selectedReminderForAction = null
+                            showAddEditDialog = true
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = SleekPrimary),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Edit Reminder", color = Color.White)
+                    }
+                    OutlinedButton(
+                        onClick = {
+                            remindersList.remove(rem)
+                            selectedReminderForAction = null
+                            Toast.makeText(context, "Deleted reminder", Toast.LENGTH_SHORT).show()
+                        },
+                        border = BorderStroke(1.dp, Color(0xFFEF4444)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Delete Reminder", color = Color(0xFFEF4444))
+                    }
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { selectedReminderForAction = null }) {
+                    Text("Cancel", color = SleekTextSecondary)
                 }
             },
             containerColor = SleekSurface
@@ -4261,14 +4332,26 @@ fun ReminderDialog(
                         modifier = Modifier.fillMaxWidth()
                     )
 
-                    OutlinedTextField(
-                        value = reminderDueDate,
-                        onValueChange = { reminderDueDate = it },
-                        label = { Text("Due Date (e.g. Due Today, Tomorrow)", color = SleekTextSecondary) },
-                        singleLine = true,
+                    OutlinedButton(
+                        onClick = {
+                            val cal = java.util.Calendar.getInstance()
+                            android.app.DatePickerDialog(
+                                context,
+                                { _, year, month, dayOfMonth ->
+                                    reminderDueDate = String.format("%02d/%02d/%d", dayOfMonth, month + 1, year)
+                                },
+                                cal.get(java.util.Calendar.YEAR),
+                                cal.get(java.util.Calendar.MONTH),
+                                cal.get(java.util.Calendar.DAY_OF_MONTH)
+                            ).show()
+                        },
                         shape = RoundedCornerShape(12.dp),
                         modifier = Modifier.fillMaxWidth()
-                    )
+                    ) {
+                        Icon(Icons.Default.DateRange, contentDescription = null, tint = SleekPrimary)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Due Date: $reminderDueDate", color = SleekTextPrimary)
+                    }
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -4287,10 +4370,10 @@ fun ReminderDialog(
                                 if (reminderText.isNotBlank()) {
                                     val currentEditing = editingReminder
                                     if (currentEditing == null) {
-                                        remindersList.add(ReminderEntry(System.currentTimeMillis().toString(), reminderText.trim(), reminderDueDate.ifBlank { "Due Today" }))
+                                        remindersList.add(ReminderEntry(System.currentTimeMillis().toString(), reminderText.trim(), reminderDueDate))
                                     } else {
                                         currentEditing.text = reminderText.trim()
-                                        currentEditing.dueDate = reminderDueDate.ifBlank { "Due Today" }
+                                        currentEditing.dueDate = reminderDueDate
                                     }
                                     showAddEditDialog = false
                                     Toast.makeText(context, "Saved reminder successfully!", Toast.LENGTH_SHORT).show()
@@ -4308,106 +4391,79 @@ fun ReminderDialog(
         }
     }
 
-    Dialog(onDismissRequest = onDismiss) {
-        Card(
-            colors = CardDefaults.cardColors(containerColor = SleekSurface),
-            border = BorderStroke(1.dp, SleekBorder),
-            shape = RoundedCornerShape(24.dp),
-            modifier = Modifier.fillMaxWidth().testTag("reminder_dialog")
+    Surface(
+        modifier = Modifier.fillMaxSize(),
+        color = SleekSurface
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Column(
-                modifier = Modifier.padding(24.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = SleekTextPrimary)
+                    }
                     Text(
-                        text = "Payment & Financial Reminders",
+                        text = "Payment Reminders",
                         style = MaterialTheme.typography.titleLarge,
                         color = SleekTextPrimary,
                         fontWeight = FontWeight.Bold
                     )
-                    IconButton(
-                        onClick = {
-                            editingReminder = null
-                            reminderText = ""
-                            reminderDueDate = "Due Today"
-                            showAddEditDialog = true
-                        },
-                        modifier = Modifier.size(36.dp)
-                    ) {
-                        Icon(Icons.Default.Add, contentDescription = "Add Reminder", tint = SleekPrimary)
-                    }
                 }
+                IconButton(
+                    onClick = {
+                        editingReminder = null
+                        reminderText = ""
+                        reminderDueDate = "15/08/2026"
+                        showAddEditDialog = true
+                    }
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = "Add Reminder", tint = SleekPrimary)
+                }
+            }
 
-                Text(
-                    text = "Manage, add, edit, or delete reminders with due date alerts",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = SleekTextSecondary
-                )
+            Text(
+                text = "Tap any reminder for edit or delete options.",
+                style = MaterialTheme.typography.bodySmall,
+                color = SleekTextSecondary
+            )
 
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    remindersList.forEach { rem ->
+            LazyColumn(
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier.fillMaxSize()
+            ) {
+                items(remindersList, key = { it.id }) { rem ->
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(SleekBorder.copy(alpha = 0.25f))
+                            .clickable { selectedReminderForAction = rem }
+                            .padding(16.dp)
+                    ) {
                         Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(SleekBorder.copy(alpha = 0.2f))
-                                .clickable { showAlertPopup = rem }
-                                .padding(12.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            modifier = Modifier.fillMaxWidth()
                         ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Icon(Icons.Rounded.NotificationsActive, contentDescription = null, tint = Color(0xFFEC4899), modifier = Modifier.size(18.dp))
-                                Column {
-                                    Text(rem.text, fontSize = 13.sp, color = SleekTextPrimary, fontWeight = FontWeight.Medium)
-                                    Text(rem.dueDate, fontSize = 10.sp, color = Color(0xFFEC4899), fontWeight = FontWeight.Bold)
-                                }
-                            }
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                IconButton(
-                                    onClick = {
-                                        editingReminder = rem
-                                        reminderText = rem.text
-                                        reminderDueDate = rem.dueDate
-                                        showAddEditDialog = true
-                                    },
-                                    modifier = Modifier.size(28.dp)
-                                ) {
-                                    Icon(Icons.Default.Edit, contentDescription = "Edit", tint = SleekTextSecondary, modifier = Modifier.size(16.dp))
-                                }
-
-                                IconButton(
-                                    onClick = {
-                                        remindersList.remove(rem)
-                                        Toast.makeText(context, "Deleted reminder", Toast.LENGTH_SHORT).show()
-                                    },
-                                    modifier = Modifier.size(28.dp)
-                                ) {
-                                    Icon(Icons.Default.Delete, contentDescription = "Delete", tint = Color(0xFFEF4444), modifier = Modifier.size(16.dp))
-                                }
+                            Icon(Icons.Rounded.NotificationsActive, contentDescription = null, tint = Color(0xFFEC4899), modifier = Modifier.size(22.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(rem.text, fontSize = 14.sp, color = SleekTextPrimary, fontWeight = FontWeight.Medium)
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text("Due: ${rem.dueDate}", fontSize = 11.sp, color = Color(0xFFEC4899), fontWeight = FontWeight.Bold)
                             }
                         }
                     }
-                }
-
-                Spacer(modifier = Modifier.height(4.dp))
-
-                OutlinedButton(
-                    onClick = onDismiss,
-                    border = BorderStroke(1.dp, SleekBorder),
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("Close", color = SleekTextSecondary, fontWeight = FontWeight.Bold)
                 }
             }
         }
