@@ -445,6 +445,7 @@ fun DashboardTab(
 ) {
     val accounts by viewModel.accounts.collectAsStateWithLifecycle()
     val selectedLanguage by viewModel.selectedLanguage.collectAsStateWithLifecycle()
+    val profileImageUri by viewModel.userProfileImageUri.collectAsStateWithLifecycle()
 
     val currentCalendar = Calendar.getInstance()
     val currentMonth = currentCalendar.get(Calendar.MONTH)
@@ -566,12 +567,21 @@ fun DashboardTab(
                         .background(SleekPrimaryContainer),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(
-                        text = initials,
-                        style = MaterialTheme.typography.titleMedium,
-                        color = SleekOnPrimaryContainer,
-                        fontWeight = FontWeight.Bold
-                    )
+                    if (!profileImageUri.isNullOrBlank()) {
+                        AsyncImage(
+                            model = profileImageUri,
+                            contentDescription = "Profile Picture",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    } else {
+                        Text(
+                            text = initials,
+                            style = MaterialTheme.typography.titleMedium,
+                            color = SleekOnPrimaryContainer,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                 }
                 Column {
                     Text(
@@ -4867,9 +4877,20 @@ fun SidebarDrawerContent(
     onCloseDrawer: () -> Unit,
     onOpenSettingsScreen: (SettingsSubScreen) -> Unit
 ) {
+    val context = LocalContext.current
     val userName by viewModel.userName.collectAsStateWithLifecycle()
     val selectedLanguage by viewModel.selectedLanguage.collectAsStateWithLifecycle()
+    val profileImageUri by viewModel.userProfileImageUri.collectAsStateWithLifecycle()
     var showEditNameDialog by remember { mutableStateOf(false) }
+
+    val imagePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            viewModel.updateUserProfileImageUri(uri.toString())
+            Toast.makeText(context, "Profile picture updated successfully!", Toast.LENGTH_SHORT).show()
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -4923,15 +4944,40 @@ fun SidebarDrawerContent(
                     modifier = Modifier
                         .size(52.dp)
                         .clip(CircleShape)
-                        .background(SleekPrimaryContainer),
+                        .background(SleekPrimaryContainer)
+                        .clickable { imagePickerLauncher.launch("image/*") },
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(
-                        text = initials,
-                        style = MaterialTheme.typography.titleMedium,
-                        color = SleekOnPrimaryContainer,
-                        fontWeight = FontWeight.Bold
-                    )
+                    if (!profileImageUri.isNullOrBlank()) {
+                        AsyncImage(
+                            model = profileImageUri,
+                            contentDescription = "Profile Picture",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    } else {
+                        Text(
+                            text = initials,
+                            style = MaterialTheme.typography.titleMedium,
+                            color = SleekOnPrimaryContainer,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .size(18.dp)
+                            .clip(CircleShape)
+                            .background(SleekPrimary),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.CameraAlt,
+                            contentDescription = "Change Photo",
+                            tint = Color.White,
+                            modifier = Modifier.size(10.dp)
+                        )
+                    }
                 }
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
@@ -4939,6 +4985,11 @@ fun SidebarDrawerContent(
                         style = MaterialTheme.typography.titleMedium,
                         color = SleekTextPrimary,
                         fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "Tap avatar to change photo",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = SleekTextSecondary
                     )
                 }
                 IconButton(
@@ -4969,6 +5020,15 @@ fun SidebarDrawerContent(
         
         // 2. Settings Items List
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            // Item 0: General Settings
+            SidebarSettingsTile(
+                icon = Icons.Rounded.Settings,
+                iconBgColor = Color(0xFF6366F1), // Indigo Squircle
+                title = LanguageManager.tr("General Settings", selectedLanguage),
+                subtitle = LanguageManager.tr("Profile, budget, name & preferences", selectedLanguage),
+                onClick = { onOpenSettingsScreen(SettingsSubScreen.PersonalData) }
+            )
+
             // Item 1: Data and Storage
             SidebarSettingsTile(
                 icon = Icons.Rounded.PieChart,

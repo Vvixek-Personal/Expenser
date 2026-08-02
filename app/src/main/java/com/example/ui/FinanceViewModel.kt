@@ -124,6 +124,14 @@ class FinanceViewModel(
     private val _userName = MutableStateFlow<String?>(null)
     val userName: StateFlow<String?> = _userName.asStateFlow()
 
+    private val _userProfileImageUri = MutableStateFlow<String?>(null)
+    val userProfileImageUri: StateFlow<String?> = _userProfileImageUri.asStateFlow()
+
+    fun updateUserProfileImageUri(uriString: String?) {
+        _userProfileImageUri.value = uriString
+        sharedPrefs.edit().putString("user_profile_image_uri", uriString).apply()
+    }
+
     private val _userDob = MutableStateFlow("24 December 1999")
     val userDob: StateFlow<String> = _userDob.asStateFlow()
 
@@ -211,6 +219,7 @@ class FinanceViewModel(
 
     init {
         _userName.value = sharedPrefs.getString("user_name", null)
+        _userProfileImageUri.value = sharedPrefs.getString("user_profile_image_uri", null)
         _userDob.value = sharedPrefs.getString("user_dob", "24 December 1999") ?: "24 December 1999"
         _userJob.value = sharedPrefs.getString("user_job", "Successor Designer") ?: "Successor Designer"
         _userMonthlyIncome.value = sharedPrefs.getString("user_monthly_income", "500 - 3000 / year") ?: "500 - 3000 / year"
