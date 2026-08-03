@@ -20,7 +20,13 @@ data class ChatMessage(
 )
 
 data class BillEntry(var id: String, var title: String, var amount: Double, var dueDate: String)
-data class ReminderEntry(var id: String, var text: String, var dueDate: String, var isCompleted: Boolean = false)
+data class ReminderEntry(
+    var id: String,
+    var text: String,
+    var dueDate: String,
+    var isCompleted: Boolean = false,
+    var isEnabled: Boolean = true
+)
 
 class FinanceViewModel(
     application: Application,

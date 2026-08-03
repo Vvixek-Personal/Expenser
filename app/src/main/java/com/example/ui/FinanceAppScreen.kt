@@ -820,6 +820,7 @@ fun DashboardTab(
 
         // Quick Shortcuts Feed
         QuickServicesCategorySection(
+            viewModel = viewModel,
             selectedLanguage = selectedLanguage,
             onNavigateToExpenses = onNavigateToExpenses,
             onNavigateToAnalytics = onNavigateToAnalytics,
@@ -962,12 +963,16 @@ fun DashboardTab(
 // ==========================================
 @Composable
 fun QuickServicesCategorySection(
+    viewModel: FinanceViewModel = androidx.lifecycle.viewmodel.compose.viewModel(),
     selectedLanguage: String = "English",
     onNavigateToExpenses: () -> Unit,
     onNavigateToAnalytics: () -> Unit,
     onBillsClick: () -> Unit,
     onReminderClick: () -> Unit
 ) {
+    val todayStr = remember { SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(Date()) }
+    val hasBillDueToday = viewModel.billsList.any { it.dueDate == todayStr }
+
     Card(
         shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(containerColor = SleekSurface),
@@ -1020,7 +1025,8 @@ fun QuickServicesCategorySection(
                     label = "Bills",
                     tileColor = Color(0xFFF59E0B),
                     onClick = onBillsClick,
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f),
+                    hasBadge = hasBillDueToday
                 )
 
                 CategoryFeedTile(
@@ -1041,7 +1047,8 @@ fun CategoryFeedTile(
     label: String,
     tileColor: Color,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    hasBadge: Boolean = false
 ) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -1063,6 +1070,17 @@ fun CategoryFeedTile(
                 tint = Color.White,
                 modifier = Modifier.size(20.dp)
             )
+            if (hasBadge) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .offset(x = 2.dp, y = (-2).dp)
+                        .size(10.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFFEF4444))
+                        .border(1.dp, Color.White, CircleShape)
+                )
+            }
         }
 
         Spacer(modifier = Modifier.height(4.dp))
@@ -3909,6 +3927,8 @@ fun BillsFullScreen(
 ) {
     val context = LocalContext.current
     val billsList = viewModel.billsList
+    val accounts by viewModel.accounts.collectAsStateWithLifecycle()
+    val totalBalance = remember(accounts) { accounts.sumOf { it.balance } }
 
     var showAddEditDialog by remember { mutableStateOf(false) }
     var editingBill by remember { mutableStateOf<BillEntry?>(null) }
@@ -3916,8 +3936,61 @@ fun BillsFullScreen(
     var billAmount by remember { mutableStateOf("") }
     var billDueDate by remember { mutableStateOf("15/08/2026") }
     var selectedBillForAction by remember { mutableStateOf<BillEntry?>(null) }
+    var insufficientBillDialog by remember { mutableStateOf<BillEntry?>(null) }
+    var confirmPayDialog by remember { mutableStateOf<BillEntry?>(null) }
 
     BackHandler { onBack() }
+
+    val processPaymentCheck: (BillEntry) -> Unit = { bill ->
+        if (bill.amount > totalBalance) {
+            insufficientBillDialog = bill
+        } else {
+            confirmPayDialog = bill
+        }
+    }
+
+    if (insufficientBillDialog != null) {
+        val bill = insufficientBillDialog!!
+        AlertDialog(
+            onDismissRequest = { insufficientBillDialog = null },
+            title = { Text("Insufficient Balance", fontWeight = FontWeight.Bold, color = SleekTextPrimary) },
+            text = { Text("Cannot pay ₹%.0f for %s because your available account balance is ₹%.0f. Please add funds or top up your account to prevent a negative balance.".format(bill.amount, bill.title, totalBalance), color = SleekTextSecondary) },
+            confirmButton = {
+                Button(onClick = { insufficientBillDialog = null }) {
+                    Text("OK", color = Color.White)
+                }
+            },
+            containerColor = SleekSurface
+        )
+    }
+
+    if (confirmPayDialog != null) {
+        val bill = confirmPayDialog!!
+        AlertDialog(
+            onDismissRequest = { confirmPayDialog = null },
+            title = { Text("Confirm Bill Payment", fontWeight = FontWeight.Bold, color = SleekTextPrimary) },
+            text = { Text("Pay ₹%.0f for %s? This will be deducted from your account balance (Current Balance: ₹%.0f).".format(bill.amount, bill.title, totalBalance), color = SleekTextSecondary) },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        onPayBill(bill.title, bill.amount)
+                        billsList.remove(bill)
+                        confirmPayDialog = null
+                        Toast.makeText(context, "Paid ${bill.title} successfully!", Toast.LENGTH_SHORT).show()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981))
+                ) {
+                    Text("Pay Now", color = Color.White)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmPayDialog = null }) {
+                    Text("Cancel", color = SleekTextSecondary)
+                }
+            },
+            containerColor = SleekSurface
+        )
+    }
 
     if (selectedBillForAction != null) {
         val bill = selectedBillForAction!!
@@ -3929,10 +4002,8 @@ fun BillsFullScreen(
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                     Button(
                         onClick = {
-                            onPayBill(bill.title, bill.amount)
-                            billsList.remove(bill)
                             selectedBillForAction = null
-                            Toast.makeText(context, "Paid ${bill.title} successfully!", Toast.LENGTH_SHORT).show()
+                            processPaymentCheck(bill)
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981)),
                         modifier = Modifier.fillMaxWidth()
@@ -4134,9 +4205,7 @@ fun BillsFullScreen(
                                 detectHorizontalDragGestures(
                                     onDragEnd = {
                                         if (offsetX > 120f) {
-                                            onPayBill(bill.title, bill.amount)
-                                            billsList.remove(bill)
-                                            Toast.makeText(context, "Paid ${bill.title} via swipe!", Toast.LENGTH_SHORT).show()
+                                            processPaymentCheck(bill)
                                         }
                                         offsetX = 0f
                                     },
@@ -4398,8 +4467,13 @@ fun RemindersFullScreen(
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(rem.text, fontSize = 14.sp, color = SleekTextPrimary, fontWeight = FontWeight.Medium)
                                 Spacer(modifier = Modifier.height(2.dp))
-                                Text("Due: ${rem.dueDate}", fontSize = 11.sp, color = Color(0xFFEC4899), fontWeight = FontWeight.Bold)
+                                Text("Due: ${rem.dueDate} • ${if (rem.isEnabled) "Active" else "Stopped"}", fontSize = 11.sp, color = if (rem.isEnabled) Color(0xFFEC4899) else SleekTextSecondary, fontWeight = FontWeight.Bold)
                             }
+                            Switch(
+                                checked = rem.isEnabled,
+                                onCheckedChange = { rem.isEnabled = it },
+                                colors = SwitchDefaults.colors(checkedThumbColor = Color(0xFFEC4899), checkedTrackColor = Color(0xFFEC4899).copy(alpha = 0.5f))
+                            )
                         }
                     }
                 }
@@ -4948,15 +5022,6 @@ fun SidebarDrawerContent(
         
         // 2. Settings Items List
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            // Item 0: App Settings & Customization
-            SidebarSettingsTile(
-                icon = Icons.Rounded.Settings,
-                iconBgColor = Color(0xFF6366F1), // Indigo Squircle
-                title = LanguageManager.tr("App Settings & Customization", selectedLanguage),
-                subtitle = LanguageManager.tr("Theme hue, dark mode, currency & UI preferences", selectedLanguage),
-                onClick = { onOpenSettingsScreen(SettingsSubScreen.ThemeAndLanguage) }
-            )
-
             // Item 1: Data and Storage
             SidebarSettingsTile(
                 icon = Icons.Rounded.PieChart,
