@@ -516,6 +516,7 @@ fun DashboardTab(
 
     if (showBillsScreen) {
         BillsFullScreen(
+            viewModel = viewModel,
             onBack = { showBillsScreen = false },
             onPayBill = { title, amt ->
                 viewModel.addExpense(
@@ -532,6 +533,7 @@ fun DashboardTab(
 
     if (showRemindersScreen) {
         RemindersFullScreen(
+            viewModel = viewModel,
             onBack = { showRemindersScreen = false }
         )
         return
@@ -3899,21 +3901,14 @@ fun CreateCategoryDialog(
     )
 }
 
-data class BillEntry(var id: String, var title: String, var amount: Double, var dueDate: String)
-
 @Composable
 fun BillsFullScreen(
+    viewModel: FinanceViewModel = androidx.lifecycle.viewmodel.compose.viewModel(),
     onBack: () -> Unit,
     onPayBill: (String, Double) -> Unit
 ) {
     val context = LocalContext.current
-    val billsList = remember {
-        mutableStateListOf(
-            BillEntry("1", "Electricity Bill", 1450.0, "15/08/2026"),
-            BillEntry("2", "High-Speed Internet", 999.0, "16/08/2026"),
-            BillEntry("3", "Apartment Rent", 15000.0, "20/08/2026")
-        )
-    }
+    val billsList = viewModel.billsList
 
     var showAddEditDialog by remember { mutableStateOf(false) }
     var editingBill by remember { mutableStateOf<BillEntry?>(null) }
@@ -4176,20 +4171,13 @@ fun BillsFullScreen(
     }
 }
 
-data class ReminderEntry(var id: String, var text: String, var dueDate: String)
-
 @Composable
 fun RemindersFullScreen(
+    viewModel: FinanceViewModel = androidx.lifecycle.viewmodel.compose.viewModel(),
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
-    val remindersList = remember {
-        mutableStateListOf(
-            ReminderEntry("1", "Check Monthly Budget Cap (85% alert)", "15/08/2026"),
-            ReminderEntry("2", "Transfer ₹5000 to Savings Vault", "16/08/2026"),
-            ReminderEntry("3", "Review weekly expense insights", "18/08/2026")
-        )
-    }
+    val remindersList = viewModel.remindersList
 
     var showAddEditDialog by remember { mutableStateOf(false) }
     var editingReminder by remember { mutableStateOf<ReminderEntry?>(null) }
@@ -4207,6 +4195,18 @@ fun RemindersFullScreen(
             text = { Text("'${rem.text}'\nDue: ${rem.dueDate}", color = SleekTextSecondary) },
             confirmButton = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                    Button(
+                        onClick = {
+                            rem.isCompleted = true
+                            remindersList.remove(rem)
+                            selectedReminderForAction = null
+                            Toast.makeText(context, "Marked reminder as complete!", Toast.LENGTH_SHORT).show()
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Mark as Complete", color = Color.White)
+                    }
                     Button(
                         onClick = {
                             editingReminder = rem
