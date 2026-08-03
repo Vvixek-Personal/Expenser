@@ -31,6 +31,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -150,12 +151,28 @@ private fun ImageInspiredDockTile(
     val inactiveCircleBorder = Color(0xFFC8DCCE).copy(alpha = 0.45f)
     val inactiveIconColor = Color.White
 
+    val animatedHorizontalPadding by animateDpAsState(
+        targetValue = if (isSelected) 14.dp else 12.dp,
+        animationSpec = spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioMediumBouncy),
+        label = "paddingAnim"
+    )
+
+    val animatedScale by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = if (isSelected) 1.05f else 1.0f,
+        animationSpec = spring(stiffness = Spring.StiffnessMedium, dampingRatio = Spring.DampingRatioMediumBouncy),
+        label = "scaleAnim"
+    )
+
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Center,
         modifier = Modifier
             .testTag(testTag)
             .height(48.dp)
+            .graphicsLayer {
+                scaleX = animatedScale
+                scaleY = animatedScale
+            }
             .clip(CircleShape)
             .background(if (isSelected) activeBg else Color.Transparent)
             .border(
@@ -171,44 +188,38 @@ private fun ImageInspiredDockTile(
                 onClick = onClick
             )
             .padding(
-                horizontal = if (isSelected) 14.dp else 12.dp,
+                horizontal = animatedHorizontalPadding,
                 vertical = 6.dp
             )
     ) {
-        if (isSelected) {
-            // White circle icon container with dark icon inside (Matching Image 3 active pill)
-            Box(
-                modifier = Modifier
-                    .size(34.dp)
-                    .clip(CircleShape)
-                    .background(Color(0xFF1E293B)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = title,
-                    tint = Color.White,
-                    modifier = Modifier.size(18.dp)
-                )
-            }
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(
-                text = title,
-                color = Color(0xFF1E293B),
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Bold
+        Box(
+            modifier = Modifier
+                .size(34.dp)
+                .clip(CircleShape)
+                .background(if (isSelected) Color(0xFF1E293B) else Color.Transparent),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = title,
+                tint = if (isSelected) Color.White else (if (isActionTile) SleekPrimary else inactiveIconColor),
+                modifier = Modifier.size(if (isSelected) 18.dp else 20.dp)
             )
-        } else {
-            // Inactive item: Circular outline button with white icon inside
-            Box(
-                modifier = Modifier.size(34.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = title,
-                    tint = if (isActionTile) SleekPrimary else inactiveIconColor,
-                    modifier = Modifier.size(20.dp)
+        }
+
+        AnimatedVisibility(
+            visible = isSelected,
+            enter = androidx.compose.animation.expandHorizontally(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) + fadeIn(),
+            exit = androidx.compose.animation.shrinkHorizontally(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) + fadeOut()
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = title,
+                    color = Color(0xFF1E293B),
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1
                 )
             }
         }

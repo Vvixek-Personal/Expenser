@@ -4,6 +4,8 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.*
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
@@ -278,7 +280,10 @@ fun FinanceAppScreen(viewModel: FinanceViewModel) {
             AnimatedContent(
                 targetState = currentScreen,
                 transitionSpec = {
-                    fadeIn(animationSpec = tween(220)) togetherWith fadeOut(animationSpec = tween(220))
+                    (fadeIn(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
+                     scaleIn(initialScale = 0.95f, animationSpec = spring(stiffness = Spring.StiffnessMediumLow))) togetherWith
+                    (fadeOut(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
+                     scaleOut(targetScale = 1.02f, animationSpec = spring(stiffness = Spring.StiffnessMediumLow)))
                 },
                 label = "ScreenTransition"
             ) { screen ->
@@ -2214,12 +2219,21 @@ fun AnalyticsTab(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = "₹%,.2f".format(totalSpent),
-                        fontSize = 30.sp,
-                        fontWeight = FontWeight.Black,
-                        color = Color.White
-                    )
+                    AnimatedContent(
+                        targetState = totalSpent,
+                        transitionSpec = {
+                            fadeIn(animationSpec = spring()) + slideInVertically { it / 2 } togetherWith
+                            fadeOut(animationSpec = spring()) + slideOutVertically { -it / 2 }
+                        },
+                        label = "SpentAnim"
+                    ) { amt ->
+                        Text(
+                            text = "₹%,.2f".format(amt),
+                            fontSize = 30.sp,
+                            fontWeight = FontWeight.Black,
+                            color = Color.White
+                        )
+                    }
 
                     Button(
                         onClick = onAddClick,
@@ -2256,10 +2270,15 @@ fun AnalyticsTab(
                 ) {
                     timeFilters.forEach { tf ->
                         val isSelected = selectedTimeFilter == tf
+                        val pillBg by animateColorAsState(
+                            targetValue = if (isSelected) Color(0xFF334155) else Color.Transparent,
+                            animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+                            label = "pillBg"
+                        )
                         Box(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(12.dp))
-                                .background(if (isSelected) Color(0xFF334155) else Color.Transparent)
+                                .background(pillBg)
                                 .clickable { selectedTimeFilter = tf }
                                 .padding(horizontal = 8.dp, vertical = 6.dp),
                             contentAlignment = Alignment.Center
