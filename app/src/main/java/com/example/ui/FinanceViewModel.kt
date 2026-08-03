@@ -19,13 +19,13 @@ data class ChatMessage(
     val timestamp: Long = System.currentTimeMillis()
 )
 
-data class BillEntry(var id: String, var title: String, var amount: Double, var dueDate: String)
+data class BillEntry(val id: String, val title: String, val amount: Double, val dueDate: String)
 data class ReminderEntry(
-    var id: String,
-    var text: String,
-    var dueDate: String,
-    var isCompleted: Boolean = false,
-    var isEnabled: Boolean = true
+    val id: String,
+    val text: String,
+    val dueDate: String,
+    val isCompleted: Boolean = false,
+    val isEnabled: Boolean = true
 )
 
 class FinanceViewModel(
