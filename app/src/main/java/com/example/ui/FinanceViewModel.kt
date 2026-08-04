@@ -33,17 +33,9 @@ class FinanceViewModel(
     private val repository: FinanceRepository
 ) : AndroidViewModel(application) {
 
-    val billsList = androidx.compose.runtime.mutableStateListOf(
-        BillEntry("1", "Electricity Bill", 1450.0, "15/08/2026"),
-        BillEntry("2", "High-Speed Internet", 999.0, "16/08/2026"),
-        BillEntry("3", "Apartment Rent", 15000.0, "20/08/2026")
-    )
+    val billsList = androidx.compose.runtime.mutableStateListOf<BillEntry>()
 
-    val remindersList = androidx.compose.runtime.mutableStateListOf(
-        ReminderEntry("1", "Check Monthly Budget Cap (85% alert)", "15/08/2026", false),
-        ReminderEntry("2", "Transfer ₹5000 to Savings Vault", "16/08/2026", false),
-        ReminderEntry("3", "Review weekly expense insights", "18/08/2026", false)
-    )
+    val remindersList = androidx.compose.runtime.mutableStateListOf<ReminderEntry>()
 
     // Database states
     val expenses = repository.allExpenses.stateIn(

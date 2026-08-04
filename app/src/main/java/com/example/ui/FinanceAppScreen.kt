@@ -809,35 +809,7 @@ fun DashboardTab(
 
 
 
-        if (showStartupReminder) {
-            Card(
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = Color(0xFFFEF3C7)),
-                border = BorderStroke(1.dp, Color(0xFFF59E0B)),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 16.dp)
-            ) {
-                Row(
-                    modifier = Modifier.padding(14.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    Icon(Icons.Rounded.NotificationsActive, contentDescription = null, tint = Color(0xFFD97706), modifier = Modifier.size(24.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("Today's Reminder Alert", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = Color(0xFF78350F))
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Text("Check Monthly Budget Cap (85% alert) is due today. Please review your expenses.", fontSize = 12.sp, color = Color(0xFF92400E))
-                    }
-                    IconButton(
-                        onClick = { showStartupReminder = false },
-                        modifier = Modifier.size(28.dp)
-                    ) {
-                        Icon(Icons.Default.Close, contentDescription = "Dismiss", tint = Color(0xFF78350F), modifier = Modifier.size(18.dp))
-                    }
-                }
-            }
-        }
+
 
         // Quick Shortcuts Feed
         QuickServicesCategorySection(
@@ -2111,7 +2083,7 @@ fun AnalyticsTab(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFFF8FAFC))
+            .background(Color(0xFF0F172A))
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 16.dp, vertical = 12.dp)
     ) {
@@ -2151,7 +2123,7 @@ fun AnalyticsTab(
             Text(
                 text = "Analytics",
                 style = MaterialTheme.typography.titleLarge,
-                color = Color(0xFF0F172A),
+                color = Color.White,
                 fontWeight = FontWeight.Bold,
                 fontSize = 22.sp
             )
@@ -2161,13 +2133,13 @@ fun AnalyticsTab(
                 modifier = Modifier
                     .size(42.dp)
                     .clip(RoundedCornerShape(12.dp))
-                    .background(Color.White)
-                    .border(1.dp, Color(0xFFE2E8F0), RoundedCornerShape(12.dp))
+                    .background(Color(0xFF1E293B))
+                    .border(1.dp, Color(0xFF334155), RoundedCornerShape(12.dp))
             ) {
                 Icon(
                     imageVector = Icons.Default.FileDownload,
                     contentDescription = "Export Report",
-                    tint = Color(0xFF0F172A),
+                    tint = Color.White,
                     modifier = Modifier.size(20.dp)
                 )
             }
@@ -2175,7 +2147,7 @@ fun AnalyticsTab(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // 1️⃣ IMAGE 1 INSPIRED DARK EXPENSES CARD
+        // DARK EXPENSES SUMMARY CARD
         Card(
             colors = CardDefaults.cardColors(containerColor = Color(0xFF1E293B)),
             shape = RoundedCornerShape(24.dp),
@@ -2190,23 +2162,23 @@ fun AnalyticsTab(
                 ) {
                     Column {
                         Text(
-                            text = "Total Expenses",
+                            text = "Analytics Overview",
                             fontSize = 13.sp,
                             color = Color(0xFF94A3B8),
                             fontWeight = FontWeight.Medium
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = "Weekly Spend",
+                            text = "Total Expenses",
                             fontSize = 18.sp,
                             color = Color.White,
                             fontWeight = FontWeight.Bold
                         )
                     }
-                    IconButton(onClick = { /* menu */ }, modifier = Modifier.size(32.dp)) {
+                    IconButton(onClick = { showExportDialog = true }, modifier = Modifier.size(32.dp)) {
                         Icon(
-                            imageVector = Icons.Default.MoreVert,
-                            contentDescription = "Options",
+                            imageVector = Icons.Default.FileDownload,
+                            contentDescription = "Export",
                             tint = Color(0xFF94A3B8)
                         )
                     }
@@ -2292,117 +2264,47 @@ fun AnalyticsTab(
                         }
                     }
                 }
+            }
+        }
 
-                Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
-                // Stacked Multi-Segmented Bar Chart for Days of Week (Mon, Sun, Tue, Wed, Thr, Fri, Sat)
-                val days = listOf("Mon", "Sun", "Tue", "Wed", "Thr", "Fri", "Sat")
-                val dayMap = remember(expenseList) {
-                    val map = mutableMapOf<Int, List<Expense>>()
-                    expenseList.forEach { exp ->
-                        val cal = Calendar.getInstance().apply { timeInMillis = exp.date }
-                        val dow = cal.get(Calendar.DAY_OF_WEEK)
-                        map[dow] = (map[dow] ?: emptyList()) + exp
-                    }
-                    map
-                }
-
-                val maxDaySum = days.maxOfOrNull { dayName ->
-                    val dow = when (dayName) {
-                        "Sun" -> Calendar.SUNDAY
-                        "Mon" -> Calendar.MONDAY
-                        "Tue" -> Calendar.TUESDAY
-                        "Wed" -> Calendar.WEDNESDAY
-                        "Thr" -> Calendar.THURSDAY
-                        "Fri" -> Calendar.FRIDAY
-                        "Sat" -> Calendar.SATURDAY
-                        else -> Calendar.MONDAY
-                    }
-                    dayMap[dow]?.sumOf { it.amount } ?: 0.0
-                }?.coerceAtLeast(100.0) ?: 100.0
-
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(160.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.Bottom
+        // CLEAN DARK MODE CONTAINER
+        Card(
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF1E293B)),
+            shape = RoundedCornerShape(24.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 8.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(32.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    days.forEach { dayName ->
-                        val dow = when (dayName) {
-                            "Sun" -> Calendar.SUNDAY
-                            "Mon" -> Calendar.MONDAY
-                            "Tue" -> Calendar.TUESDAY
-                            "Wed" -> Calendar.WEDNESDAY
-                            "Thr" -> Calendar.THURSDAY
-                            "Fri" -> Calendar.FRIDAY
-                            "Sat" -> Calendar.SATURDAY
-                            else -> Calendar.MONDAY
-                        }
-                        val dayExpenses = dayMap[dow] ?: emptyList()
-                        val daySum = dayExpenses.sumOf { it.amount }
-                        val heightFraction = (daySum / maxDaySum).toFloat().coerceIn(0.05f, 1f)
-
-                        val catBreakdown = dayExpenses.groupBy { it.category }
-                            .mapValues { entry -> entry.value.sumOf { it.amount } }
-                            .entries.sortedByDescending { it.value }
-
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Bottom,
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .width(22.dp)
-                                    .height(120.dp)
-                                    .clip(CircleShape)
-                                    .background(Color(0xFF0F172A)),
-                                contentAlignment = Alignment.BottomCenter
-                            ) {
-                                Column(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .fillMaxHeight(heightFraction),
-                                    verticalArrangement = Arrangement.Bottom
-                                ) {
-                                    if (catBreakdown.isNotEmpty()) {
-                                        catBreakdown.forEachIndexed { cIdx, (_, amt) ->
-                                            val segFraction = (amt / daySum.coerceAtLeast(1.0)).toFloat()
-                                            val segColor = when (cIdx % 4) {
-                                                0 -> SleekPrimary
-                                                1 -> SleekPrimaryContainer
-                                                2 -> mixPrimaryWithColor(SleekPrimary, Color.White, 0.5f)
-                                                else -> mixPrimaryWithColor(SleekPrimary, Color.Black, 0.2f)
-                                            }
-                                            Box(
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .weight(segFraction.coerceAtLeast(0.05f))
-                                                    .background(segColor)
-                                            )
-                                        }
-                                    } else {
-                                        Box(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .fillMaxSize()
-                                                .background(Color(0xFF334155))
-                                        )
-                                    }
-                                }
-                            }
-
-                            Spacer(modifier = Modifier.height(8.dp))
-
-                            Text(
-                                text = dayName,
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = Color(0xFF94A3B8)
-                            )
-                        }
-                    }
+                    Icon(
+                        imageVector = Icons.Default.PieChart,
+                        contentDescription = null,
+                        tint = Color(0xFF64748B),
+                        modifier = Modifier.size(48.dp)
+                    )
+                    Text(
+                        text = "Analytics Overview Ready",
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
+                        fontSize = 16.sp
+                    )
+                    Text(
+                        text = "Use time filters above or tap export icon to generate PDF/CSV reports.",
+                        color = Color(0xFF94A3B8),
+                        fontSize = 13.sp,
+                        textAlign = TextAlign.Center
+                    )
                 }
             }
         }
@@ -4097,7 +3999,7 @@ fun BillsFullScreen(
     var editingBill by remember { mutableStateOf<BillEntry?>(null) }
     var billTitle by remember { mutableStateOf("") }
     var billAmount by remember { mutableStateOf("") }
-    var billDueDate by remember { mutableStateOf("15/08/2026") }
+    var billDueDate by remember { mutableStateOf(SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(Date())) }
     var billErrorMessage by remember { mutableStateOf<String?>(null) }
 
     BackHandler { onBack() }
@@ -4235,7 +4137,7 @@ fun BillsFullScreen(
                         editingBill = null
                         billTitle = ""
                         billAmount = ""
-                        billDueDate = "15/08/2026"
+                        billDueDate = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(Date())
                         showAddEditDialog = true
                     }
                 ) {
@@ -4272,79 +4174,97 @@ fun BillsFullScreen(
                 color = SleekTextSecondary
             )
 
-            LazyColumn(
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-                modifier = Modifier.fillMaxSize()
-            ) {
-                items(billsList, key = { it.id }) { bill ->
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(16.dp))
-                            .background(SleekBorder.copy(alpha = 0.25f))
-                            .padding(14.dp)
+            if (billsList.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
+                        Icon(Icons.Default.ReceiptLong, contentDescription = null, tint = SleekTextSecondary, modifier = Modifier.size(48.dp))
+                        Text("No upcoming bills", fontWeight = FontWeight.Bold, color = SleekTextPrimary, fontSize = 16.sp)
+                        Text("Tap + to add a bill", color = SleekTextSecondary, fontSize = 13.sp)
+                    }
+                }
+            } else {
+                LazyColumn(
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    items(billsList, key = { it.id }) { bill ->
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(16.dp))
+                                .background(SleekBorder.copy(alpha = 0.25f))
+                                .padding(14.dp)
                         ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(bill.title, fontWeight = FontWeight.Bold, color = SleekTextPrimary, fontSize = 15.sp)
-                                Spacer(modifier = Modifier.height(2.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(bill.title, fontWeight = FontWeight.Bold, color = SleekTextPrimary, fontSize = 15.sp)
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        Text("Due: ${bill.dueDate}", fontSize = 12.sp, color = Color(0xFFF59E0B), fontWeight = FontWeight.SemiBold)
+                                        Text("•", fontSize = 12.sp, color = SleekTextSecondary)
+                                        Text("₹%,.0f".format(bill.amount), fontWeight = FontWeight.Bold, color = SleekTextPrimary, fontSize = 14.sp)
+                                    }
+                                }
+
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
                                 ) {
-                                    Text("Due: ${bill.dueDate}", fontSize = 12.sp, color = Color(0xFFF59E0B), fontWeight = FontWeight.SemiBold)
-                                    Text("•", fontSize = 12.sp, color = SleekTextSecondary)
-                                    Text("₹%,.0f".format(bill.amount), fontWeight = FontWeight.Bold, color = SleekTextPrimary, fontSize = 14.sp)
-                                }
-                            }
+                                    Button(
+                                        onClick = {
+                                            if (bill.amount > totalBalance) {
+                                                billErrorMessage = "Cannot pay ₹%.0f for %s: Amount exceeds available balance (₹%.0f available).".format(bill.amount, bill.title, totalBalance)
+                                            } else {
+                                                onPayBill(bill.title, bill.amount)
+                                                billsList.remove(bill)
+                                                billErrorMessage = null
+                                                Toast.makeText(context, "Paid ${bill.title} successfully!", Toast.LENGTH_SHORT).show()
+                                            }
+                                        },
+                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981)),
+                                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                        shape = RoundedCornerShape(10.dp)
+                                    ) {
+                                        Text("Pay Now", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                    }
 
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                Button(
-                                    onClick = {
-                                        if (bill.amount > totalBalance) {
-                                            billErrorMessage = "Cannot pay ₹%.0f for %s: Amount exceeds available balance (₹%.0f available).".format(bill.amount, bill.title, totalBalance)
-                                        } else {
-                                            onPayBill(bill.title, bill.amount)
+                                    IconButton(
+                                        onClick = {
+                                            editingBill = bill
+                                            billTitle = bill.title
+                                            billAmount = bill.amount.toString()
+                                            billDueDate = bill.dueDate
+                                            showAddEditDialog = true
+                                        },
+                                        modifier = Modifier.size(32.dp)
+                                    ) {
+                                        Icon(Icons.Default.Edit, contentDescription = "Edit", tint = SleekPrimary, modifier = Modifier.size(18.dp))
+                                    }
+
+                                    IconButton(
+                                        onClick = {
                                             billsList.remove(bill)
-                                            billErrorMessage = null
-                                            Toast.makeText(context, "Paid ${bill.title} successfully!", Toast.LENGTH_SHORT).show()
-                                        }
-                                    },
-                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981)),
-                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                                    shape = RoundedCornerShape(10.dp)
-                                ) {
-                                    Text("Pay Now", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                                }
-
-                                IconButton(
-                                    onClick = {
-                                        editingBill = bill
-                                        billTitle = bill.title
-                                        billAmount = bill.amount.toString()
-                                        billDueDate = bill.dueDate
-                                        showAddEditDialog = true
-                                    },
-                                    modifier = Modifier.size(32.dp)
-                                ) {
-                                    Icon(Icons.Default.Edit, contentDescription = "Edit", tint = SleekPrimary, modifier = Modifier.size(18.dp))
-                                }
-
-                                IconButton(
-                                    onClick = {
-                                        billsList.remove(bill)
-                                        Toast.makeText(context, "Deleted ${bill.title}", Toast.LENGTH_SHORT).show()
-                                    },
-                                    modifier = Modifier.size(32.dp)
-                                ) {
-                                    Icon(Icons.Default.Delete, contentDescription = "Delete", tint = Color(0xFFEF4444), modifier = Modifier.size(18.dp))
+                                            Toast.makeText(context, "Deleted ${bill.title}", Toast.LENGTH_SHORT).show()
+                                        },
+                                        modifier = Modifier.size(32.dp)
+                                    ) {
+                                        Icon(Icons.Default.Delete, contentDescription = "Delete", tint = Color(0xFFEF4444), modifier = Modifier.size(18.dp))
+                                    }
                                 }
                             }
                         }
@@ -4366,7 +4286,7 @@ fun RemindersFullScreen(
     var showAddEditDialog by remember { mutableStateOf(false) }
     var editingReminder by remember { mutableStateOf<ReminderEntry?>(null) }
     var reminderText by remember { mutableStateOf("") }
-    var reminderDueDate by remember { mutableStateOf("15/08/2026") }
+    var reminderDueDate by remember { mutableStateOf(SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(Date())) }
 
     BackHandler { onBack() }
 
@@ -4492,7 +4412,7 @@ fun RemindersFullScreen(
                     onClick = {
                         editingReminder = null
                         reminderText = ""
-                        reminderDueDate = "15/08/2026"
+                        reminderDueDate = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(Date())
                         showAddEditDialog = true
                     }
                 ) {
@@ -4506,79 +4426,97 @@ fun RemindersFullScreen(
                 color = SleekTextSecondary
             )
 
-            LazyColumn(
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-                modifier = Modifier.fillMaxSize()
-            ) {
-                items(remindersList, key = { it.id }) { rem ->
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(16.dp))
-                            .background(SleekBorder.copy(alpha = 0.25f))
-                            .padding(14.dp)
+            if (remindersList.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
-                            modifier = Modifier.fillMaxWidth()
+                        Icon(Icons.Default.NotificationsNone, contentDescription = null, tint = SleekTextSecondary, modifier = Modifier.size(48.dp))
+                        Text("No active reminders", fontWeight = FontWeight.Bold, color = SleekTextPrimary, fontSize = 16.sp)
+                        Text("Tap + to add a reminder", color = SleekTextSecondary, fontSize = 13.sp)
+                    }
+                }
+            } else {
+                LazyColumn(
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    items(remindersList, key = { it.id }) { rem ->
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(16.dp))
+                                .background(SleekBorder.copy(alpha = 0.25f))
+                                .padding(14.dp)
                         ) {
-                            Icon(Icons.Rounded.NotificationsActive, contentDescription = null, tint = if (rem.isEnabled) Color(0xFFEC4899) else SleekTextSecondary, modifier = Modifier.size(22.dp))
-                            
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(rem.text, fontSize = 14.sp, color = SleekTextPrimary, fontWeight = FontWeight.Medium)
-                                Spacer(modifier = Modifier.height(2.dp))
-                                Text("Due: ${rem.dueDate} • ${if (rem.isEnabled) "Active" else "Stopped"}", fontSize = 11.sp, color = if (rem.isEnabled) Color(0xFFEC4899) else SleekTextSecondary, fontWeight = FontWeight.Bold)
-                            }
-
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(2.dp)
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                modifier = Modifier.fillMaxWidth()
                             ) {
-                                Switch(
-                                    checked = rem.isEnabled,
-                                    onCheckedChange = { isChecked ->
-                                        val idx = remindersList.indexOfFirst { it.id == rem.id }
-                                        if (idx != -1) {
-                                            remindersList[idx] = rem.copy(isEnabled = isChecked)
-                                        }
-                                    },
-                                    colors = SwitchDefaults.colors(
-                                        checkedThumbColor = Color(0xFFEC4899),
-                                        checkedTrackColor = Color(0xFFEC4899).copy(alpha = 0.5f)
+                                Icon(Icons.Rounded.NotificationsActive, contentDescription = null, tint = if (rem.isEnabled) Color(0xFFEC4899) else SleekTextSecondary, modifier = Modifier.size(22.dp))
+                                
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(rem.text, fontSize = 14.sp, color = SleekTextPrimary, fontWeight = FontWeight.Medium)
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text("Due: ${rem.dueDate} • ${if (rem.isEnabled) "Active" else "Stopped"}", fontSize = 11.sp, color = if (rem.isEnabled) Color(0xFFEC4899) else SleekTextSecondary, fontWeight = FontWeight.Bold)
+                                }
+
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(2.dp)
+                                ) {
+                                    Switch(
+                                        checked = rem.isEnabled,
+                                        onCheckedChange = { isChecked ->
+                                            val idx = remindersList.indexOfFirst { it.id == rem.id }
+                                            if (idx != -1) {
+                                                remindersList[idx] = rem.copy(isEnabled = isChecked)
+                                            }
+                                        },
+                                        colors = SwitchDefaults.colors(
+                                            checkedThumbColor = Color(0xFFEC4899),
+                                            checkedTrackColor = Color(0xFFEC4899).copy(alpha = 0.5f)
+                                        )
                                     )
-                                )
 
-                                IconButton(
-                                    onClick = {
-                                        remindersList.remove(rem)
-                                        Toast.makeText(context, "Marked reminder as complete!", Toast.LENGTH_SHORT).show()
-                                    },
-                                    modifier = Modifier.size(32.dp)
-                                ) {
-                                    Icon(Icons.Default.CheckCircle, contentDescription = "Complete", tint = Color(0xFF10B981), modifier = Modifier.size(20.dp))
-                                }
+                                    IconButton(
+                                        onClick = {
+                                            remindersList.remove(rem)
+                                            Toast.makeText(context, "Marked reminder as complete!", Toast.LENGTH_SHORT).show()
+                                        },
+                                        modifier = Modifier.size(32.dp)
+                                    ) {
+                                        Icon(Icons.Default.CheckCircle, contentDescription = "Complete", tint = Color(0xFF10B981), modifier = Modifier.size(20.dp))
+                                    }
 
-                                IconButton(
-                                    onClick = {
-                                        editingReminder = rem
-                                        reminderText = rem.text
-                                        reminderDueDate = rem.dueDate
-                                        showAddEditDialog = true
-                                    },
-                                    modifier = Modifier.size(32.dp)
-                                ) {
-                                    Icon(Icons.Default.Edit, contentDescription = "Edit", tint = SleekPrimary, modifier = Modifier.size(18.dp))
-                                }
+                                    IconButton(
+                                        onClick = {
+                                            editingReminder = rem
+                                            reminderText = rem.text
+                                            reminderDueDate = rem.dueDate
+                                            showAddEditDialog = true
+                                        },
+                                        modifier = Modifier.size(32.dp)
+                                    ) {
+                                        Icon(Icons.Default.Edit, contentDescription = "Edit", tint = SleekPrimary, modifier = Modifier.size(18.dp))
+                                    }
 
-                                IconButton(
-                                    onClick = {
-                                        remindersList.remove(rem)
-                                        Toast.makeText(context, "Deleted reminder", Toast.LENGTH_SHORT).show()
-                                    },
-                                    modifier = Modifier.size(32.dp)
-                                ) {
-                                    Icon(Icons.Default.Delete, contentDescription = "Delete", tint = Color(0xFFEF4444), modifier = Modifier.size(18.dp))
+                                    IconButton(
+                                        onClick = {
+                                            remindersList.remove(rem)
+                                            Toast.makeText(context, "Deleted reminder", Toast.LENGTH_SHORT).show()
+                                        },
+                                        modifier = Modifier.size(32.dp)
+                                    ) {
+                                        Icon(Icons.Default.Delete, contentDescription = "Delete", tint = Color(0xFFEF4444), modifier = Modifier.size(18.dp))
+                                    }
                                 }
                             }
                         }
