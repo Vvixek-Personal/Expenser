@@ -519,6 +519,7 @@ fun DashboardTab(
     var showAdjustBudgetDialog by remember { mutableStateOf(false) }
     var showBillsScreen by remember { mutableStateOf(false) }
     var showRemindersScreen by remember { mutableStateOf(false) }
+    var showSavingGoalsScreen by remember { mutableStateOf(false) }
     var showStartupReminder by remember { mutableStateOf(true) }
 
     LaunchedEffect(Unit) {
@@ -527,6 +528,14 @@ fun DashboardTab(
     }
 
     // Startup reminder alert dialog removed - shown on-screen in dashboard feed
+
+    if (showSavingGoalsScreen) {
+        SavingGoalsFullScreen(
+            viewModel = viewModel,
+            onBack = { showSavingGoalsScreen = false }
+        )
+        return
+    }
 
     if (showBillsScreen) {
         BillsFullScreen(
@@ -868,7 +877,8 @@ fun DashboardTab(
             onNavigateToExpenses = onNavigateToExpenses,
             onNavigateToAnalytics = onNavigateToAnalytics,
             onBillsClick = { showBillsScreen = true },
-            onReminderClick = { showRemindersScreen = true }
+            onReminderClick = { showRemindersScreen = true },
+            onGoalsClick = { showSavingGoalsScreen = true }
         )
 
         Spacer(modifier = Modifier.height(24.dp))
@@ -1011,7 +1021,8 @@ fun QuickServicesCategorySection(
     onNavigateToExpenses: () -> Unit,
     onNavigateToAnalytics: () -> Unit,
     onBillsClick: () -> Unit,
-    onReminderClick: () -> Unit
+    onReminderClick: () -> Unit,
+    onGoalsClick: () -> Unit = {}
 ) {
     val todayStr = remember { SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(Date()) }
     val hasBillDueToday = viewModel.billsList.any { it.dueDate == todayStr }
@@ -1045,8 +1056,16 @@ fun QuickServicesCategorySection(
             Row(
                 modifier = Modifier
                     .fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
+                CategoryFeedTile(
+                    icon = Icons.Rounded.Savings,
+                    label = "Goals",
+                    tileColor = Color(0xFF0EA5E9),
+                    onClick = onGoalsClick,
+                    modifier = Modifier.weight(1f)
+                )
+
                 CategoryFeedTile(
                     icon = Icons.Rounded.ReceiptLong,
                     label = "Finance",

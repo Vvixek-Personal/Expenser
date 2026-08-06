@@ -52,6 +52,8 @@ data class SavingsGoal(
     val frequency: String = "WEEKLY", // "DAILY", "WEEKLY", "MONTHLY", "MANUAL"
     val contributionAmount: Double = 0.0,
     val isAutoGap: Boolean = true,
-    val iconTag: String = "🎮"
+    val iconTag: String = "🎮",
+    val category: String = "Saving",
+    val imageUri: String? = null
 )
 

@@ -338,37 +338,10 @@ class FinanceViewModel(
         // Compute initial storage & network values
         refreshUsageData()
 
-        // Seed default savings goals once if list is empty
+        // Ensure no prefilled default goals are added automatically
         val hasSeeded = sharedPrefs.getBoolean("has_seeded_savings_goals", false)
         if (!hasSeeded) {
-            viewModelScope.launch {
-                val list = savingsGoals.first()
-                if (list.isEmpty()) {
-                    repository.insertSavingsGoal(
-                        SavingsGoal(
-                            name = "Vacation Trip",
-                            targetAmount = 500.0,
-                            currentAmount = 175.0,
-                            frequency = "WEEKLY",
-                            contributionAmount = 25.0,
-                            isAutoGap = false,
-                            iconTag = "✈️"
-                        )
-                    )
-                    repository.insertSavingsGoal(
-                        SavingsGoal(
-                            name = "Emergency Reserve",
-                            targetAmount = 2000.0,
-                            currentAmount = 850.0,
-                            frequency = "MONTHLY",
-                            contributionAmount = 150.0,
-                            isAutoGap = false,
-                            iconTag = "🛡️"
-                        )
-                    )
-                }
-                sharedPrefs.edit().putBoolean("has_seeded_savings_goals", true).apply()
-            }
+            sharedPrefs.edit().putBoolean("has_seeded_savings_goals", true).apply()
         }
     }
 
@@ -691,7 +664,9 @@ class FinanceViewModel(
         frequency: String = "WEEKLY",
         contributionAmount: Double = 0.0,
         isAutoGap: Boolean = true,
-        iconTag: String = "🎮"
+        iconTag: String = "🎯",
+        category: String = "Saving",
+        imageUri: String? = null
     ) {
         viewModelScope.launch {
             repository.insertSavingsGoal(
@@ -703,7 +678,9 @@ class FinanceViewModel(
                     frequency = frequency,
                     contributionAmount = contributionAmount,
                     isAutoGap = isAutoGap,
-                    iconTag = iconTag
+                    iconTag = iconTag,
+                    category = category,
+                    imageUri = imageUri
                 )
             )
             if (initialAmount > 0) {

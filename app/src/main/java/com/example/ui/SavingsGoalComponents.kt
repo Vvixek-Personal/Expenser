@@ -1,34 +1,1250 @@
 package com.example.ui
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import android.net.Uri
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
+import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import coil.compose.AsyncImage
 import com.example.data.Account
 import com.example.data.SavingsGoal
 import com.example.ui.theme.*
+import kotlinx.coroutines.delay
+import java.text.SimpleDateFormat
+import java.util.*
 
+// ==========================================
+// 🎯 FULL SAVING GOALS SCREEN (MATCHING REFERENCE IMAGE)
+// ==========================================
+@Composable
+fun SavingGoalsFullScreen(
+    viewModel: FinanceViewModel = androidx.lifecycle.viewmodel.compose.viewModel(),
+    onBack: () -> Unit
+) {
+    val haptic = LocalHapticFeedback.current
+    val savingsGoals by viewModel.savingsGoals.collectAsStateWithLifecycle()
+    val accounts by viewModel.accounts.collectAsStateWithLifecycle()
+    val selectedLanguage by viewModel.selectedLanguage.collectAsStateWithLifecycle()
+
+    var selectedCategoryFilter by remember { mutableStateOf("All") }
+    var showAddDialog by remember { mutableStateOf(false) }
+    var editingGoal by remember { mutableStateOf<SavingsGoal?>(null) }
+    var selectedGoalForDeposit by remember { mutableStateOf<SavingsGoal?>(null) }
+
+    // Active Coin Deposit Animation state
+    var activeDepositAnimationInfo by remember { mutableStateOf<Pair<Double, String>?>(null) }
+
+    BackHandler { onBack() }
+
+    // Calculate Total Savings
+    val totalSaving = remember(savingsGoals) { savingsGoals.sumOf { g: SavingsGoal -> g.currentAmount } }
+
+    // Category Tabs list
+    val categories: List<String> = remember(savingsGoals) {
+        val base = listOf("All", "Saving", "Investment", "Expenditure")
+        val custom = savingsGoals.map { g: SavingsGoal -> g.category }.distinct().filter { c: String -> c !in base }
+        base + custom
+    }
+
+    // Filtered goals grid
+    val filteredGoals: List<SavingsGoal> = remember(savingsGoals, selectedCategoryFilter) {
+        if (selectedCategoryFilter == "All") {
+            savingsGoals
+        } else {
+            savingsGoals.filter { g: SavingsGoal -> g.category.equals(selectedCategoryFilter, ignoreCase = true) }
+        }
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .statusBarsPadding()
+                .padding(horizontal = 20.dp)
+        ) {
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // 1. Header Bar: Back | Title ("Saving Goals") | More Options
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(
+                    onClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        onBack()
+                    }
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.ArrowBack,
+                        contentDescription = "Back",
+                        tint = SleekTextPrimary
+                    )
+                }
+
+                Text(
+                    text = "Saving Goals",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = SleekTextPrimary
+                )
+
+                IconButton(
+                    onClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    }
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.MoreVert,
+                        contentDescription = "Options",
+                        tint = SleekTextPrimary
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // 2. Centered Total Saving Display
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = "Total Saving",
+                    fontSize = 14.sp,
+                    color = SleekTextSecondary,
+                    fontWeight = FontWeight.Medium
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "₹%,.2f".format(totalSaving),
+                    fontSize = 32.sp,
+                    fontWeight = FontWeight.Black,
+                    color = SleekTextPrimary
+                )
+            }
+
+            Spacer(modifier = Modifier.height(28.dp))
+
+            // 3. Section Title "My Saving" & "+ Add New" Button
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "My Saving",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = SleekTextPrimary
+                )
+
+                OutlinedButton(
+                    onClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        showAddDialog = true
+                    },
+                    shape = RoundedCornerShape(20.dp),
+                    border = BorderStroke(1.dp, SleekPrimary),
+                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Add,
+                        contentDescription = null,
+                        tint = SleekPrimary,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = "Add New",
+                        color = SleekPrimary,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // 4. Category Filter Pills (All, Saving, Investment, Expenditure)
+            LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                items(categories, key = { cat: String -> cat }) { cat: String ->
+                    val isSelected = selectedCategoryFilter.equals(cat, ignoreCase = true)
+                    val bgColor = if (isSelected) SleekPrimary else SleekSurface
+                    val textColor = if (isSelected) Color.White else SleekTextSecondary
+                    val borderColor = if (isSelected) SleekPrimary else SleekBorder
+
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(bgColor)
+                            .border(1.dp, borderColor, RoundedCornerShape(16.dp))
+                            .clickable {
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                selectedCategoryFilter = cat
+                            }
+                            .padding(horizontal = 18.dp, vertical = 8.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = cat,
+                            fontSize = 13.sp,
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                            color = textColor
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // 5. 2-Column Grid of Goal Cards
+            if (filteredGoals.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.padding(24.dp)
+                    ) {
+                        Surface(
+                            shape = CircleShape,
+                            color = SleekPrimary.copy(alpha = 0.1f),
+                            modifier = Modifier.size(64.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Savings,
+                                    contentDescription = null,
+                                    tint = SleekPrimary,
+                                    modifier = Modifier.size(32.dp)
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            text = if (savingsGoals.isEmpty()) "No Saving Goals Created" else "No Goals in $selectedCategoryFilter",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = SleekTextPrimary
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = "Tap '+ Add New' to set up your target saving goal!",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = SleekTextSecondary,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
+            } else {
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(2),
+                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                ) {
+                    items(filteredGoals, key = { goal: SavingsGoal -> goal.id }) { goal: SavingsGoal ->
+                        SavingGoalCardItem(
+                            goal = goal,
+                            onClick = {
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                selectedGoalForDeposit = goal
+                            }
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+
+        // Add / Edit Goal Dialog
+        if (showAddDialog || editingGoal != null) {
+            AddEditSavingsGoalDialog(
+                goalToEdit = editingGoal,
+                onDismiss = {
+                    showAddDialog = false
+                    editingGoal = null
+                },
+                onSave = { title, target, category, imageUri, targetDate ->
+                    if (editingGoal != null) {
+                        viewModel.updateSavingsGoal(
+                            editingGoal!!.copy(
+                                name = title,
+                                targetAmount = target,
+                                category = category,
+                                imageUri = imageUri,
+                                targetDate = targetDate
+                            )
+                        )
+                    } else {
+                        viewModel.addSavingsGoal(
+                            name = title,
+                            targetAmount = target,
+                            initialAmount = 0.0,
+                            targetDate = targetDate,
+                            category = category,
+                            imageUri = imageUri
+                        )
+                    }
+                    showAddDialog = false
+                    editingGoal = null
+                }
+            )
+        }
+
+        // Goal Detail & Quick Deposit Sheet
+        selectedGoalForDeposit?.let { goal ->
+            GoalDepositDetailBottomSheet(
+                goal = goal,
+                onDismiss = { selectedGoalForDeposit = null },
+                onDeposit = { amount ->
+                    viewModel.quickDepositToGoal(goal, amount)
+                    selectedGoalForDeposit = null
+                    // Trigger coin rolling animation!
+                    activeDepositAnimationInfo = Pair(amount, goal.name)
+                },
+                onDeduct = { amount ->
+                    viewModel.quickDeductFromGoal(goal, amount)
+                    selectedGoalForDeposit = null
+                },
+                onEdit = {
+                    editingGoal = goal
+                    selectedGoalForDeposit = null
+                },
+                onDelete = {
+                    viewModel.deleteSavingsGoal(goal)
+                    selectedGoalForDeposit = null
+                }
+            )
+        }
+
+        // Coin Deposit Animation Overlay (Video matched)
+        activeDepositAnimationInfo?.let { (amt, name) ->
+            CoinDepositAnimationDialog(
+                amount = amt,
+                goalName = name,
+                onDismiss = { activeDepositAnimationInfo = null }
+            )
+        }
+    }
+}
+
+// ==========================================
+// 🎨 GOAL CARD ITEM (MATCHING REFERENCE IMAGE GRID)
+// ==========================================
+@Composable
+fun SavingGoalCardItem(
+    goal: SavingsGoal,
+    onClick: () -> Unit
+) {
+    val progressRatio = if (goal.targetAmount > 0) (goal.currentAmount / goal.targetAmount).toFloat() else 0f
+    val animatedProgress by animateFloatAsState(
+        targetValue = progressRatio.coerceIn(0f, 1f),
+        animationSpec = tween(700, easing = FastOutSlowInEasing),
+        label = "goalProgress"
+    )
+
+    val formattedDate = remember(goal.targetDate) {
+        if (goal.targetDate > 0) {
+            SimpleDateFormat("dd MMM yyyy", Locale.getDefault()).format(Date(goal.targetDate))
+        } else {
+            "Open Goal"
+        }
+    }
+
+    val primaryAccent = getCategoryAccentColor(goal.category)
+
+    Card(
+        shape = RoundedCornerShape(22.dp),
+        colors = CardDefaults.cardColors(containerColor = SleekSurface),
+        border = BorderStroke(1.dp, SleekBorder),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() }
+            .testTag("savings_goal_item_${goal.id}")
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            // Circular Avatar Badge with surrounding Progress Ring Arc
+            Box(
+                modifier = Modifier.size(52.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                // Background Track Ring
+                Canvas(modifier = Modifier.fillMaxSize()) {
+                    drawCircle(
+                        color = primaryAccent.copy(alpha = 0.15f),
+                        style = Stroke(width = 4.dp.toPx())
+                    )
+                    drawArc(
+                        color = primaryAccent,
+                        startAngle = -90f,
+                        sweepAngle = 360f * animatedProgress,
+                        useCenter = false,
+                        style = Stroke(width = 4.dp.toPx(), cap = StrokeCap.Round)
+                    )
+                }
+
+                // Inner Avatar Image or Category Icon
+                Box(
+                    modifier = Modifier
+                        .size(42.dp)
+                        .clip(CircleShape)
+                        .background(primaryAccent.copy(alpha = 0.12f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (!goal.imageUri.isNullOrBlank()) {
+                        AsyncImage(
+                            model = goal.imageUri,
+                            contentDescription = goal.name,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    } else {
+                        Icon(
+                            imageVector = getCategoryVectorIcon(goal.category, goal.name),
+                            contentDescription = goal.category,
+                            tint = primaryAccent,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+                }
+            }
+
+            // Goal Title
+            Text(
+                text = goal.name,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Bold,
+                color = SleekTextPrimary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+
+            // Target Date Subtitle
+            Text(
+                text = formattedDate,
+                fontSize = 11.sp,
+                color = SleekTextSecondary
+            )
+
+            // Goal Saved vs Target Amount Row
+            Row(verticalAlignment = Alignment.Bottom) {
+                Text(
+                    text = "₹%,.0f".format(goal.currentAmount),
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = primaryAccent
+                )
+                Text(
+                    text = " of ₹%,.0f".format(goal.targetAmount),
+                    fontSize = 11.sp,
+                    color = SleekTextSecondary,
+                    fontWeight = FontWeight.Normal
+                )
+            }
+        }
+    }
+}
+
+// ==========================================
+// 🪙 COIN DEPOSIT ANIMATION DIALOG (VIDEO MATCHED)
+// ==========================================
+@Composable
+fun CoinDepositAnimationDialog(
+    amount: Double,
+    goalName: String,
+    onDismiss: () -> Unit
+) {
+    val haptic = LocalHapticFeedback.current
+    var animPhase by remember { mutableIntStateOf(0) } // 0: Rolling, 1: Arcing, 2: Dropped into Wallet Slot
+
+    val rollX by animateFloatAsState(
+        targetValue = if (animPhase >= 1) 0f else -130f,
+        animationSpec = tween(550, easing = FastOutSlowInEasing),
+        label = "rollX"
+    )
+
+    val rollRotation by animateFloatAsState(
+        targetValue = if (animPhase >= 1) 720f else 0f,
+        animationSpec = tween(550, easing = FastOutSlowInEasing),
+        label = "rollRotation"
+    )
+
+    val coinY by animateFloatAsState(
+        targetValue = when (animPhase) {
+            0 -> 0f
+            1 -> -80f
+            else -> 18f
+        },
+        animationSpec = tween(if (animPhase == 1) 380 else 420, easing = FastOutSlowInEasing),
+        label = "coinY"
+    )
+
+    val coinScale by animateFloatAsState(
+        targetValue = when (animPhase) {
+            0 -> 1f
+            1 -> 1.15f
+            else -> 0.40f
+        },
+        animationSpec = tween(420),
+        label = "coinScale"
+    )
+
+    val cardScale by animateFloatAsState(
+        targetValue = if (animPhase == 2) 1.08f else 1f,
+        animationSpec = tween(300),
+        label = "cardScale"
+    )
+
+    val cardGlowAlpha by animateFloatAsState(
+        targetValue = if (animPhase == 2) 0.6f else 0f,
+        animationSpec = tween(400),
+        label = "cardGlowAlpha"
+    )
+
+    LaunchedEffect(Unit) {
+        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+        delay(120)
+        animPhase = 1
+        delay(420)
+        animPhase = 2
+        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+        delay(1800)
+        onDismiss()
+    }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Card(
+                shape = RoundedCornerShape(28.dp),
+                colors = CardDefaults.cardColors(containerColor = SleekSurface),
+                border = BorderStroke(1.dp, SleekBorder),
+                elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = "Depositing to $goalName",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = SleekTextSecondary
+                    )
+
+                    Spacer(modifier = Modifier.height(28.dp))
+
+                    // Animation Canvas Box
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(170.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        // Horizontal rolling track line
+                        Canvas(
+                            modifier = Modifier
+                                .fillMaxWidth(0.85f)
+                                .height(2.dp)
+                                .align(Alignment.Center)
+                        ) {
+                            drawLine(
+                                color = SleekBorder,
+                                start = androidx.compose.ui.geometry.Offset(0f, 0f),
+                                end = androidx.compose.ui.geometry.Offset(size.width, 0f),
+                                strokeWidth = 2.dp.toPx()
+                            )
+                        }
+
+                        // Wallet / Card Slot Container
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.Center)
+                                .offset(y = 20.dp)
+                                .scale(cardScale)
+                                .width(180.dp)
+                                .height(105.dp)
+                                .clip(RoundedCornerShape(20.dp))
+                                .background(
+                                    Brush.linearGradient(
+                                        colors = listOf(Color(0xFF7C3AED), Color(0xFF4C1D95))
+                                    )
+                                )
+                                .border(
+                                    width = 2.dp,
+                                    color = Color(0xFFA78BFA).copy(alpha = cardGlowAlpha + 0.4f),
+                                    shape = RoundedCornerShape(20.dp)
+                                ),
+                            contentAlignment = Alignment.TopCenter
+                        ) {
+                            // Slot Opening Line
+                            Box(
+                                modifier = Modifier
+                                    .padding(top = 8.dp)
+                                    .width(80.dp)
+                                    .height(5.dp)
+                                    .clip(RoundedCornerShape(3.dp))
+                                    .background(Color(0xFF2E1065))
+                            )
+
+                            // Subtle Card Icon / Brand Tag
+                            Text(
+                                text = "FS",
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Black,
+                                color = Color.White.copy(alpha = 0.35f),
+                                modifier = Modifier.align(Alignment.Center)
+                            )
+                        }
+
+                        // Animated Gold Coin with INR Symbol (₹)
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.Center)
+                                .offset(x = rollX.dp, y = coinY.dp)
+                                .rotate(rollRotation)
+                                .scale(coinScale)
+                                .size(48.dp)
+                                .clip(CircleShape)
+                                .background(
+                                    Brush.radialGradient(
+                                        colors = listOf(Color(0xFFFDE047), Color(0xFFEAB308), Color(0xFFCA8A04))
+                                    )
+                                )
+                                .border(2.dp, Color(0xFFFEF08A), CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "₹",
+                                fontSize = 22.sp,
+                                fontWeight = FontWeight.Black,
+                                color = Color(0xFF713F12)
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    AnimatedVisibility(
+                        visible = animPhase == 2,
+                        enter = fadeIn() + expandVertically()
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Surface(
+                                shape = CircleShape,
+                                color = Color(0xFF10B981).copy(alpha = 0.15f)
+                            ) {
+                                Text(
+                                    text = "+₹%,.2f Saved!".format(amount),
+                                    fontSize = 18.sp,
+                                    fontWeight = FontWeight.Black,
+                                    color = Color(0xFF10B981),
+                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = "Deducted from usable balance & locked in goal",
+                                fontSize = 11.sp,
+                                color = SleekTextSecondary
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ==========================================
+// ➕ ADD / EDIT GOAL DIALOG
+// ==========================================
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun AddEditSavingsGoalDialog(
+    goalToEdit: SavingsGoal? = null,
+    onDismiss: () -> Unit,
+    onSave: (name: String, target: Double, category: String, imageUri: String?, targetDate: Long) -> Unit
+) {
+    val haptic = LocalHapticFeedback.current
+    var name by remember { mutableStateOf(goalToEdit?.name ?: "") }
+    var targetStr by remember { mutableStateOf(goalToEdit?.targetAmount?.takeIf { it > 0 }?.toString() ?: "") }
+    var category by remember { mutableStateOf(goalToEdit?.category ?: "Saving") }
+    var imageUriStr by remember { mutableStateOf<String?>(goalToEdit?.imageUri) }
+
+    var selectedPresetMonths by remember { mutableIntStateOf(6) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+
+    // Custom Image Launcher
+    val imagePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            imageUriStr = uri.toString()
+        }
+    }
+
+    val availableCategories = listOf(
+        "Saving", "Investment", "Expenditure", "Travel", "Tech",
+        "Shopping", "Vehicle", "Education", "Emergency"
+    )
+
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            shape = RoundedCornerShape(24.dp),
+            colors = CardDefaults.cardColors(containerColor = SleekSurface),
+            border = BorderStroke(1.dp, SleekBorder),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                Text(
+                    text = if (goalToEdit == null) "Add New Saving Goal" else "Edit Saving Goal",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = SleekTextPrimary
+                )
+
+                // Goal Name Input
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = {
+                        name = it
+                        errorMessage = null
+                    },
+                    label = { Text("Goal Name (e.g. Holiday, Laptop)") },
+                    singleLine = true,
+                    shape = RoundedCornerShape(14.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = SleekPrimary,
+                        unfocusedBorderColor = SleekBorder
+                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("goal_name_input")
+                )
+
+                // Target Amount Input in INR (₹)
+                OutlinedTextField(
+                    value = targetStr,
+                    onValueChange = {
+                        targetStr = it
+                        errorMessage = null
+                    },
+                    label = { Text("Total Target Money (INR ₹)") },
+                    prefix = { Text("₹ ", fontWeight = FontWeight.Bold, color = SleekPrimary) },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    singleLine = true,
+                    shape = RoundedCornerShape(14.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = SleekPrimary,
+                        unfocusedBorderColor = SleekBorder
+                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("goal_target_input")
+                )
+
+                // Category Selection
+                Text(
+                    text = "Select Category",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = SleekTextSecondary
+                )
+
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    availableCategories.forEach { cat ->
+                        val isSel = category.equals(cat, ignoreCase = true)
+                        FilterChip(
+                            selected = isSel,
+                            onClick = {
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                category = cat
+                            },
+                            label = { Text(cat, fontSize = 12.sp) },
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                    }
+                }
+
+                // Target Timeframe Presets
+                Text(
+                    text = "Target Timeframe",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = SleekTextSecondary
+                )
+
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    listOf(3 to "3 Mon", 6 to "6 Mon", 12 to "1 Year", 24 to "2 Years").forEach { (months, label) ->
+                        val isSel = selectedPresetMonths == months
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(if (isSel) SleekPrimary else SleekPrimaryContainer.copy(alpha = 0.2f))
+                                .clickable { selectedPresetMonths = months }
+                                .padding(vertical = 8.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = label,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (isSel) Color.White else SleekTextSecondary
+                            )
+                        }
+                    }
+                }
+
+                // Goal Image Option
+                Text(
+                    text = "Goal Image (Optional)",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = SleekTextSecondary
+                )
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(54.dp)
+                            .clip(CircleShape)
+                            .background(SleekPrimary.copy(alpha = 0.12f))
+                            .border(1.dp, SleekBorder, CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (!imageUriStr.isNullOrBlank()) {
+                            AsyncImage(
+                                model = imageUriStr,
+                                contentDescription = "Custom Image",
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        } else {
+                            Icon(
+                                imageVector = getCategoryVectorIcon(category, name),
+                                contentDescription = "Default Category Icon",
+                                tint = SleekPrimary,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+                    }
+
+                    Column(modifier = Modifier.weight(1f)) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedButton(
+                                onClick = { imagePickerLauncher.launch("image/*") },
+                                shape = RoundedCornerShape(12.dp),
+                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                            ) {
+                                Text("Choose Image", fontSize = 11.sp)
+                            }
+
+                            if (!imageUriStr.isNullOrBlank()) {
+                                TextButton(
+                                    onClick = { imageUriStr = null }
+                                ) {
+                                    Text("Remove", fontSize = 11.sp, color = Color(0xFFEF4444))
+                                }
+                            }
+                        }
+                        Text(
+                            text = if (imageUriStr == null) "A category icon avatar will be created automatically" else "Custom image attached",
+                            fontSize = 10.sp,
+                            color = SleekTextSecondary
+                        )
+                    }
+                }
+
+                errorMessage?.let { err ->
+                    Text(err, color = Color(0xFFEF4444), fontSize = 12.sp)
+                }
+
+                // Dialog Buttons
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    TextButton(onClick = onDismiss) {
+                        Text("Cancel", color = SleekTextSecondary)
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Button(
+                        onClick = {
+                            val targetVal = targetStr.toDoubleOrNull()
+                            if (name.isBlank()) {
+                                errorMessage = "Please enter a goal name"
+                                return@Button
+                            }
+                            if (targetVal == null || targetVal <= 0) {
+                                errorMessage = "Please enter a valid target amount"
+                                return@Button
+                            }
+
+                            val cal = Calendar.getInstance()
+                            cal.add(Calendar.MONTH, selectedPresetMonths)
+                            val calcDate = cal.timeInMillis
+
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            onSave(name.trim(), targetVal, category, imageUriStr, calcDate)
+                        },
+                        shape = RoundedCornerShape(14.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = SleekPrimary)
+                    ) {
+                        Text(if (goalToEdit == null) "Save Goal" else "Update", color = Color.White)
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ==========================================
+// 🔍 GOAL DEPOSIT & DETAIL BOTTOM SHEET
+// ==========================================
+@Composable
+fun GoalDepositDetailBottomSheet(
+    goal: SavingsGoal,
+    onDismiss: () -> Unit,
+    onDeposit: (Double) -> Unit,
+    onDeduct: (Double) -> Unit,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit
+) {
+    val haptic = LocalHapticFeedback.current
+    var depositInput by remember { mutableStateOf("") }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+
+    val remaining = (goal.targetAmount - goal.currentAmount).coerceAtLeast(0.0)
+    val primaryAccent = getCategoryAccentColor(goal.category)
+
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            shape = RoundedCornerShape(28.dp),
+            colors = CardDefaults.cardColors(containerColor = SleekSurface),
+            border = BorderStroke(1.dp, SleekBorder),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(22.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                // Top Header Row
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(48.dp)
+                                .clip(CircleShape)
+                                .background(primaryAccent.copy(alpha = 0.15f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (!goal.imageUri.isNullOrBlank()) {
+                                AsyncImage(
+                                    model = goal.imageUri,
+                                    contentDescription = goal.name,
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = getCategoryVectorIcon(goal.category, goal.name),
+                                    contentDescription = goal.category,
+                                    tint = primaryAccent,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            }
+                        }
+
+                        Column {
+                            Text(
+                                text = goal.name,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = SleekTextPrimary
+                            )
+                            Text(
+                                text = "Category: ${goal.category}",
+                                fontSize = 12.sp,
+                                color = SleekTextSecondary
+                            )
+                        }
+                    }
+
+                    Row {
+                        IconButton(onClick = onEdit) {
+                            Icon(Icons.Rounded.Edit, contentDescription = "Edit", tint = SleekPrimary)
+                        }
+                        IconButton(onClick = onDelete) {
+                            Icon(Icons.Rounded.Delete, contentDescription = "Delete", tint = Color(0xFFEF4444))
+                        }
+                    }
+                }
+
+                // Progress Banner
+                Surface(
+                    shape = RoundedCornerShape(18.dp),
+                    color = primaryAccent.copy(alpha = 0.12f),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text("Saved so far", fontSize = 11.sp, color = SleekTextSecondary)
+                            Text(
+                                "₹%,.2f".format(goal.currentAmount),
+                                fontSize = 20.sp,
+                                fontWeight = FontWeight.Black,
+                                color = primaryAccent
+                            )
+                        }
+                        Column(horizontalAlignment = Alignment.End) {
+                            Text("Target Amount", fontSize = 11.sp, color = SleekTextSecondary)
+                            Text(
+                                "₹%,.2f".format(goal.targetAmount),
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = SleekTextPrimary
+                            )
+                        }
+                    }
+                }
+
+                // Deposit Money Input Section
+                Text(
+                    text = "Deposit Money to Goal",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = SleekTextPrimary
+                )
+
+                OutlinedTextField(
+                    value = depositInput,
+                    onValueChange = {
+                        depositInput = it
+                        errorMessage = null
+                    },
+                    label = { Text("Enter Deposit Amount") },
+                    prefix = { Text("₹ ", fontWeight = FontWeight.Bold, color = SleekPrimary) },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    singleLine = true,
+                    shape = RoundedCornerShape(14.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = SleekPrimary,
+                        unfocusedBorderColor = SleekBorder
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                // Quick Preset Deposit Chips
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    listOf(100.0, 500.0, 1000.0, 2000.0).forEach { preset ->
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(SleekPrimaryContainer.copy(alpha = 0.2f))
+                                .border(1.dp, SleekBorder, RoundedCornerShape(12.dp))
+                                .clickable {
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    depositInput = preset.toInt().toString()
+                                }
+                                .padding(vertical = 8.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "+₹%,.0f".format(preset),
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = SleekPrimary
+                            )
+                        }
+                    }
+                }
+
+                errorMessage?.let {
+                    Text(it, color = Color(0xFFEF4444), fontSize = 12.sp)
+                }
+
+                // Action Buttons
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    if (goal.currentAmount > 0) {
+                        OutlinedButton(
+                            onClick = {
+                                val amt = depositInput.toDoubleOrNull() ?: 0.0
+                                if (amt <= 0) {
+                                    errorMessage = "Enter valid deduction amount"
+                                    return@OutlinedButton
+                                }
+                                onDeduct(amt)
+                            },
+                            shape = RoundedCornerShape(16.dp),
+                            border = BorderStroke(1.dp, Color(0xFFEF4444)),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("Withdraw", color = Color(0xFFEF4444), fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+
+                    Button(
+                        onClick = {
+                            val amt = depositInput.toDoubleOrNull() ?: 0.0
+                            if (amt <= 0) {
+                                errorMessage = "Enter valid deposit amount"
+                                return@Button
+                            }
+                            onDeposit(amt)
+                        },
+                        shape = RoundedCornerShape(16.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = SleekPrimary),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("+ Deposit", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ==========================================
+// 🎨 CATEGORY VECTOR & ACCENT HELPERS
+// ==========================================
+fun getCategoryVectorIcon(category: String, name: String): ImageVector {
+    val combined = "$category $name".lowercase()
+    return when {
+        combined.contains("holiday") || combined.contains("travel") || combined.contains("trip") || combined.contains("beach") -> Icons.Rounded.BeachAccess
+        combined.contains("laptop") || combined.contains("tech") || combined.contains("phone") || combined.contains("gadget") -> Icons.Rounded.Laptop
+        combined.contains("education") || combined.contains("study") || combined.contains("school") || combined.contains("college") -> Icons.Rounded.School
+        combined.contains("shopping") || combined.contains("cloth") || combined.contains("fashion") -> Icons.Rounded.ShoppingBag
+        combined.contains("car") || combined.contains("vehicle") || combined.contains("bike") -> Icons.Rounded.DirectionsCar
+        combined.contains("investment") || combined.contains("stock") || combined.contains("mutual") -> Icons.Rounded.TrendingUp
+        combined.contains("emergency") || combined.contains("health") || combined.contains("medical") -> Icons.Rounded.Shield
+        else -> Icons.Rounded.Savings
+    }
+}
+
+fun getCategoryAccentColor(category: String): Color {
+    return when (category.lowercase()) {
+        "investment" -> Color(0xFF10B981)
+        "expenditure", "shopping" -> Color(0xFFF59E0B)
+        "travel", "holiday" -> Color(0xFF0EA5E9)
+        "tech" -> Color(0xFF6366F1)
+        "education" -> Color(0xFF8B5CF6)
+        "vehicle" -> Color(0xFFEC4899)
+        "emergency" -> Color(0xFFEF4444)
+        else -> Color(0xFF0D9488) // Sleek teal
+    }
+}
+
+// ==========================================
+// 📌 LEGACY EMBEDDED SECTION (MAINTAINED)
+// ==========================================
 @Composable
 fun SavingsGoalsSection(
     savingsGoals: List<SavingsGoal>,
@@ -42,1225 +1258,38 @@ fun SavingsGoalsSection(
     onQuickDeposit: (SavingsGoal, Double) -> Unit,
     onQuickDeduct: ((SavingsGoal, Double) -> Unit)? = null
 ) {
-    // Separate Safe Vault goal if exists for Hero Card display
-    val safeGoal = savingsGoals.find { it.name.contains("Safe Vault", ignoreCase = true) || it.name.contains("Monthly Safe", ignoreCase = true) }
-    val regularGoals = savingsGoals.filter { it.id != safeGoal?.id }
-
     Column(modifier = Modifier.fillMaxWidth()) {
-        // Safe Vault Hero Card (₹50 / Month Auto-Reserve)
-        if (safeGoal != null) {
-            SafeVaultBannerCard(
-                safeVaultAmount = safeGoal.currentAmount,
-                monthlyRate = if (safeGoal.contributionAmount > 0) safeGoal.contributionAmount else 50.0,
-                selectedLanguage = selectedLanguage,
-                onQuickDepositSafe = { amt -> onQuickDeposit(safeGoal, amt) },
-                onQuickDeductSafe = { amt -> onQuickDeduct?.invoke(safeGoal, amt) }
-            )
-            Spacer(modifier = Modifier.height(16.dp))
-        }
-
-        // Section Header
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier
-                        .size(34.dp)
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(SleekPrimary.copy(alpha = 0.15f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.Savings,
-                        contentDescription = null,
-                        tint = SleekPrimary,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-                Spacer(modifier = Modifier.width(10.dp))
-                Column {
-                    Text(
-                        text = LanguageManager.tr("Savings Goals", selectedLanguage),
-                        style = MaterialTheme.typography.titleMedium,
-                        color = SleekTextPrimary,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = "Save & deduct for major goals, gadgets & reserves",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = SleekTextSecondary,
-                        fontSize = 11.sp
-                    )
-                }
-            }
-
-            Surface(
+            Text(
+                text = "Saving Goals",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = SleekTextPrimary
+            )
+            OutlinedButton(
                 onClick = onAddGoalClick,
                 shape = RoundedCornerShape(20.dp),
-                color = SleekPrimary,
-                modifier = Modifier.testTag("add_savings_goal_btn")
+                border = BorderStroke(1.dp, SleekPrimary)
             ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.Add,
-                        contentDescription = null,
-                        tint = Color.White,
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        text = LanguageManager.tr("Create Goal", selectedLanguage),
-                        color = Color.White,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
+                Text("+ Add New", fontSize = 12.sp, color = SleekPrimary)
             }
         }
 
-        Spacer(modifier = Modifier.height(14.dp))
+        Spacer(modifier = Modifier.height(12.dp))
 
-        if (regularGoals.isEmpty() && safeGoal == null) {
-            Card(
-                shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = SleekSurface),
-                border = BorderStroke(1.dp, SleekBorder),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { onAddGoalClick() }
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(24.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text(
-                        text = "🎮 📱 ✈️",
-                        fontSize = 28.sp
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = "No Savings Goals Yet",
-                        style = MaterialTheme.typography.titleSmall,
-                        color = SleekTextPrimary,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "Set a target amount and start saving daily, weekly, or monthly!",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = SleekTextSecondary,
-                        fontSize = 12.sp
-                    )
-                }
-            }
+        if (savingsGoals.isEmpty()) {
+            Text("No saving goals yet. Tap '+ Add New' to get started!", fontSize = 12.sp, color = SleekTextSecondary)
         } else {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                regularGoals.forEach { goal ->
-                    SavingsGoalCard(
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                savingsGoals.forEach { goal ->
+                    SavingGoalCardItem(
                         goal = goal,
-                        selectedLanguage = selectedLanguage,
-                        onEdit = { onEditGoalClick(goal) },
-                        onDelete = { onDeleteGoalClick(goal) },
-                        onDeposit = { onDepositGoalClick(goal) },
-                        onDeduct = { onDeductGoalClick?.invoke(goal) ?: onDepositGoalClick(goal) },
-                        onQuickDeposit = { amount -> onQuickDeposit(goal, amount) },
-                        onQuickDeduct = { amount -> onQuickDeduct?.invoke(goal, amount) }
+                        onClick = { onDepositGoalClick(goal) }
                     )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun SavingsGoalCard(
-    goal: SavingsGoal,
-    selectedLanguage: String = "English",
-    onEdit: () -> Unit,
-    onDelete: () -> Unit,
-    onDeposit: () -> Unit,
-    onDeduct: () -> Unit = onDeposit,
-    onQuickDeposit: (Double) -> Unit,
-    onQuickDeduct: ((Double) -> Unit)? = null
-) {
-    val progressRatio = if (goal.targetAmount > 0) (goal.currentAmount / goal.targetAmount).toFloat() else 0f
-    val animatedProgress by animateFloatAsState(
-        targetValue = progressRatio.coerceIn(0f, 1f),
-        animationSpec = tween(600),
-        label = "goalProgress"
-    )
-
-    val percentInt = (progressRatio * 100).toInt()
-    val isCompleted = goal.currentAmount >= goal.targetAmount
-    val remainingAmount = (goal.targetAmount - goal.currentAmount).coerceAtLeast(0.0)
-
-    var showMenu by remember { mutableStateOf(false) }
-
-    // Calculated entry gap display
-    val calculatedGap = if (goal.isAutoGap) {
-        if (goal.contributionAmount > 0) goal.contributionAmount
-        else (goal.targetAmount / 10.0).coerceAtLeast(10.0)
-    } else {
-        goal.contributionAmount
-    }
-
-    val frequencyLabel = when (goal.frequency.uppercase()) {
-        "DAILY" -> "Daily Gap"
-        "WEEKLY" -> "Weekly Gap"
-        "MONTHLY" -> "Monthly Gap"
-        else -> "Manual Gap"
-    }
-
-    Card(
-        shape = RoundedCornerShape(22.dp),
-        colors = CardDefaults.cardColors(containerColor = SleekSurface),
-        border = BorderStroke(1.dp, if (isCompleted) Color(0xFF10B981) else SleekBorder),
-        modifier = Modifier
-            .fillMaxWidth()
-            .testTag("savings_goal_card_${goal.id}")
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            // Header Row: Emoji Tag, Title & Menu
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(42.dp)
-                            .clip(RoundedCornerShape(14.dp))
-                            .background(
-                                if (isCompleted) Color(0xFF10B981).copy(alpha = 0.2f)
-                                else SleekPrimaryContainer.copy(alpha = 0.3f)
-                            ),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = goal.iconTag.ifBlank { "🎮" },
-                            fontSize = 22.sp
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.width(12.dp))
-
-                    Column {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = goal.name,
-                                style = MaterialTheme.typography.titleMedium,
-                                color = SleekTextPrimary,
-                                fontWeight = FontWeight.Bold
-                            )
-                            if (isCompleted) {
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Box(
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(8.dp))
-                                        .background(Color(0xFF10B981))
-                                        .padding(horizontal = 6.dp, vertical = 2.dp)
-                                ) {
-                                    Text(
-                                        text = "REACHED 🎉",
-                                        color = Color.White,
-                                        fontSize = 9.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
-                            }
-                        }
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = "Target: ₹%,.0f".format(goal.targetAmount),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = SleekTextSecondary,
-                                fontSize = 11.sp
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(6.dp))
-                                    .background(Color(0xFF3B82F6).copy(alpha = 0.12f))
-                                    .padding(horizontal = 5.dp, vertical = 1.dp)
-                            ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(
-                                        imageVector = Icons.Rounded.Lock,
-                                        contentDescription = "Locked",
-                                        tint = Color(0xFF2563EB),
-                                        modifier = Modifier.size(10.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(3.dp))
-                                    Text(
-                                        text = "Locked: ₹%,.0f".format(goal.currentAmount),
-                                        color = Color(0xFF2563EB),
-                                        fontSize = 9.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-
-                Box {
-                    IconButton(
-                        onClick = { showMenu = true },
-                        modifier = Modifier.size(32.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.MoreVert,
-                            contentDescription = "Options",
-                            tint = SleekTextSecondary
-                        )
-                    }
-                    DropdownMenu(
-                        expanded = showMenu,
-                        onDismissRequest = { showMenu = false }
-                    ) {
-                        DropdownMenuItem(
-                            text = { Text("Edit Goal") },
-                            leadingIcon = { Icon(Icons.Rounded.Edit, contentDescription = null) },
-                            onClick = {
-                                showMenu = false
-                                onEdit()
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Delete Goal", color = Color(0xFFEF4444)) },
-                            leadingIcon = { Icon(Icons.Rounded.Delete, contentDescription = null, tint = Color(0xFFEF4444)) },
-                            onClick = {
-                                showMenu = false
-                                onDelete()
-                            }
-                        )
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(14.dp))
-
-            // Progress Line & Amounts
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Bottom
-            ) {
-                Column {
-                    Text(
-                        text = "Saved so far",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = SleekTextSecondary,
-                        fontSize = 10.sp
-                    )
-                    Text(
-                        text = "₹%,.0f".format(goal.currentAmount),
-                        style = MaterialTheme.typography.titleLarge,
-                        color = if (isCompleted) Color(0xFF10B981) else SleekPrimary,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-
-                Box(
-                    modifier = Modifier
-                        .clip(CircleShape)
-                        .background(
-                            if (isCompleted) Color(0xFF10B981).copy(alpha = 0.2f)
-                            else SleekPrimary.copy(alpha = 0.15f)
-                        )
-                        .padding(horizontal = 10.dp, vertical = 4.dp)
-                ) {
-                    Text(
-                        text = "$percentInt%",
-                        color = if (isCompleted) Color(0xFF10B981) else SleekPrimary,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Animated Progress Indicator Bar
-            LinearProgressIndicator(
-                progress = { animatedProgress },
-                color = if (isCompleted) Color(0xFF10B981) else SleekPrimary,
-                trackColor = SleekPrimary.copy(alpha = 0.15f),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(8.dp)
-                    .clip(RoundedCornerShape(4.dp))
-            )
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            // Frequency Gap & Remaining info row
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(SleekBg)
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = Icons.Rounded.Schedule,
-                        contentDescription = null,
-                        tint = SleekTextSecondary,
-                        modifier = Modifier.size(14.dp)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = "$frequencyLabel: ",
-                        fontSize = 11.sp,
-                        color = SleekTextSecondary
-                    )
-                    Text(
-                        text = if (calculatedGap > 0) "₹%,.0f".format(calculatedGap) else "Flexible",
-                        fontSize = 11.sp,
-                        color = SleekTextPrimary,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-
-                Text(
-                    text = if (remainingAmount > 0) "₹%,.0f left".format(remainingAmount) else "Completed!",
-                    fontSize = 11.sp,
-                    color = if (remainingAmount > 0) SleekTextSecondary else Color(0xFF10B981),
-                    fontWeight = FontWeight.Medium
-                )
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            // Action row: Quick Deposit/Deduct Chips & Action Buttons
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    val chip1 = if (calculatedGap > 0) calculatedGap else 100.0
-
-                    QuickDepositChip(
-                        label = "+₹%,.0f".format(chip1),
-                        onClick = { onQuickDeposit(chip1) }
-                    )
-
-                    if (goal.currentAmount > 0 && onQuickDeduct != null) {
-                        QuickDeductChip(
-                            label = "-₹%,.0f".format(chip1.coerceAtMost(goal.currentAmount)),
-                            onClick = { onQuickDeduct(chip1.coerceAtMost(goal.currentAmount)) }
-                        )
-                    }
-                }
-
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    if (goal.currentAmount > 0) {
-                        OutlinedButton(
-                            onClick = onDeduct,
-                            shape = RoundedCornerShape(12.dp),
-                            border = BorderStroke(1.dp, Color(0xFFEF4444)),
-                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                            modifier = Modifier.height(32.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Rounded.RemoveCircleOutline,
-                                contentDescription = null,
-                                tint = Color(0xFFEF4444),
-                                modifier = Modifier.size(13.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text = "Deduct",
-                                color = Color(0xFFEF4444),
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
-
-                    Button(
-                        onClick = onDeposit,
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = SleekPrimary),
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                        modifier = Modifier.height(32.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.AddCircleOutline,
-                            contentDescription = null,
-                            tint = Color.White,
-                            modifier = Modifier.size(13.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = LanguageManager.tr("Deposit", selectedLanguage),
-                            color = Color.White,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun QuickDepositChip(
-    label: String,
-    onClick: () -> Unit
-) {
-    Box(
-        modifier = Modifier
-            .clip(RoundedCornerShape(10.dp))
-            .background(SleekPrimary.copy(alpha = 0.1f))
-            .clickable { onClick() }
-            .padding(horizontal = 8.dp, vertical = 5.dp)
-    ) {
-        Text(
-            text = label,
-            fontSize = 11.sp,
-            color = SleekPrimary,
-            fontWeight = FontWeight.Bold
-        )
-    }
-}
-
-@Composable
-fun QuickDeductChip(
-    label: String,
-    onClick: () -> Unit
-) {
-    Box(
-        modifier = Modifier
-            .clip(RoundedCornerShape(10.dp))
-            .background(Color(0xFFEF4444).copy(alpha = 0.1f))
-            .clickable { onClick() }
-            .padding(horizontal = 8.dp, vertical = 5.dp)
-    ) {
-        Text(
-            text = label,
-            fontSize = 11.sp,
-            color = Color(0xFFEF4444),
-            fontWeight = FontWeight.Bold
-        )
-    }
-}
-
-@Composable
-fun AddEditSavingsGoalDialog(
-    goalToEdit: SavingsGoal? = null,
-    onDismiss: () -> Unit,
-    onSave: (name: String, targetAmount: Double, initialAmount: Double, frequency: String, contributionAmount: Double, isAutoGap: Boolean, iconTag: String) -> Unit
-) {
-    var name by remember { mutableStateOf(goalToEdit?.name ?: "") }
-    var targetAmountStr by remember { mutableStateOf(goalToEdit?.targetAmount?.takeIf { it > 0 }?.let { "%.0f".format(it) } ?: "") }
-    var currentAmountStr by remember { mutableStateOf(goalToEdit?.currentAmount?.takeIf { it > 0 }?.let { "%.0f".format(it) } ?: "") }
-    var frequency by remember { mutableStateOf(goalToEdit?.frequency ?: "WEEKLY") }
-    var isAutoGap by remember { mutableStateOf(goalToEdit?.isAutoGap ?: true) }
-    var manualContributionStr by remember { mutableStateOf(goalToEdit?.contributionAmount?.takeIf { it > 0 }?.let { "%.0f".format(it) } ?: "") }
-    var iconTag by remember { mutableStateOf(goalToEdit?.iconTag ?: "📱") }
-
-    val presetTags = listOf("Phone 📱", "Trip ✈️", "Car 🚗", "Emergency 🛡️", "Laptop 💻", "House 🏠")
-    val presetIcons = listOf("🎮", "📱", "✈️", "🚗", "🛡️", "💻", "🏠", "👟", "⌚", "🎸")
-
-    val targetDouble = targetAmountStr.toDoubleOrNull() ?: 0.0
-    val autoCalculatedGap = remember(targetDouble, frequency) {
-        if (targetDouble <= 0) 0.0
-        else when (frequency.uppercase()) {
-            "DAILY" -> targetDouble / 30.0
-            "WEEKLY" -> targetDouble / 10.0
-            "MONTHLY" -> targetDouble / 6.0
-            else -> targetDouble / 10.0
-        }
-    }
-
-    Dialog(onDismissRequest = onDismiss) {
-        Card(
-            colors = CardDefaults.cardColors(containerColor = SleekSurface),
-            border = BorderStroke(1.dp, SleekBorder),
-            shape = RoundedCornerShape(24.dp),
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 16.dp)
-        ) {
-            Column(
-                modifier = Modifier
-                    .padding(20.dp)
-                    .fillMaxWidth()
-            ) {
-                Text(
-                    text = if (goalToEdit == null) "Create Savings Goal" else "Edit Savings Goal",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = SleekTextPrimary,
-                    fontWeight = FontWeight.Bold
-                )
-
-                Spacer(modifier = Modifier.height(14.dp))
-
-                // Quick preset pills
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    presetTags.take(4).forEach { tag ->
-                        val textOnly = tag.split(" ").first()
-                        val emoji = tag.split(" ").last()
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(SleekPrimary.copy(alpha = 0.1f))
-                                .clickable {
-                                    if (name.isBlank() || name == "New Phone" || name == "Vacation") {
-                                        name = textOnly
-                                    }
-                                    iconTag = emoji
-                                }
-                                .padding(horizontal = 8.dp, vertical = 4.dp)
-                        ) {
-                            Text(
-                                text = tag,
-                                fontSize = 10.sp,
-                                color = SleekPrimary,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(14.dp))
-
-                // Icon Tag Selector Row
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Text(
-                        text = "Icon:",
-                        fontSize = 12.sp,
-                        color = SleekTextSecondary
-                    )
-                    presetIcons.take(6).forEach { emoji ->
-                        Box(
-                            modifier = Modifier
-                                .size(32.dp)
-                                .clip(CircleShape)
-                                .background(if (iconTag == emoji) SleekPrimaryContainer else SleekBg)
-                                .clickable { iconTag = emoji },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(text = emoji, fontSize = 14.sp)
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(14.dp))
-
-                // Goal Name Field
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    label = { Text("Goal Name (e.g. New Phone, Vacation, Emergency)", color = SleekTextSecondary) },
-                    singleLine = true,
-                    shape = RoundedCornerShape(12.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = SleekPrimary,
-                        unfocusedBorderColor = SleekBorder
-                    ),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("goal_name_input")
-                )
-
-                Spacer(modifier = Modifier.height(10.dp))
-
-                // Target Amount & Initial Amount
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    OutlinedTextField(
-                        value = targetAmountStr,
-                        onValueChange = { targetAmountStr = it },
-                        label = { Text("Target Prize (₹)", color = SleekTextSecondary) },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        singleLine = true,
-                        shape = RoundedCornerShape(12.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = SleekPrimary,
-                            unfocusedBorderColor = SleekBorder
-                        ),
-                        modifier = Modifier
-                            .weight(1f)
-                            .testTag("target_amount_input")
-                    )
-
-                    OutlinedTextField(
-                        value = currentAmountStr,
-                        onValueChange = { currentAmountStr = it },
-                        label = { Text("Initial Saved (₹)", color = SleekTextSecondary) },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        singleLine = true,
-                        shape = RoundedCornerShape(12.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = SleekPrimary,
-                            unfocusedBorderColor = SleekBorder
-                        ),
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(14.dp))
-
-                // Saving Mode: Automatic vs Manual Buttons
-                Text(
-                    text = "Saving Mode",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = SleekTextSecondary,
-                    fontWeight = FontWeight.Bold
-                )
-                Spacer(modifier = Modifier.height(6.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    val modes = listOf(true to "Automatic ⚡", false to "Manual 🖐️")
-                    modes.forEach { (modeVal, label) ->
-                        val isSel = isAutoGap == modeVal
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(if (isSel) SleekPrimary else SleekBg)
-                                .clickable { isAutoGap = modeVal }
-                                .padding(vertical = 10.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = label,
-                                fontSize = 12.sp,
-                                color = if (isSel) Color.White else SleekTextSecondary,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
-                }
-
-                if (isAutoGap) {
-                    Spacer(modifier = Modifier.height(14.dp))
-                    Text(
-                        text = "Automatic Deduction Interval",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = SleekTextSecondary,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Spacer(modifier = Modifier.height(6.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        val frequencies = listOf("DAILY" to "Daily", "WEEKLY" to "Weekly", "MONTHLY" to "Monthly")
-                        frequencies.forEach { (key, label) ->
-                            val isSel = frequency.equals(key, ignoreCase = true)
-                            Box(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .clip(RoundedCornerShape(10.dp))
-                                    .background(if (isSel) SleekPrimaryContainer.copy(alpha = 0.8f) else SleekBg)
-                                    .clickable { frequency = key }
-                                    .padding(vertical = 8.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = label,
-                                    fontSize = 11.sp,
-                                    color = if (isSel) SleekPrimary else SleekTextSecondary,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(10.dp))
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(SleekPrimary.copy(alpha = 0.08f))
-                            .padding(10.dp)
-                    ) {
-                        Text(
-                            text = if (targetDouble > 0) "💡 Money will be deducted automatically ~₹%,.0f / %s".format(autoCalculatedGap, frequency.lowercase())
-                            else "Enter target prize to view automatic deduction estimation",
-                            fontSize = 11.sp,
-                            color = SleekPrimary,
-                            fontWeight = FontWeight.Medium
-                        )
-                    }
-                } else {
-                    Spacer(modifier = Modifier.height(10.dp))
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(SleekPrimary.copy(alpha = 0.08f))
-                            .padding(10.dp)
-                    ) {
-                        Text(
-                            text = "💡 Manual saving: You choose when to add money to this goal.",
-                            fontSize = 11.sp,
-                            color = SleekPrimary,
-                            fontWeight = FontWeight.Medium
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(20.dp))
-
-                // Action Buttons
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End
-                ) {
-                    TextButton(onClick = onDismiss) {
-                        Text("Cancel", color = SleekTextSecondary)
-                    }
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Button(
-                        onClick = {
-                            val target = targetAmountStr.toDoubleOrNull() ?: 0.0
-                            val initial = currentAmountStr.toDoubleOrNull() ?: 0.0
-                            val manualVal = manualContributionStr.toDoubleOrNull() ?: 0.0
-                            val finalGap = if (isAutoGap) autoCalculatedGap else manualVal
-                            if (name.isNotBlank() && target > 0) {
-                                onSave(name, target, initial, frequency, finalGap, isAutoGap, iconTag)
-                                onDismiss()
-                            }
-                        },
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = SleekPrimary)
-                    ) {
-                        Text("Save Goal", color = Color.White, fontWeight = FontWeight.Bold)
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun DepositToGoalDialog(
-    goal: SavingsGoal,
-    accounts: List<Account> = emptyList(),
-    initialMode: String = "DEPOSIT",
-    onDismiss: () -> Unit,
-    onConfirmDeposit: (amount: Double, accountId: Int?) -> Unit,
-    onConfirmDeduct: ((amount: Double, accountId: Int?) -> Unit)? = null
-) {
-    var mode by remember { mutableStateOf(initialMode) } // "DEPOSIT" or "DEDUCT"
-    var amountStr by remember { mutableStateOf("") }
-    var selectedAccountId by remember { mutableStateOf<Int?>(accounts.firstOrNull()?.id) }
-
-    val remaining = (goal.targetAmount - goal.currentAmount).coerceAtLeast(0.0)
-    val maxDeductible = goal.currentAmount
-
-    Dialog(onDismissRequest = onDismiss) {
-        Card(
-            colors = CardDefaults.cardColors(containerColor = SleekSurface),
-            border = BorderStroke(1.dp, SleekBorder),
-            shape = RoundedCornerShape(24.dp),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(
-                modifier = Modifier
-                    .padding(20.dp)
-                    .fillMaxWidth()
-            ) {
-                // Goal Header Info
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(text = goal.iconTag.ifBlank { "🎮" }, fontSize = 24.sp)
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Column {
-                        Text(
-                            text = if (mode == "DEPOSIT") "Deposit to ${goal.name}" else "Deduct from ${goal.name}",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = SleekTextPrimary,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = "Saved: ₹%,.0f of ₹%,.0f".format(goal.currentAmount, goal.targetAmount),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = SleekTextSecondary
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(14.dp))
-
-                // Mode Segmented Switcher (Deposit / Deduct)
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(SleekBg)
-                        .padding(3.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(if (mode == "DEPOSIT") SleekPrimary else Color.Transparent)
-                            .clickable { mode = "DEPOSIT" }
-                            .padding(vertical = 8.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "+ Deposit Money",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = if (mode == "DEPOSIT") Color.White else SleekTextSecondary
-                        )
-                    }
-
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(if (mode == "DEDUCT") Color(0xFFEF4444) else Color.Transparent)
-                            .clickable { mode = "DEDUCT" }
-                            .padding(vertical = 8.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "- Deduct / Withdraw",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = if (mode == "DEDUCT") Color.White else SleekTextSecondary
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(14.dp))
-
-                // Preset Chips based on active mode
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    if (mode == "DEPOSIT") {
-                        val presetAmounts = listOf(100.0, 500.0, 1000.0, remaining)
-                        presetAmounts.distinct().filter { it > 0 }.take(4).forEach { amt ->
-                            Box(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(SleekPrimary.copy(alpha = 0.12f))
-                                    .clickable { amountStr = "%.0f".format(amt) }
-                                    .padding(vertical = 6.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = if (amt == remaining) "Target Gap" else "+₹%,.0f".format(amt),
-                                    fontSize = 10.sp,
-                                    color = SleekPrimary,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                        }
-                    } else {
-                        val presetAmounts = listOf(100.0, 500.0, 1000.0, maxDeductible)
-                        presetAmounts.distinct().filter { it > 0 }.take(4).forEach { amt ->
-                            Box(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(Color(0xFFEF4444).copy(alpha = 0.12f))
-                                    .clickable { amountStr = "%.0f".format(amt) }
-                                    .padding(vertical = 6.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = if (amt == maxDeductible) "All Saved" else "-₹%,.0f".format(amt),
-                                    fontSize = 10.sp,
-                                    color = Color(0xFFEF4444),
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(14.dp))
-
-                OutlinedTextField(
-                    value = amountStr,
-                    onValueChange = { amountStr = it },
-                    label = { Text(if (mode == "DEPOSIT") "Deposit Amount (₹)" else "Deduct / Withdraw Amount (₹)", color = SleekTextSecondary) },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    singleLine = true,
-                    shape = RoundedCornerShape(12.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = if (mode == "DEPOSIT") SleekPrimary else Color(0xFFEF4444),
-                        unfocusedBorderColor = SleekBorder
-                    ),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("deposit_amount_input")
-                )
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(if (mode == "DEPOSIT") Color(0xFF2563EB).copy(alpha = 0.1f) else Color(0xFFEF4444).copy(alpha = 0.1f))
-                        .padding(horizontal = 10.dp, vertical = 6.dp)
-                ) {
-                    Icon(
-                        imageVector = if (mode == "DEPOSIT") Icons.Rounded.Lock else Icons.Rounded.LockOpen,
-                        contentDescription = "Info",
-                        tint = if (mode == "DEPOSIT") Color(0xFF2563EB) else Color(0xFFEF4444),
-                        modifier = Modifier.size(14.dp)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = if (mode == "DEPOSIT")
-                            "Deposited money will be locked in this goal & deducted from liquid balance."
-                        else
-                            "Deducted money will be unlocked and returned to your spendable balance.",
-                        fontSize = 11.sp,
-                        color = if (mode == "DEPOSIT") Color(0xFF2563EB) else Color(0xFFEF4444),
-                        fontWeight = FontWeight.Medium
-                    )
-                }
-
-                if (accounts.isNotEmpty()) {
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Text(
-                        text = "Source/Destination Account:",
-                        fontSize = 11.sp,
-                        color = SleekTextSecondary,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Spacer(modifier = Modifier.height(6.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        accounts.take(3).forEach { acc ->
-                            val isSelected = selectedAccountId == acc.id
-                            Box(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .clip(RoundedCornerShape(10.dp))
-                                    .background(if (isSelected) SleekPrimary else SleekBg)
-                                    .clickable { selectedAccountId = acc.id }
-                                    .padding(vertical = 6.dp, horizontal = 4.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = acc.name,
-                                    fontSize = 10.sp,
-                                    color = if (isSelected) Color.White else SleekTextSecondary,
-                                    fontWeight = FontWeight.Bold,
-                                    maxLines = 1
-                                )
-                            }
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(20.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End
-                ) {
-                    TextButton(onClick = onDismiss) {
-                        Text("Cancel", color = SleekTextSecondary)
-                    }
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Button(
-                        onClick = {
-                            val amt = amountStr.toDoubleOrNull() ?: 0.0
-                            if (amt > 0) {
-                                if (mode == "DEPOSIT") {
-                                    onConfirmDeposit(amt, selectedAccountId)
-                                } else {
-                                    onConfirmDeduct?.invoke(amt, selectedAccountId) ?: onConfirmDeposit(amt, selectedAccountId)
-                                }
-                                onDismiss()
-                            }
-                        },
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = if (mode == "DEPOSIT") SleekPrimary else Color(0xFFEF4444)
-                        )
-                    ) {
-                        Text(
-                            text = if (mode == "DEPOSIT") "Confirm Deposit" else "Confirm Deduction",
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun SafeVaultBannerCard(
-    safeVaultAmount: Double,
-    monthlyRate: Double = 50.0,
-    selectedLanguage: String = "English",
-    onQuickDepositSafe: (Double) -> Unit,
-    onQuickDeductSafe: (Double) -> Unit
-) {
-    Card(
-        shape = RoundedCornerShape(22.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF1E1B4B)),
-        modifier = Modifier
-            .fillMaxWidth()
-            .testTag("safe_vault_card")
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier
-                            .size(42.dp)
-                            .clip(RoundedCornerShape(14.dp))
-                            .background(Color(0xFF6366F1).copy(alpha = 0.3f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(text = "🔐", fontSize = 22.sp)
-                    }
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Column {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = "Monthly Safe Vault",
-                                style = MaterialTheme.typography.titleMedium,
-                                color = Color.White,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(6.dp))
-                                    .background(Color(0xFF10B981))
-                                    .padding(horizontal = 6.dp, vertical = 2.dp)
-                            ) {
-                                Text(
-                                    text = "AUTO ₹%,.0f/MO".format(monthlyRate),
-                                    color = Color.White,
-                                    fontSize = 9.sp,
-                                    fontWeight = FontWeight.ExtraBold
-                                )
-                            }
-                        }
-                        Text(
-                            text = "Auto-reserves ₹%,.0f each month automatically".format(monthlyRate),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Color(0xFFA5B4FC),
-                            fontSize = 11.sp
-                        )
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(14.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Bottom
-            ) {
-                Column {
-                    Text(
-                        text = "Total Safe Balance Locked",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = Color(0xFFA5B4FC),
-                        fontSize = 10.sp
-                    )
-                    Text(
-                        text = "₹%,.0f".format(safeVaultAmount),
-                        style = MaterialTheme.typography.titleLarge,
-                        color = Color(0xFF818CF8),
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    // Quick +50 Deposit Button
-                    Surface(
-                        onClick = { onQuickDepositSafe(monthlyRate) },
-                        shape = RoundedCornerShape(10.dp),
-                        color = Color(0xFF6366F1)
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(Icons.Rounded.Add, contentDescription = null, tint = Color.White, modifier = Modifier.size(13.dp))
-                            Spacer(modifier = Modifier.width(3.dp))
-                            Text(text = "+₹%,.0f".format(monthlyRate), color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                        }
-                    }
-
-                    if (safeVaultAmount > 0) {
-                        // Quick -50 Deduct Button
-                        Surface(
-                            onClick = { onQuickDeductSafe(monthlyRate.coerceAtMost(safeVaultAmount)) },
-                            shape = RoundedCornerShape(10.dp),
-                            color = Color(0xFFEF4444).copy(alpha = 0.2f),
-                            border = BorderStroke(1.dp, Color(0xFFEF4444))
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(Icons.Rounded.Remove, contentDescription = null, tint = Color(0xFFEF4444), modifier = Modifier.size(13.dp))
-                                Spacer(modifier = Modifier.width(3.dp))
-                                Text(text = "-₹%,.0f".format(monthlyRate.coerceAtMost(safeVaultAmount)), color = Color(0xFFEF4444), fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                            }
-                        }
-                    }
                 }
             }
         }
