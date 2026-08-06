@@ -41,6 +41,7 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -617,9 +618,17 @@ fun SavingGoalsFullScreen(
         }
 
         // Goal Detail & Quick Deposit Sheet
+        val expenses by viewModel.expenses.collectAsStateWithLifecycle()
+        val availableNetBalance = remember(expenses) {
+            val inc = expenses.filter { it.type == "INCOME" }.sumOf { it.amount }
+            val exp = expenses.filter { it.type != "INCOME" }.sumOf { it.amount }
+            (inc - exp).coerceAtLeast(0.0)
+        }
+
         selectedGoalForDeposit?.let { goal ->
             GoalDepositDetailBottomSheet(
                 goal = goal,
+                availableNetBalance = availableNetBalance,
                 onDismiss = { selectedGoalForDeposit = null },
                 onDeposit = { amount ->
                     viewModel.quickDepositToGoal(goal, amount)
@@ -1344,6 +1353,7 @@ fun AddEditSavingsGoalDialog(
 @Composable
 fun GoalDepositDetailBottomSheet(
     goal: SavingsGoal,
+    availableNetBalance: Double = 0.0,
     onDismiss: () -> Unit,
     onDeposit: (Double) -> Unit,
     onDeduct: (Double) -> Unit,
@@ -1351,11 +1361,17 @@ fun GoalDepositDetailBottomSheet(
     onDelete: () -> Unit
 ) {
     val haptic = LocalHapticFeedback.current
+    var isDepositMode by remember { mutableStateOf(true) } // true: Deposit, false: Withdraw
     var depositInput by remember { mutableStateOf("") }
-    var errorMessage by remember { mutableStateOf<String?>(null) }
+    var isAmountEditing by remember { mutableStateOf(false) }
 
     val remaining = (goal.targetAmount - goal.currentAmount).coerceAtLeast(0.0)
     val primaryAccent = getCategoryAccentColor(goal.category)
+    val activeColor = if (isDepositMode) Color(0xFF10B981) else Color(0xFFEF4444)
+    val activeSoftBg = if (isDepositMode) Color(0xFFDCFCE7) else Color(0xFFFEE2E2)
+
+    val enteredAmount = depositInput.toDoubleOrNull() ?: 0.0
+    val isExceedingNetBalance = isDepositMode && (enteredAmount > availableNetBalance || availableNetBalance <= 0)
 
     Dialog(onDismissRequest = onDismiss) {
         Card(
@@ -1367,10 +1383,12 @@ fun GoalDepositDetailBottomSheet(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(22.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                    .padding(22.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                // Top Header Row
+                // Top Header Row with Goal Avatar & Controls
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -1429,7 +1447,7 @@ fun GoalDepositDetailBottomSheet(
                     }
                 }
 
-                // Progress Banner
+                // Goal Status Banner
                 Surface(
                     shape = RoundedCornerShape(18.dp),
                     color = primaryAccent.copy(alpha = 0.12f),
@@ -1438,7 +1456,7 @@ fun GoalDepositDetailBottomSheet(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(16.dp),
+                            .padding(14.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -1446,7 +1464,7 @@ fun GoalDepositDetailBottomSheet(
                             Text("Saved so far", fontSize = 11.sp, color = SleekTextSecondary)
                             Text(
                                 "₹%,.2f".format(goal.currentAmount),
-                                fontSize = 20.sp,
+                                fontSize = 18.sp,
                                 fontWeight = FontWeight.Black,
                                 color = primaryAccent
                             )
@@ -1455,7 +1473,7 @@ fun GoalDepositDetailBottomSheet(
                             Text("Target Amount", fontSize = 11.sp, color = SleekTextSecondary)
                             Text(
                                 "₹%,.2f".format(goal.targetAmount),
-                                fontSize = 15.sp,
+                                fontSize = 14.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = SleekTextPrimary
                             )
@@ -1463,33 +1481,146 @@ fun GoalDepositDetailBottomSheet(
                     }
                 }
 
-                // Deposit Money Input Section
-                Text(
-                    text = "Deposit Money to Goal",
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = SleekTextPrimary
-                )
+                // Circular Transaction Type Switcher (Matching Main Balance Popup Style)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Deposit Circle Button
+                    val isDep = isDepositMode
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(20.dp))
+                            .clickable {
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                isDepositMode = true
+                            }
+                            .padding(8.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(60.dp)
+                                .clip(CircleShape)
+                                .background(if (isDep) Color(0xFFDCFCE7) else SleekBg)
+                                .border(
+                                    width = if (isDep) 2.dp else 1.dp,
+                                    color = if (isDep) Color(0xFF10B981) else SleekBorder,
+                                    shape = CircleShape
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.ArrowDownward,
+                                contentDescription = "Deposit to Goal",
+                                tint = if (isDep) Color(0xFF10B981) else SleekTextSecondary,
+                                modifier = Modifier.size(26.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "Deposit",
+                            fontSize = 12.sp,
+                            fontWeight = if (isDep) FontWeight.Bold else FontWeight.Medium,
+                            color = if (isDep) Color(0xFF10B981) else SleekTextSecondary
+                        )
+                    }
 
-                OutlinedTextField(
-                    value = depositInput,
-                    onValueChange = {
-                        depositInput = it
-                        errorMessage = null
-                    },
-                    label = { Text("Enter Deposit Amount") },
-                    prefix = { Text("₹ ", fontWeight = FontWeight.Bold, color = SleekPrimary) },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    singleLine = true,
-                    shape = RoundedCornerShape(14.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = SleekPrimary,
-                        unfocusedBorderColor = SleekBorder
-                    ),
-                    modifier = Modifier.fillMaxWidth()
-                )
+                    // Withdraw Circle Button
+                    val isWith = !isDepositMode
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(20.dp))
+                            .clickable {
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                isDepositMode = false
+                            }
+                            .padding(8.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(60.dp)
+                                .clip(CircleShape)
+                                .background(if (isWith) Color(0xFFFEE2E2) else SleekBg)
+                                .border(
+                                    width = if (isWith) 2.dp else 1.dp,
+                                    color = if (isWith) Color(0xFFEF4444) else SleekBorder,
+                                    shape = CircleShape
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.ArrowUpward,
+                                contentDescription = "Withdraw from Goal",
+                                tint = if (isWith) Color(0xFFEF4444) else SleekTextSecondary,
+                                modifier = Modifier.size(26.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "Withdraw",
+                            fontSize = 12.sp,
+                            fontWeight = if (isWith) FontWeight.Bold else FontWeight.Medium,
+                            color = if (isWith) Color(0xFFEF4444) else SleekTextSecondary
+                        )
+                    }
+                }
 
-                // Quick Preset Deposit Chips
+                // Big Amount Display Box (Circular Dial Style)
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(activeSoftBg)
+                        .border(1.dp, activeColor.copy(alpha = 0.4f), RoundedCornerShape(20.dp))
+                        .clickable { isAmountEditing = true }
+                        .padding(16.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        if (isAmountEditing) {
+                            OutlinedTextField(
+                                value = depositInput,
+                                onValueChange = { depositInput = it },
+                                placeholder = { Text("0", fontSize = 26.sp, color = SleekTextSecondary) },
+                                singleLine = true,
+                                textStyle = LocalTextStyle.current.copy(
+                                    fontSize = 26.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = activeColor,
+                                    textAlign = TextAlign.Center
+                                ),
+                                keyboardOptions = KeyboardOptions(
+                                    keyboardType = KeyboardType.Number,
+                                    imeAction = ImeAction.Done
+                                ),
+                                modifier = Modifier.width(140.dp)
+                            )
+                        } else {
+                            val formatted = if (enteredAmount > 0) "₹%,.0f".format(enteredAmount) else "₹0"
+                            Text(
+                                text = formatted,
+                                fontSize = 30.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = activeColor,
+                                textAlign = TextAlign.Center
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = if (enteredAmount > 0) "Tap to edit amount" else "Tap to enter transaction amount",
+                                fontSize = 11.sp,
+                                color = SleekTextSecondary
+                            )
+                        }
+                    }
+                }
+
+                // Preset Chips
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     modifier = Modifier.fillMaxWidth()
@@ -1499,11 +1630,12 @@ fun GoalDepositDetailBottomSheet(
                             modifier = Modifier
                                 .weight(1f)
                                 .clip(RoundedCornerShape(12.dp))
-                                .background(SleekPrimaryContainer.copy(alpha = 0.2f))
-                                .border(1.dp, SleekBorder, RoundedCornerShape(12.dp))
+                                .background(activeSoftBg)
+                                .border(1.dp, activeColor.copy(alpha = 0.2f), RoundedCornerShape(12.dp))
                                 .clickable {
                                     haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                    depositInput = preset.toInt().toString()
+                                    val current = depositInput.toDoubleOrNull() ?: 0.0
+                                    depositInput = "%.0f".format(current + preset)
                                 }
                                 .padding(vertical = 8.dp),
                             contentAlignment = Alignment.Center
@@ -1512,54 +1644,98 @@ fun GoalDepositDetailBottomSheet(
                                 text = "+₹%,.0f".format(preset),
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = SleekPrimary
+                                color = activeColor
                             )
                         }
                     }
                 }
 
-                errorMessage?.let {
-                    Text(it, color = Color(0xFFEF4444), fontSize = 12.sp)
-                }
-
-                // Action Buttons
-                Row(
+                // Available Net Balance & Lock Warning Card
+                Column(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    if (goal.currentAmount > 0) {
-                        OutlinedButton(
-                            onClick = {
-                                val amt = depositInput.toDoubleOrNull() ?: 0.0
-                                if (amt <= 0) {
-                                    errorMessage = "Enter valid deduction amount"
-                                    return@OutlinedButton
-                                }
-                                onDeduct(amt)
-                            },
-                            shape = RoundedCornerShape(16.dp),
-                            border = BorderStroke(1.dp, Color(0xFFEF4444)),
-                            modifier = Modifier.weight(1f)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Available Net Balance:",
+                            fontSize = 11.sp,
+                            color = SleekTextSecondary
+                        )
+                        Text(
+                            text = "₹%,.2f".format(availableNetBalance),
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (availableNetBalance > 0) Color(0xFF10B981) else Color(0xFFEF4444)
+                        )
+                    }
+
+                    if (isDepositMode && isExceedingNetBalance) {
+                        Surface(
+                            shape = RoundedCornerShape(14.dp),
+                            color = Color(0xFFFEF2F2),
+                            border = BorderStroke(1.dp, Color(0xFFFCA5A5)),
+                            modifier = Modifier.fillMaxWidth()
                         ) {
-                            Text("Withdraw", color = Color(0xFFEF4444), fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                            Row(
+                                modifier = Modifier.padding(10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Lock,
+                                    contentDescription = "Balance Locked",
+                                    tint = Color(0xFFEF4444),
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Text(
+                                    text = "🔒 Total Balance Locked: Deposit of ₹%,.2f exceeds available net balance (₹%,.2f). Add Income first!".format(enteredAmount, availableNetBalance),
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF991B1B)
+                                )
+                            }
                         }
                     }
+                }
 
-                    Button(
-                        onClick = {
-                            val amt = depositInput.toDoubleOrNull() ?: 0.0
-                            if (amt <= 0) {
-                                errorMessage = "Enter valid deposit amount"
-                                return@Button
+                // Main Action Confirm Button
+                Button(
+                    onClick = {
+                        if (enteredAmount <= 0) return@Button
+                        if (isDepositMode) {
+                            if (isExceedingNetBalance) return@Button
+                            onDeposit(enteredAmount)
+                        } else {
+                            if (enteredAmount > goal.currentAmount) {
+                                onDeduct(goal.currentAmount)
+                            } else {
+                                onDeduct(enteredAmount)
                             }
-                            onDeposit(amt)
-                        },
-                        shape = RoundedCornerShape(16.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = SleekPrimary),
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text("+ Deposit", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-                    }
+                        }
+                    },
+                    enabled = enteredAmount > 0 && !(isDepositMode && isExceedingNetBalance),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = activeColor,
+                        disabledContainerColor = activeColor.copy(alpha = 0.3f)
+                    ),
+                    shape = RoundedCornerShape(18.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(52.dp)
+                ) {
+                    Text(
+                        text = if (isDepositMode && isExceedingNetBalance) "🔒 Net Balance Locked"
+                               else if (isDepositMode && enteredAmount > 0) "Confirm Deposit (+₹%,.0f)".format(enteredAmount)
+                               else if (!isDepositMode && enteredAmount > 0) "Confirm Withdrawal (-₹%,.0f)".format(enteredAmount)
+                               else "Enter Amount",
+                        color = Color.White,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold
+                    )
                 }
             }
         }

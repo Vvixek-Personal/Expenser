@@ -611,6 +611,13 @@ class FinanceViewModel(
         }
     }
 
+    fun getAvailableNetBalance(): Double {
+        val allExp = expenses.value
+        val totalInc = allExp.filter { it.type == "INCOME" }.sumOf { it.amount }
+        val totalExp = allExp.filter { it.type != "INCOME" }.sumOf { it.amount }
+        return totalInc - totalExp
+    }
+
     // DB Operations
     fun addExpense(
         amount: Double,
@@ -620,6 +627,13 @@ class FinanceViewModel(
         imagePath: String? = null,
         type: String = "EXPENSE"
     ) {
+        if (type == "EXPENSE") {
+            val available = getAvailableNetBalance()
+            if (amount > available) {
+                _toastMessage.value = "🔒 Total Balance Locked: Cannot expense ₹%,.2f! Exceeds available net balance (₹%,.2f)".format(amount, available.coerceAtLeast(0.0))
+                return
+            }
+        }
         viewModelScope.launch {
             repository.insertExpense(
                 Expense(
@@ -665,6 +679,13 @@ class FinanceViewModel(
     }
 
     fun addTransaction(title: String, amount: Double, type: String, category: String, accountId: Int) {
+        if (type == "EXPENSE") {
+            val available = getAvailableNetBalance()
+            if (amount > available) {
+                _toastMessage.value = "🔒 Total Balance Locked: Cannot expense ₹%,.2f! Exceeds available net balance (₹%,.2f)".format(amount, available.coerceAtLeast(0.0))
+                return
+            }
+        }
         viewModelScope.launch {
             repository.insertTransaction(
                 Transaction(
@@ -746,6 +767,11 @@ class FinanceViewModel(
 
     fun quickDepositToGoal(goal: SavingsGoal, amount: Double) {
         if (amount <= 0) return
+        val available = getAvailableNetBalance()
+        if (amount > available) {
+            _toastMessage.value = "🔒 Goal Deposit Locked: Cannot deposit ₹%,.2f! Exceeds available net balance (₹%,.2f)".format(amount, available.coerceAtLeast(0.0))
+            return
+        }
         viewModelScope.launch {
             val updated = goal.copy(currentAmount = goal.currentAmount + amount)
             repository.updateSavingsGoal(updated)
