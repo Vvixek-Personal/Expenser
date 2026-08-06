@@ -28,7 +28,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
@@ -185,6 +187,7 @@ fun FinanceAppScreen(viewModel: FinanceViewModel) {
     var prefilledDateForAddDialog by remember { mutableStateOf<Long?>(null) }
     var editingExpense by remember { mutableStateOf<Expense?>(null) }
     var viewingDetailExpense by remember { mutableStateOf<Expense?>(null) }
+    var recordedTransactionInfo by remember { mutableStateOf<RecordedTransactionInfo?>(null) }
 
     var activeSettingsSubScreen by remember { mutableStateOf<SettingsSubScreen?>(null) }
 
@@ -349,7 +352,20 @@ fun FinanceAppScreen(viewModel: FinanceViewModel) {
                         viewModel.addExpense(amount, category, date, note, imagePath, type)
                         viewModel.refreshUsageData()
                         showAddExpenseDialog = false
+                        recordedTransactionInfo = RecordedTransactionInfo(
+                            amount = amount,
+                            category = category,
+                            type = type,
+                            note = note
+                        )
                     }
+                )
+            }
+
+            if (recordedTransactionInfo != null) {
+                TransactionSuccessDialog(
+                    info = recordedTransactionInfo!!,
+                    onDismiss = { recordedTransactionInfo = null }
                 )
             }
 
@@ -1626,9 +1642,9 @@ fun Image1TransactionRow(
                 }
             }
 
-            // Right: Amount +$5,710.20 (Green) / -$124.55 (Red)
+            // Right: Amount +₹5,710.20 (Green) / -₹124.55 (Red)
             Text(
-                text = String.format("%s$%,.2f", if (isIncome) "+" else "-", expense.amount),
+                text = String.format("%s₹%,.2f", if (isIncome) "+" else "-", expense.amount),
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Bold,
                 color = if (isIncome) Color(0xFF16A34A) else Color(0xFF991B1B)
@@ -1927,7 +1943,7 @@ fun AnalyticsStatCard(
 }
 
 // ==========================================
-// 3️⃣ ANALYTICS TAB (IMAGE 1 & IMAGE 2 INPIRED DESIGN)
+// 3️⃣ ANALYTICS TAB (REWORKED WITH DEFAULT APP STYLE & ANIMATED CHARTS)
 // ==========================================
 @Composable
 fun AnalyticsTab(
@@ -1935,14 +1951,13 @@ fun AnalyticsTab(
     onAddClick: () -> Unit,
     onProfileClick: () -> Unit = {}
 ) {
-    val expenses by viewModel.filteredExpenses.collectAsStateWithLifecycle()
     val allExpenses by viewModel.expenses.collectAsStateWithLifecycle()
     val userName by viewModel.userName.collectAsStateWithLifecycle()
     val profileImageUri by viewModel.userProfileImageUri.collectAsStateWithLifecycle()
 
     var selectedTimeFilter by remember { mutableStateOf("7D") }
     var showExportDialog by remember { mutableStateOf(false) }
-    val timeFilters = listOf("1H", "24H", "7D", "30D", "1M", "6M", "1Y")
+    val timeFilters = listOf("7D", "30D", "1M", "6M", "1Y", "All")
 
     val initials = remember(userName) {
         if (!userName.isNullOrBlank()) {
@@ -1950,18 +1965,10 @@ fun AnalyticsTab(
         } else "U"
     }
 
-    // Filter expenses based on time filter
+    // Filter expenses based on selected time filter
     val filteredPeriodExpenses = remember(allExpenses, selectedTimeFilter) {
         val now = Calendar.getInstance()
         when (selectedTimeFilter) {
-            "1H" -> {
-                val start = now.timeInMillis - 3600 * 1000L
-                allExpenses.filter { it.date >= start }
-            }
-            "24H" -> {
-                val start = now.timeInMillis - 24 * 3600 * 1000L
-                allExpenses.filter { it.date >= start }
-            }
             "7D" -> {
                 val start = now.timeInMillis - 7 * 24 * 3600 * 1000L
                 allExpenses.filter { it.date >= start }
@@ -1993,18 +2000,12 @@ fun AnalyticsTab(
         }
     }
 
-    val expenseList = filteredPeriodExpenses.filter { it.type != "INCOME" }
-    val incomeList = filteredPeriodExpenses.filter { it.type == "INCOME" }
+    val expenseList = remember(filteredPeriodExpenses) { filteredPeriodExpenses.filter { it.type != "INCOME" } }
+    val incomeList = remember(filteredPeriodExpenses) { filteredPeriodExpenses.filter { it.type == "INCOME" } }
 
-    val totalSpent = expenseList.sumOf { it.amount }
-    val totalIncome = incomeList.sumOf { it.amount }
-
-    // Category breakdown
-    val categoryTotals = remember(expenseList) {
-        expenseList.groupBy { it.category }
-            .mapValues { entry -> entry.value.sumOf { it.amount } }
-            .entries.sortedByDescending { it.value }
-    }
+    val totalSpent = remember(expenseList) { expenseList.sumOf { it.amount } }
+    val totalIncome = remember(incomeList) { incomeList.sumOf { it.amount } }
+    val netBalance = totalIncome - totalSpent
 
     val context = LocalContext.current
 
@@ -2038,14 +2039,14 @@ fun AnalyticsTab(
                             ) {
                                 Icon(Icons.Default.FileDownload, contentDescription = null, tint = SleekPrimary, modifier = Modifier.size(20.dp))
                             }
-                            Text("Export Analytics", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = SleekTextPrimary)
+                            Text("Export Report", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = SleekTextPrimary)
                         }
                         IconButton(onClick = { showExportDialog = false }, modifier = Modifier.size(28.dp)) {
                             Icon(Icons.Default.Close, contentDescription = "Close", tint = SleekTextSecondary, modifier = Modifier.size(18.dp))
                         }
                     }
 
-                    Text("Download or share report for period ($selectedTimeFilter):", fontSize = 13.sp, color = SleekTextSecondary)
+                    Text("Export analytics data for period ($selectedTimeFilter):", fontSize = 13.sp, color = SleekTextSecondary)
 
                     Button(
                         onClick = {
@@ -2117,11 +2118,11 @@ fun AnalyticsTab(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF0F172A))
+            .background(SleekBg)
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 16.dp, vertical = 12.dp)
     ) {
-        // Top Bar
+        // App Default Top Header
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -2157,7 +2158,7 @@ fun AnalyticsTab(
             Text(
                 text = "Analytics",
                 style = MaterialTheme.typography.titleLarge,
-                color = Color.White,
+                color = SleekTextPrimary,
                 fontWeight = FontWeight.Bold,
                 fontSize = 22.sp
             )
@@ -2167,13 +2168,13 @@ fun AnalyticsTab(
                 modifier = Modifier
                     .size(42.dp)
                     .clip(RoundedCornerShape(12.dp))
-                    .background(Color(0xFF1E293B))
-                    .border(1.dp, Color(0xFF334155), RoundedCornerShape(12.dp))
+                    .background(SleekSurface)
+                    .border(1.dp, SleekBorder, RoundedCornerShape(12.dp))
             ) {
                 Icon(
                     imageVector = Icons.Default.FileDownload,
                     contentDescription = "Export Report",
-                    tint = Color.White,
+                    tint = SleekTextPrimary,
                     modifier = Modifier.size(20.dp)
                 )
             }
@@ -2181,170 +2182,939 @@ fun AnalyticsTab(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // DARK EXPENSES SUMMARY CARD
-        Card(
-            colors = CardDefaults.cardColors(containerColor = Color(0xFF1E293B)),
-            shape = RoundedCornerShape(24.dp),
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-            modifier = Modifier.fillMaxWidth()
+        // Time Range Filter Bar (Pills in App Default Style)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(18.dp))
+                .background(SleekSurface)
+                .border(1.dp, SleekBorder, RoundedCornerShape(18.dp))
+                .padding(4.dp),
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Column(modifier = Modifier.padding(20.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column {
-                        Text(
-                            text = "Analytics Overview",
-                            fontSize = 13.sp,
-                            color = Color(0xFF94A3B8),
-                            fontWeight = FontWeight.Medium
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = "Total Expenses",
-                            fontSize = 18.sp,
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                    IconButton(onClick = { showExportDialog = true }, modifier = Modifier.size(32.dp)) {
-                        Icon(
-                            imageVector = Icons.Default.FileDownload,
-                            contentDescription = "Export",
-                            tint = Color(0xFF94A3B8)
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    AnimatedContent(
-                        targetState = totalSpent,
-                        transitionSpec = {
-                            fadeIn(animationSpec = spring()) + slideInVertically { it / 2 } togetherWith
-                            fadeOut(animationSpec = spring()) + slideOutVertically { -it / 2 }
-                        },
-                        label = "SpentAnim"
-                    ) { amt ->
-                        Text(
-                            text = "₹%,.2f".format(amt),
-                            fontSize = 30.sp,
-                            fontWeight = FontWeight.Black,
-                            color = Color.White
-                        )
-                    }
-
-                    Button(
-                        onClick = onAddClick,
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF334155)),
-                        shape = RoundedCornerShape(16.dp),
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Add,
-                            contentDescription = "Add Money",
-                            tint = Color.White,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = "Add",
-                            fontSize = 12.sp,
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // Time Filter Pills (1H, 24H, 7D, 30D, 1M, 6M, 1Y)
-                Row(
+            timeFilters.forEach { tf ->
+                val isSelected = selectedTimeFilter == tf
+                val pillBg by animateColorAsState(
+                    targetValue = if (isSelected) SleekPrimary else Color.Transparent,
+                    animationSpec = tween(250),
+                    label = "pillBg"
+                )
+                Box(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(Color(0xFF0F172A))
-                        .padding(4.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween
+                        .weight(1f)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(pillBg)
+                        .clickable { selectedTimeFilter = tf }
+                        .padding(vertical = 8.dp),
+                    contentAlignment = Alignment.Center
                 ) {
-                    timeFilters.forEach { tf ->
-                        val isSelected = selectedTimeFilter == tf
-                        val pillBg by animateColorAsState(
-                            targetValue = if (isSelected) Color(0xFF334155) else Color.Transparent,
-                            animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
-                            label = "pillBg"
-                        )
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(pillBg)
-                                .clickable { selectedTimeFilter = tf }
-                                .padding(horizontal = 8.dp, vertical = 6.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = tf,
-                                fontSize = 12.sp,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                color = if (isSelected) Color.White else Color(0xFF94A3B8)
-                            )
-                        }
-                    }
+                    Text(
+                        text = tf,
+                        fontSize = 12.sp,
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                        color = if (isSelected) Color.White else SleekTextSecondary
+                    )
                 }
             }
         }
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // CLEAN DARK MODE CONTAINER
-        Card(
-            colors = CardDefaults.cardColors(containerColor = Color(0xFF1E293B)),
-            shape = RoundedCornerShape(24.dp),
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 8.dp)
+        // Metrics Overview Cards Row (App Default Style)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(32.dp),
-                contentAlignment = Alignment.Center
+            // Income Metric Card
+            Card(
+                colors = CardDefaults.cardColors(containerColor = SleekSurface),
+                shape = RoundedCornerShape(20.dp),
+                border = BorderStroke(1.dp, SleekBorder),
+                modifier = Modifier.weight(1f)
             ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.PieChart,
-                        contentDescription = null,
-                        tint = Color(0xFF64748B),
-                        modifier = Modifier.size(48.dp)
-                    )
+                Column(modifier = Modifier.padding(14.dp)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(24.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFF10B981).copy(alpha = 0.15f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Icons.Default.TrendingUp, contentDescription = null, tint = Color(0xFF10B981), modifier = Modifier.size(14.dp))
+                        }
+                        Text("Income", fontSize = 11.sp, color = SleekTextSecondary, fontWeight = FontWeight.Medium)
+                    }
+                    Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = "Analytics Overview Ready",
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White,
-                        fontSize = 16.sp
+                        text = "₹%,.0f".format(totalIncome),
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Black,
+                        color = Color(0xFF10B981)
                     )
+                }
+            }
+
+            // Expense Metric Card
+            Card(
+                colors = CardDefaults.cardColors(containerColor = SleekSurface),
+                shape = RoundedCornerShape(20.dp),
+                border = BorderStroke(1.dp, SleekBorder),
+                modifier = Modifier.weight(1f)
+            ) {
+                Column(modifier = Modifier.padding(14.dp)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(24.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFFEF4444).copy(alpha = 0.15f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Icons.Default.TrendingDown, contentDescription = null, tint = Color(0xFFEF4444), modifier = Modifier.size(14.dp))
+                        }
+                        Text("Expense", fontSize = 11.sp, color = SleekTextSecondary, fontWeight = FontWeight.Medium)
+                    }
+                    Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = "Use time filters above or tap export icon to generate PDF/CSV reports.",
-                        color = Color(0xFF94A3B8),
-                        fontSize = 13.sp,
-                        textAlign = TextAlign.Center
+                        text = "₹%,.0f".format(totalSpent),
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Black,
+                        color = Color(0xFFEF4444)
+                    )
+                }
+            }
+
+            // Net Cash Flow Metric Card
+            Card(
+                colors = CardDefaults.cardColors(containerColor = SleekSurface),
+                shape = RoundedCornerShape(20.dp),
+                border = BorderStroke(1.dp, SleekBorder),
+                modifier = Modifier.weight(1f)
+            ) {
+                Column(modifier = Modifier.padding(14.dp)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(24.dp)
+                                .clip(CircleShape)
+                                .background(SleekPrimary.copy(alpha = 0.15f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Icons.Default.AccountBalanceWallet, contentDescription = null, tint = SleekPrimary, modifier = Modifier.size(14.dp))
+                        }
+                        Text("Net Flow", fontSize = 11.sp, color = SleekTextSecondary, fontWeight = FontWeight.Medium)
+                    }
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = (if (netBalance >= 0) "+₹%,.0f".format(netBalance) else "-₹%,.0f".format(Math.abs(netBalance))),
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Black,
+                        color = if (netBalance >= 0) Color(0xFF10B981) else Color(0xFFEF4444)
                     )
                 }
             }
         }
 
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // 📈 1. ANIMATED GRAPH FOR INCOME AND EXPENSE
+        IncomeExpenseLineGraphCard(
+            expenses = filteredPeriodExpenses,
+            selectedTimeFilter = selectedTimeFilter
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // 📊 2. BAR CHART FOR CATEGORY OVER INCOME AND EXPENSE
+        CategoryIncomeExpenseBarChartCard(
+            expenses = filteredPeriodExpenses
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // 🥧 3. PIE CHART / DONUT CHART
+        CategoryPieChartCard(
+            expenses = filteredPeriodExpenses
+        )
 
         Spacer(modifier = Modifier.height(110.dp))
+    }
+}
+
+// ==========================================
+// 📈 1. ANIMATED DUAL LINE GRAPH (INCOME VS EXPENSE)
+// ==========================================
+@Composable
+fun IncomeExpenseLineGraphCard(
+    expenses: List<Expense>,
+    selectedTimeFilter: String,
+    modifier: Modifier = Modifier
+) {
+    var selectedIndex by remember { mutableStateOf<Int?>(null) }
+    var animPlayed by remember { mutableStateOf(false) }
+
+    val animProgress by animateFloatAsState(
+        targetValue = if (animPlayed) 1f else 0f,
+        animationSpec = tween(durationMillis = 850, easing = FastOutSlowInEasing),
+        label = "line_graph_anim"
+    )
+
+    LaunchedEffect(expenses, selectedTimeFilter) {
+        animPlayed = false
+        animPlayed = true
+        selectedIndex = null
+    }
+
+    // Aggregate data into time buckets
+    val chartData = remember(expenses, selectedTimeFilter) {
+        val calendar = Calendar.getInstance()
+        val now = calendar.timeInMillis
+        val days = when (selectedTimeFilter) {
+            "7D" -> 7
+            "30D", "1M" -> 30
+            "6M" -> 180
+            "1Y" -> 365
+            else -> 14
+        }
+
+        val pointCount = if (days <= 7) 7 else if (days <= 30) 10 else 12
+        val timeStep = (days * 24 * 3600 * 1000L) / pointCount
+
+        val sdf = java.text.SimpleDateFormat(
+            if (days <= 7) "EEE" else if (days <= 30) "d MMM" else "MMM",
+            Locale.getDefault()
+        )
+
+        (0 until pointCount).map { i ->
+            val startTime = now - (pointCount - 1 - i) * timeStep
+            val endTime = startTime + timeStep
+
+            val bucketTxns = expenses.filter { it.date in startTime..endTime }
+            val inc = bucketTxns.filter { it.type == "INCOME" }.sumOf { it.amount }
+            val exp = bucketTxns.filter { it.type != "INCOME" }.sumOf { it.amount }
+            val dateLabel = sdf.format(java.util.Date(startTime))
+
+            GraphPoint(
+                label = dateLabel,
+                income = inc,
+                expense = exp,
+                timestamp = startTime
+            )
+        }
+    }
+
+    val maxVal = remember(chartData) {
+        val maxInc = chartData.maxOfOrNull { it.income } ?: 0.0
+        val maxExp = chartData.maxOfOrNull { it.expense } ?: 0.0
+        maxOf(maxInc, maxExp, 1000.0) * 1.15
+    }
+
+    val activePoint = selectedIndex?.let { chartData.getOrNull(it) } ?: chartData.lastOrNull()
+
+    Card(
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(containerColor = SleekSurface),
+        border = BorderStroke(1.dp, SleekBorder),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        modifier = modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.padding(20.dp)) {
+            // Legend Indicators Row (Heading text removed per user request)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Box(modifier = Modifier.size(10.dp).clip(CircleShape).background(Color(0xFF10B981)))
+                        Text("Income", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = SleekTextSecondary)
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Box(modifier = Modifier.size(10.dp).clip(CircleShape).background(Color(0xFFEF4444)))
+                        Text("Expense", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = SleekTextSecondary)
+                    }
+                }
+            }
+
+            // Interactive Point Details Chip
+            activePoint?.let { pt ->
+                Spacer(modifier = Modifier.height(12.dp))
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = SleekPrimaryContainer.copy(alpha = 0.15f),
+                    border = BorderStroke(1.dp, SleekPrimary.copy(alpha = 0.25f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text(text = pt.label, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = SleekTextPrimary)
+                            val net = pt.income - pt.expense
+                            Text(
+                                text = "Net: " + (if (net >= 0) "+₹%,.2f".format(net) else "-₹%,.2f".format(Math.abs(net))),
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = if (net >= 0) Color(0xFF10B981) else Color(0xFFEF4444)
+                            )
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                            Column(horizontalAlignment = Alignment.End) {
+                                Text("Income", fontSize = 10.sp, color = SleekTextSecondary)
+                                Text("₹%,.2f".format(pt.income), fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color(0xFF10B981))
+                            }
+                            Column(horizontalAlignment = Alignment.End) {
+                                Text("Expense", fontSize = 10.sp, color = SleekTextSecondary)
+                                Text("₹%,.2f".format(pt.expense), fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color(0xFFEF4444))
+                            }
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Canvas Dual Bezier Line Chart
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(200.dp)
+            ) {
+                Canvas(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .pointerInput(chartData) {
+                            detectTapGestures { offset ->
+                                val w = size.width
+                                val pLeft = 40.dp.toPx()
+                                val pRight = 16.dp.toPx()
+                                val usableW = w - pLeft - pRight
+                                val stepX = usableW / (chartData.size - 1).coerceAtLeast(1)
+
+                                val clickedIdx = ((offset.x - pLeft) / stepX)
+                                    .roundToInt()
+                                    .coerceIn(0, chartData.size - 1)
+                                selectedIndex = clickedIdx
+                            }
+                        }
+                ) {
+                    val w = size.width
+                    val h = size.height
+
+                    val paddingLeft = 40.dp.toPx()
+                    val paddingRight = 16.dp.toPx()
+                    val paddingTop = 16.dp.toPx()
+                    val paddingBottom = 30.dp.toPx()
+
+                    val chartW = w - paddingLeft - paddingRight
+                    val chartH = h - paddingTop - paddingBottom
+
+                    // Grid lines
+                    val steps = listOf(1.0, 0.5, 0.0)
+                    val dashEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 8f), 0f)
+                    val textPaint = android.graphics.Paint().apply {
+                        color = android.graphics.Color.GRAY
+                        textSize = 10.dp.toPx()
+                        isAntiAlias = true
+                    }
+
+                    steps.forEach { ratio ->
+                        val y = paddingTop + chartH * (1.0 - ratio).toFloat()
+                        drawLine(
+                            color = SleekBorder.copy(alpha = 0.5f),
+                            start = Offset(paddingLeft, y),
+                            end = Offset(w - paddingRight, y),
+                            strokeWidth = 1.dp.toPx(),
+                            pathEffect = dashEffect
+                        )
+                        val labelVal = (maxVal * ratio)
+                        val labelStr = if (labelVal >= 1000) "%.0fK".format(labelVal / 1000) else "%.0f".format(labelVal)
+                        drawContext.canvas.nativeCanvas.drawText(
+                            labelStr,
+                            6.dp.toPx(),
+                            y + 4.dp.toPx(),
+                            textPaint
+                        )
+                    }
+
+                    if (chartData.size >= 2) {
+                        val stepX = chartW / (chartData.size - 1)
+
+                        val incomePoints = chartData.mapIndexed { idx, pt ->
+                            val x = paddingLeft + idx * stepX
+                            val normY = (pt.income / maxVal).coerceIn(0.0, 1.0).toFloat()
+                            val y = paddingTop + chartH * (1f - normY * animProgress)
+                            Offset(x, y)
+                        }
+
+                        val expensePoints = chartData.mapIndexed { idx, pt ->
+                            val x = paddingLeft + idx * stepX
+                            val normY = (pt.expense / maxVal).coerceIn(0.0, 1.0).toFloat()
+                            val y = paddingTop + chartH * (1f - normY * animProgress)
+                            Offset(x, y)
+                        }
+
+                        fun createSmoothPath(points: List<Offset>): Path {
+                            val path = Path()
+                            if (points.isEmpty()) return path
+                            path.moveTo(points.first().x, points.first().y)
+                            for (i in 0 until points.size - 1) {
+                                val p1 = points[i]
+                                val p2 = points[i + 1]
+                                val controlP1 = Offset(p1.x + (p2.x - p1.x) / 2f, p1.y)
+                                val controlP2 = Offset(p1.x + (p2.x - p1.x) / 2f, p2.y)
+                                path.cubicTo(controlP1.x, controlP1.y, controlP2.x, controlP2.y, p2.x, p2.y)
+                            }
+                            return path
+                        }
+
+                        val incomePath = createSmoothPath(incomePoints)
+                        val expensePath = createSmoothPath(expensePoints)
+
+                        // Gradient Area Fill - Income
+                        val incomeFillPath = Path().apply {
+                            addPath(incomePath)
+                            lineTo(incomePoints.last().x, paddingTop + chartH)
+                            lineTo(incomePoints.first().x, paddingTop + chartH)
+                            close()
+                        }
+                        drawPath(
+                            path = incomeFillPath,
+                            brush = Brush.verticalGradient(
+                                colors = listOf(Color(0xFF10B981).copy(alpha = 0.22f), Color.Transparent),
+                                startY = paddingTop,
+                                endY = paddingTop + chartH
+                            )
+                        )
+
+                        // Gradient Area Fill - Expense
+                        val expenseFillPath = Path().apply {
+                            addPath(expensePath)
+                            lineTo(expensePoints.last().x, paddingTop + chartH)
+                            lineTo(expensePoints.first().x, paddingTop + chartH)
+                            close()
+                        }
+                        drawPath(
+                            path = expenseFillPath,
+                            brush = Brush.verticalGradient(
+                                colors = listOf(Color(0xFFEF4444).copy(alpha = 0.20f), Color.Transparent),
+                                startY = paddingTop,
+                                endY = paddingTop + chartH
+                            )
+                        )
+
+                        // Draw Curve Lines
+                        drawPath(
+                            path = incomePath,
+                            color = Color(0xFF10B981),
+                            style = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round)
+                        )
+                        drawPath(
+                            path = expensePath,
+                            color = Color(0xFFEF4444),
+                            style = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round)
+                        )
+
+                        // Draw Point Dots & Active Vertical Indicator Line
+                        val activeIdx = selectedIndex ?: (chartData.size - 1)
+                        chartData.forEachIndexed { idx, _ ->
+                            val incP = incomePoints[idx]
+                            val expP = expensePoints[idx]
+
+                            if (idx == activeIdx) {
+                                drawLine(
+                                    color = SleekPrimary.copy(alpha = 0.4f),
+                                    start = Offset(incP.x, paddingTop),
+                                    end = Offset(incP.x, paddingTop + chartH),
+                                    strokeWidth = 2.dp.toPx(),
+                                    pathEffect = dashEffect
+                                )
+                                drawCircle(Color.White, radius = 7.dp.toPx(), center = incP)
+                                drawCircle(Color(0xFF10B981), radius = 5.dp.toPx(), center = incP)
+
+                                drawCircle(Color.White, radius = 7.dp.toPx(), center = expP)
+                                drawCircle(Color(0xFFEF4444), radius = 5.dp.toPx(), center = expP)
+                            } else {
+                                drawCircle(Color(0xFF10B981), radius = 3.dp.toPx(), center = incP)
+                                drawCircle(Color(0xFFEF4444), radius = 3.dp.toPx(), center = expP)
+                            }
+
+                            // X Axis Labels
+                            if (idx % ((chartData.size / 5).coerceAtLeast(1)) == 0 || idx == chartData.size - 1) {
+                                drawContext.canvas.nativeCanvas.drawText(
+                                    chartData[idx].label,
+                                    incP.x - 12.dp.toPx(),
+                                    h - 6.dp.toPx(),
+                                    textPaint
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+private data class GraphPoint(
+    val label: String,
+    val income: Double,
+    val expense: Double,
+    val timestamp: Long
+)
+
+// ==========================================
+// 📊 2. BAR CHART FOR CATEGORIES (INCOME & EXPENSE)
+// ==========================================
+@Composable
+fun CategoryIncomeExpenseBarChartCard(
+    expenses: List<Expense>,
+    modifier: Modifier = Modifier
+) {
+    var selectedTab by remember { mutableIntStateOf(0) } // 0: Expenses, 1: Income, 2: Comparison
+    var animPlayed by remember { mutableStateOf(false) }
+
+    val animProgress by animateFloatAsState(
+        targetValue = if (animPlayed) 1f else 0f,
+        animationSpec = tween(durationMillis = 700, easing = FastOutSlowInEasing),
+        label = "bar_anim"
+    )
+
+    LaunchedEffect(expenses, selectedTab) {
+        animPlayed = false
+        animPlayed = true
+    }
+
+    val expenseList = remember(expenses) { expenses.filter { it.type != "INCOME" } }
+    val incomeList = remember(expenses) { expenses.filter { it.type == "INCOME" } }
+
+    val totalExpense = remember(expenseList) { expenseList.sumOf { it.amount } }
+    val totalIncome = remember(incomeList) { incomeList.sumOf { it.amount } }
+
+    val categoryBreakdown = remember(expenses, selectedTab) {
+        val list = if (selectedTab == 1) incomeList else expenseList
+        list.groupBy { it.category }
+            .mapValues { entry -> entry.value.sumOf { it.amount } }
+            .entries
+            .sortedByDescending { it.value }
+            .take(6)
+    }
+
+    val maxCategoryVal = remember(categoryBreakdown) {
+        (categoryBreakdown.maxOfOrNull { it.value } ?: 1.0).coerceAtLeast(1.0)
+    }
+
+    Card(
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(containerColor = SleekSurface),
+        border = BorderStroke(1.dp, SleekBorder),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        modifier = modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.padding(20.dp)) {
+            // Header
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(32.dp)
+                            .clip(CircleShape)
+                            .background(SleekPrimary.copy(alpha = 0.12f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            Icons.Default.BarChart,
+                            contentDescription = null,
+                            tint = SleekPrimary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                    Text(
+                        text = "Category Breakdown",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = SleekTextPrimary
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // Mode Tabs (Expenses / Income / Comparison)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(SleekPrimaryContainer.copy(alpha = 0.2f))
+                    .border(1.dp, SleekBorder, RoundedCornerShape(16.dp))
+                    .padding(3.dp)
+            ) {
+                listOf("Expenses", "Income", "Comparison").forEachIndexed { idx, label ->
+                    val isSelected = selectedTab == idx
+                    val bg by animateColorAsState(
+                        targetValue = if (isSelected) SleekPrimary else Color.Transparent,
+                        animationSpec = tween(250),
+                        label = "tabBg"
+                    )
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(bg)
+                            .clickable { selectedTab = idx }
+                            .padding(vertical = 8.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = label,
+                            fontSize = 12.sp,
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                            color = if (isSelected) Color.White else SleekTextSecondary
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(18.dp))
+
+            if (selectedTab == 2) {
+                // COMPARISON TAB
+                val totalMax = maxOf(totalIncome, totalExpense, 100.0)
+                val incomeRatio = ((totalIncome / totalMax) * animProgress).toFloat().coerceIn(0f, 1f)
+                val expenseRatio = ((totalExpense / totalMax) * animProgress).toFloat().coerceIn(0f, 1f)
+
+                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    // Income Bar
+                    Column {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Text("💵", fontSize = 14.sp)
+                                Text("Total Income", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = SleekTextPrimary)
+                            }
+                            Text("₹%,.2f".format(totalIncome), fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color(0xFF10B981))
+                        }
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(20.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(SleekPrimaryContainer.copy(alpha = 0.2f))
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxHeight()
+                                    .fillMaxWidth(incomeRatio)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(
+                                        Brush.horizontalGradient(
+                                            listOf(Color(0xFF34D399), Color(0xFF10B981))
+                                        )
+                                    )
+                            )
+                        }
+                    }
+
+                    // Expense Bar
+                    Column {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Text("💸", fontSize = 14.sp)
+                                Text("Total Expenses", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = SleekTextPrimary)
+                            }
+                            Text("₹%,.2f".format(totalExpense), fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color(0xFFEF4444))
+                        }
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(20.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(SleekPrimaryContainer.copy(alpha = 0.2f))
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxHeight()
+                                    .fillMaxWidth(expenseRatio)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(
+                                        Brush.horizontalGradient(
+                                            listOf(Color(0xFFF87171), Color(0xFFEF4444))
+                                        )
+                                    )
+                            )
+                        }
+                    }
+
+                    val netSavings = totalIncome - totalExpense
+                    val savingsRate = if (totalIncome > 0) ((netSavings / totalIncome) * 100).coerceAtLeast(0.0) else 0.0
+
+                    Surface(
+                        shape = RoundedCornerShape(16.dp),
+                        color = if (netSavings >= 0) Color(0xFF10B981).copy(alpha = 0.1f) else Color(0xFFEF4444).copy(alpha = 0.1f),
+                        border = BorderStroke(1.dp, if (netSavings >= 0) Color(0xFF10B981).copy(alpha = 0.3f) else Color(0xFFEF4444).copy(alpha = 0.3f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(14.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Text("Net Cash Flow", fontSize = 12.sp, color = SleekTextSecondary)
+                                Text(
+                                    text = (if (netSavings >= 0) "+₹%,.2f".format(netSavings) else "-₹%,.2f".format(Math.abs(netSavings))),
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.Black,
+                                    color = if (netSavings >= 0) Color(0xFF10B981) else Color(0xFFEF4444)
+                                )
+                            }
+                            Surface(
+                                shape = CircleShape,
+                                color = if (netSavings >= 0) Color(0xFF10B981) else Color(0xFFEF4444)
+                            ) {
+                                Text(
+                                    text = "%.1f%% Saved".format(savingsRate),
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White,
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            } else {
+                // CATEGORY BARS
+                if (categoryBreakdown.isEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 24.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("No category records available.", color = SleekTextSecondary, fontSize = 13.sp)
+                    }
+                } else {
+                    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                        categoryBreakdown.forEach { (category, amt) ->
+                            val totalForTab = if (selectedTab == 1) totalIncome else totalExpense
+                            val percentage = if (totalForTab > 0) (amt / totalForTab) * 100 else 0.0
+                            val barRatio = ((amt / maxCategoryVal) * animProgress).toFloat().coerceIn(0f, 1f)
+
+                            val emoji = getCategoryEmoji(category)
+                            val catColor = categoryColors[category] ?: SleekPrimary
+
+                            Column {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        Text(emoji, fontSize = 16.sp)
+                                        Text(
+                                            text = category,
+                                            fontSize = 13.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = SleekTextPrimary
+                                        )
+                                        Surface(
+                                            shape = CircleShape,
+                                            color = catColor.copy(alpha = 0.12f)
+                                        ) {
+                                            Text(
+                                                text = "%.1f%%".format(percentage),
+                                                fontSize = 10.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = catColor,
+                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                            )
+                                        }
+                                    }
+                                    Text(
+                                        text = "₹%,.2f".format(amt),
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = SleekTextPrimary
+                                    )
+                                }
+
+                                Spacer(modifier = Modifier.height(6.dp))
+
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(12.dp)
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .background(SleekPrimaryContainer.copy(alpha = 0.2f))
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxHeight()
+                                            .fillMaxWidth(barRatio)
+                                            .clip(RoundedCornerShape(6.dp))
+                                            .background(
+                                                Brush.horizontalGradient(
+                                                    listOf(catColor.copy(alpha = 0.7f), catColor)
+                                                )
+                                            )
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ==========================================
+// 🥧 3. INTERACTIVE PIE / DONUT CHART
+// ==========================================
+@Composable
+fun CategoryPieChartCard(
+    expenses: List<Expense>,
+    modifier: Modifier = Modifier
+) {
+    var selectedType by remember { mutableStateOf("EXPENSE") }
+
+    val filteredList = remember(expenses, selectedType) {
+        if (selectedType == "INCOME") {
+            expenses.filter { it.type == "INCOME" && it.amount > 0 }
+        } else {
+            expenses.filter { it.type != "INCOME" && it.amount > 0 }
+        }
+    }
+
+    val categoryTotals = remember(filteredList) {
+        filteredList.groupBy { it.category }
+            .mapValues { entry -> entry.value.sumOf { it.amount } }
+            .filter { it.value > 0 }
+    }
+
+    Card(
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(containerColor = SleekSurface),
+        border = BorderStroke(1.dp, SleekBorder),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        modifier = modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.padding(20.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(32.dp)
+                            .clip(CircleShape)
+                            .background(SleekPrimary.copy(alpha = 0.12f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            Icons.Default.PieChart,
+                            contentDescription = null,
+                            tint = SleekPrimary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                    Text(
+                        text = "Distribution Pie Chart",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = SleekTextPrimary
+                    )
+                }
+
+                Row(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(SleekPrimaryContainer.copy(alpha = 0.2f))
+                        .border(1.dp, SleekBorder, RoundedCornerShape(16.dp))
+                        .padding(2.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(if (selectedType == "EXPENSE") Color(0xFFEF4444) else Color.Transparent)
+                            .clickable { selectedType = "EXPENSE" }
+                            .padding(horizontal = 10.dp, vertical = 5.dp)
+                    ) {
+                        Text(
+                            "Expenses",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (selectedType == "EXPENSE") Color.White else SleekTextSecondary
+                        )
+                    }
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(if (selectedType == "INCOME") Color(0xFF10B981) else Color.Transparent)
+                            .clickable { selectedType = "INCOME" }
+                            .padding(horizontal = 10.dp, vertical = 5.dp)
+                    ) {
+                        Text(
+                            "Income",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (selectedType == "INCOME") Color.White else SleekTextSecondary
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            CategoryExpensePieChart(
+                categoryExpenses = categoryTotals,
+                categoryColors = categoryColors,
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
     }
 }
 
@@ -6001,6 +6771,244 @@ fun DailyStreakCelebrationDialog(
                                 fontSize = 15.sp,
                                 modifier = Modifier.padding(vertical = 4.dp)
                             )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ==========================================
+// TRANSACTION RECORDED SUCCESS ANIMATED DIALOG
+// ==========================================
+data class RecordedTransactionInfo(
+    val amount: Double,
+    val category: String,
+    val type: String, // "EXPENSE" or "INCOME"
+    val note: String? = null
+)
+
+@Composable
+fun TransactionSuccessDialog(
+    info: RecordedTransactionInfo,
+    currencySymbol: String = "₹",
+    onDismiss: () -> Unit
+) {
+    var animPhase by remember { mutableIntStateOf(0) } // 0: rotating red swoosh in navy circle, 1: white checkmark draw, 2: card reveal
+    val scaleAnim = remember { Animatable(0.35f) }
+    val checkmarkProgress = remember { Animatable(0f) }
+    val cardAlpha = remember { Animatable(0f) }
+    val cardTranslationY = remember { Animatable(35f) }
+
+    val infiniteTransition = rememberInfiniteTransition(label = "swoosh_spin")
+    val swooshRotation by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(650, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "swoosh_rotation"
+    )
+
+    LaunchedEffect(Unit) {
+        // Step 1: Scale up dark blue circle with bounce
+        scaleAnim.animateTo(
+            targetValue = 1f,
+            animationSpec = spring(
+                dampingRatio = Spring.DampingRatioMediumBouncy,
+                stiffness = Spring.StiffnessLow
+            )
+        )
+        // Hold rotating red swoosh briefly
+        kotlinx.coroutines.delay(650)
+        animPhase = 1
+
+        // Step 2: Animate checkmark draw
+        checkmarkProgress.animateTo(
+            targetValue = 1f,
+            animationSpec = tween(450, easing = FastOutSlowInEasing)
+        )
+        animPhase = 2
+
+        // Step 3: Reveal text card
+        launch {
+            cardAlpha.animateTo(1f, tween(300))
+        }
+        launch {
+            cardTranslationY.animateTo(0f, spring(dampingRatio = Spring.DampingRatioMediumBouncy))
+        }
+    }
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.8f))
+                .clickable { onDismiss() },
+            contentAlignment = Alignment.Center
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+                modifier = Modifier
+                    .padding(24.dp)
+                    .clickable(enabled = false) {}
+            ) {
+                // Navy Blue Badge Container from Video (Color(0xFF0B2E4E))
+                Box(
+                    modifier = Modifier
+                        .size(160.dp)
+                        .graphicsLayer {
+                            scaleX = scaleAnim.value
+                            scaleY = scaleAnim.value
+                        }
+                        .clip(CircleShape)
+                        .background(Color(0xFF0B2E4E))
+                        .border(4.dp, Color(0xFF1E40AF).copy(alpha = 0.35f), CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Canvas(modifier = Modifier.fillMaxSize()) {
+                        val centerPx = Offset(size.width / 2f, size.height / 2f)
+                        val radius = size.width / 2f
+
+                        if (animPhase == 0) {
+                            // Red Swoosh Shape from Frame 0 & Frame 1 of video
+                            rotate(swooshRotation, pivot = centerPx) {
+                                val redPath = Path().apply {
+                                    moveTo(centerPx.x - radius * 0.4f, centerPx.y + radius * 0.1f)
+                                    cubicTo(
+                                        centerPx.x - radius * 0.2f, centerPx.y - radius * 0.45f,
+                                        centerPx.x + radius * 0.4f, centerPx.y - radius * 0.35f,
+                                        centerPx.x + radius * 0.35f, centerPx.y + radius * 0.2f
+                                    )
+                                    cubicTo(
+                                        centerPx.x + radius * 0.15f, centerPx.y + radius * 0.5f,
+                                        centerPx.x - radius * 0.35f, centerPx.y + radius * 0.4f,
+                                        centerPx.x - radius * 0.4f, centerPx.y + radius * 0.1f
+                                    )
+                                    close()
+                                }
+                                drawPath(
+                                    path = redPath,
+                                    color = Color(0xFFE53935)
+                                )
+                            }
+                        } else {
+                            // White Checkmark (✓) from Frame 2 & Frame 3 of video
+                            val p = checkmarkProgress.value
+                            val checkPath = Path().apply {
+                                val start = Offset(size.width * 0.30f, size.height * 0.52f)
+                                val mid = Offset(size.width * 0.44f, size.height * 0.66f)
+                                val end = Offset(size.width * 0.72f, size.height * 0.38f)
+
+                                moveTo(start.x, start.y)
+                                if (p <= 0.5f) {
+                                    val localP = p / 0.5f
+                                    lineTo(
+                                        start.x + (mid.x - start.x) * localP,
+                                        start.y + (mid.y - start.y) * localP
+                                    )
+                                } else {
+                                    lineTo(mid.x, mid.y)
+                                    val localP = (p - 0.5f) / 0.5f
+                                    lineTo(
+                                        mid.x + (end.x - mid.x) * localP,
+                                        mid.y + (end.y - mid.y) * localP
+                                    )
+                                }
+                            }
+
+                            drawPath(
+                                path = checkPath,
+                                color = Color.White,
+                                style = Stroke(
+                                    width = size.width * 0.12f,
+                                    cap = StrokeCap.Round,
+                                    join = StrokeJoin.Round
+                                )
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                // Detail Card below badge
+                if (cardAlpha.value > 0.01f) {
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = SleekSurface),
+                        shape = RoundedCornerShape(24.dp),
+                        border = BorderStroke(1.dp, SleekBorder),
+                        modifier = Modifier
+                            .fillMaxWidth(0.9f)
+                            .graphicsLayer {
+                                alpha = cardAlpha.value
+                                translationY = cardTranslationY.value
+                            }
+                    ) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier.padding(24.dp)
+                        ) {
+                            val isIncome = info.type.equals("INCOME", ignoreCase = true)
+                            val accentColor = if (isIncome) Color(0xFF10B981) else Color(0xFFEF4444)
+
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(accentColor.copy(alpha = 0.12f))
+                                    .padding(horizontal = 12.dp, vertical = 4.dp)
+                            ) {
+                                Text(
+                                    text = if (isIncome) "INCOME RECORDED" else "EXPENSE RECORDED",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = accentColor,
+                                    letterSpacing = 1.sp
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.height(10.dp))
+
+                            Text(
+                                text = "$currencySymbol${String.format(Locale.US, "%.2f", info.amount)}",
+                                fontSize = 32.sp,
+                                fontWeight = FontWeight.Black,
+                                color = SleekTextPrimary
+                            )
+
+                            Spacer(modifier = Modifier.height(4.dp))
+
+                            Text(
+                                text = info.category + if (!info.note.isNullOrBlank()) " • ${info.note}" else "",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = SleekTextSecondary,
+                                textAlign = TextAlign.Center
+                            )
+
+                            Spacer(modifier = Modifier.height(20.dp))
+
+                            Button(
+                                onClick = onDismiss,
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0B2E4E)),
+                                shape = RoundedCornerShape(14.dp),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(48.dp)
+                            ) {
+                                Text(
+                                    text = "Done",
+                                    color = Color.White,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 16.sp
+                                )
+                            }
                         }
                     }
                 }
