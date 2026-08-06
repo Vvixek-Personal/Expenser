@@ -28,6 +28,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
@@ -65,11 +66,14 @@ fun SavingGoalsFullScreen(
     val savingsGoals by viewModel.savingsGoals.collectAsStateWithLifecycle()
     val accounts by viewModel.accounts.collectAsStateWithLifecycle()
     val selectedLanguage by viewModel.selectedLanguage.collectAsStateWithLifecycle()
+    val goalCategoriesList by viewModel.goalCategories.collectAsStateWithLifecycle()
 
     var selectedCategoryFilter by remember { mutableStateOf("All") }
     var showAddDialog by remember { mutableStateOf(false) }
     var editingGoal by remember { mutableStateOf<SavingsGoal?>(null) }
     var selectedGoalForDeposit by remember { mutableStateOf<SavingsGoal?>(null) }
+    var showCreateCategoryDialog by remember { mutableStateOf(false) }
+    var newCategoryInput by remember { mutableStateOf("") }
 
     // Active Coin Deposit Animation state
     var activeDepositAnimationInfo by remember { mutableStateOf<Pair<Double, String>?>(null) }
@@ -80,10 +84,10 @@ fun SavingGoalsFullScreen(
     val totalSaving = remember(savingsGoals) { savingsGoals.sumOf { g: SavingsGoal -> g.currentAmount } }
 
     // Category Tabs list
-    val categories: List<String> = remember(savingsGoals) {
-        val base = listOf("All", "Saving", "Investment", "Expenditure")
-        val custom = savingsGoals.map { g: SavingsGoal -> g.category }.distinct().filter { c: String -> c !in base }
-        base + custom
+    val categories: List<String> = remember(savingsGoals, goalCategoriesList) {
+        val base = listOf("All")
+        val customFromGoals = savingsGoals.map { g: SavingsGoal -> g.category }.distinct()
+        (base + goalCategoriesList + customFromGoals).distinct()
     }
 
     // Filtered goals grid
@@ -147,29 +151,163 @@ fun SavingGoalsFullScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
-            // 2. Centered Total Saving Display
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalAlignment = Alignment.CenterHorizontally
+            // 2. Rounded Rectangular Credit Card Theme Box (Tuned with Customizable App Theme)
+            val totalTargetAll = remember(savingsGoals) { savingsGoals.sumOf { g: SavingsGoal -> g.targetAmount } }
+            val overallProgressRatio = if (totalTargetAll > 0) (totalSaving / totalTargetAll).toFloat().coerceIn(0f, 1f) else 0f
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(26.dp))
+                    .background(
+                        Brush.linearGradient(
+                            colors = listOf(
+                                SleekPrimary,
+                                SleekPrimary.copy(alpha = 0.85f),
+                                Color(0xFF0F172A)
+                            ),
+                            start = Offset(0f, 0f),
+                            end = Offset(1000f, 1000f)
+                        )
+                    )
+                    .border(
+                        width = 1.dp,
+                        brush = Brush.linearGradient(
+                            colors = listOf(
+                                Color.White.copy(alpha = 0.35f),
+                                Color.White.copy(alpha = 0.05f)
+                            )
+                        ),
+                        shape = RoundedCornerShape(26.dp)
+                    )
+                    .padding(22.dp)
             ) {
-                Text(
-                    text = "Total Saving",
-                    fontSize = 14.sp,
-                    color = SleekTextSecondary,
-                    fontWeight = FontWeight.Medium
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = "₹%,.2f".format(totalSaving),
-                    fontSize = 32.sp,
-                    fontWeight = FontWeight.Black,
-                    color = SleekTextPrimary
-                )
+                // Background decorative circles/watermark
+                Canvas(modifier = Modifier.matchParentSize()) {
+                    drawCircle(
+                        color = Color.White.copy(alpha = 0.08f),
+                        radius = 120.dp.toPx(),
+                        center = Offset(size.width + 10.dp.toPx(), -20.dp.toPx())
+                    )
+                    drawCircle(
+                        color = Color.White.copy(alpha = 0.04f),
+                        radius = 180.dp.toPx(),
+                        center = Offset(size.width - 20.dp.toPx(), size.height + 20.dp.toPx())
+                    )
+                }
+
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    // Header Row: Icon + Label & Goals Counter Badge
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Rounded.Savings,
+                                contentDescription = null,
+                                tint = Color.White.copy(alpha = 0.95f),
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "TOTAL SAVINGS VAULT",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = Color.White.copy(alpha = 0.9f),
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 1.1.sp
+                            )
+                        }
+
+                        // Smart Badge with Active Goals count
+                        Surface(
+                            shape = CircleShape,
+                            color = Color.White.copy(alpha = 0.18f),
+                            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.25f))
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(6.dp)
+                                        .clip(CircleShape)
+                                        .background(Color(0xFF10B981))
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "${savingsGoals.size} Goals",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // Big Amount Display in INR
+                    Text(
+                        text = "₹%,.2f".format(totalSaving),
+                        fontSize = 32.sp,
+                        fontWeight = FontWeight.Black,
+                        color = Color.White,
+                        letterSpacing = (-0.5).sp
+                    )
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    // Goal Target Progress bar inside card
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Target: ₹%,.0f".format(totalTargetAll),
+                            fontSize = 12.sp,
+                            color = Color.White.copy(alpha = 0.8f),
+                            fontWeight = FontWeight.Medium
+                        )
+                        Text(
+                            text = "${(overallProgressRatio * 100).toInt()}% Saved",
+                            fontSize = 12.sp,
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // Progress track bar
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(6.dp)
+                            .clip(RoundedCornerShape(3.dp))
+                            .background(Color.White.copy(alpha = 0.2f))
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxHeight()
+                                .fillMaxWidth(overallProgressRatio)
+                                .clip(RoundedCornerShape(3.dp))
+                                .background(
+                                    Brush.horizontalGradient(
+                                        colors = listOf(Color(0xFF34D399), Color(0xFF10B981))
+                                    )
+                                )
+                        )
+                    }
+                }
             }
 
-            Spacer(modifier = Modifier.height(28.dp))
+            Spacer(modifier = Modifier.height(24.dp))
 
             // 3. Section Title "My Saving" & "+ Add New" Button
             Row(
@@ -211,9 +349,10 @@ fun SavingGoalsFullScreen(
 
             Spacer(modifier = Modifier.height(14.dp))
 
-            // 4. Category Filter Pills (All, Saving, Investment, Expenditure)
+            // 4. Category Filter Pills with Add & Delete Category support
             LazyRow(
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.fillMaxWidth()
             ) {
                 items(categories, key = { cat: String -> cat }) { cat: String ->
@@ -221,6 +360,7 @@ fun SavingGoalsFullScreen(
                     val bgColor = if (isSelected) SleekPrimary else SleekSurface
                     val textColor = if (isSelected) Color.White else SleekTextSecondary
                     val borderColor = if (isSelected) SleekPrimary else SleekBorder
+                    val isDeletable = cat !in listOf("All", "Saving", "Investment", "Expenditure")
 
                     Box(
                         modifier = Modifier
@@ -231,15 +371,78 @@ fun SavingGoalsFullScreen(
                                 haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                 selectedCategoryFilter = cat
                             }
-                            .padding(horizontal = 18.dp, vertical = 8.dp),
+                            .padding(horizontal = 14.dp, vertical = 8.dp),
                         contentAlignment = Alignment.Center
                     ) {
-                        Text(
-                            text = cat,
-                            fontSize = 13.sp,
-                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                            color = textColor
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Text(
+                                text = cat,
+                                fontSize = 13.sp,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                color = textColor
+                            )
+
+                            if (isDeletable) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(18.dp)
+                                        .clip(CircleShape)
+                                        .background(if (isSelected) Color.White.copy(alpha = 0.25f) else SleekBorder.copy(alpha = 0.5f))
+                                        .clickable {
+                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            if (selectedCategoryFilter.equals(cat, ignoreCase = true)) {
+                                                selectedCategoryFilter = "All"
+                                            }
+                                            viewModel.deleteGoalCategory(cat)
+                                        },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Close,
+                                        contentDescription = "Delete Category",
+                                        tint = textColor,
+                                        modifier = Modifier.size(12.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Add Category Button Pill
+                item {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(SleekPrimaryContainer.copy(alpha = 0.3f))
+                            .border(1.dp, SleekPrimary.copy(alpha = 0.4f), RoundedCornerShape(16.dp))
+                            .clickable {
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                showCreateCategoryDialog = true
+                            }
+                            .padding(horizontal = 14.dp, vertical = 8.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Add,
+                                contentDescription = "Add Category",
+                                tint = SleekPrimary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Text(
+                                text = "Category",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = SleekPrimary
+                            )
+                        }
                     }
                 }
             }
@@ -316,6 +519,7 @@ fun SavingGoalsFullScreen(
         if (showAddDialog || editingGoal != null) {
             AddEditSavingsGoalDialog(
                 goalToEdit = editingGoal,
+                viewModel = viewModel,
                 onDismiss = {
                     showAddDialog = false
                     editingGoal = null
@@ -343,6 +547,71 @@ fun SavingGoalsFullScreen(
                     }
                     showAddDialog = false
                     editingGoal = null
+                }
+            )
+        }
+
+        // Create Goal Category Dialog
+        if (showCreateCategoryDialog) {
+            AlertDialog(
+                onDismissRequest = {
+                    showCreateCategoryDialog = false
+                    newCategoryInput = ""
+                },
+                containerColor = SleekSurface,
+                title = {
+                    Text(
+                        "Create Goal Category",
+                        fontWeight = FontWeight.Bold,
+                        color = SleekTextPrimary
+                    )
+                },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text(
+                            "Enter a new category name for your goals:",
+                            fontSize = 13.sp,
+                            color = SleekTextSecondary
+                        )
+                        OutlinedTextField(
+                            value = newCategoryInput,
+                            onValueChange = { newCategoryInput = it },
+                            label = { Text("Category Name (e.g. Gadgets, Vacation)") },
+                            singleLine = true,
+                            shape = RoundedCornerShape(12.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = SleekPrimary,
+                                unfocusedBorderColor = SleekBorder
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            if (newCategoryInput.isNotBlank()) {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                val trimmed = newCategoryInput.trim()
+                                viewModel.addGoalCategory(trimmed)
+                                selectedCategoryFilter = trimmed
+                                newCategoryInput = ""
+                                showCreateCategoryDialog = false
+                            }
+                        },
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = SleekPrimary)
+                    ) {
+                        Text("Create", color = Color.White)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = {
+                        showCreateCategoryDialog = false
+                        newCategoryInput = ""
+                    }) {
+                        Text("Cancel", color = SleekTextSecondary)
+                    }
                 }
             )
         }
@@ -403,7 +672,7 @@ fun SavingGoalCardItem(
         if (goal.targetDate > 0) {
             SimpleDateFormat("dd MMM yyyy", Locale.getDefault()).format(Date(goal.targetDate))
         } else {
-            "Open Goal"
+            "Undefined / Open Goal"
         }
     }
 
@@ -730,17 +999,24 @@ fun CoinDepositAnimationDialog(
 @Composable
 fun AddEditSavingsGoalDialog(
     goalToEdit: SavingsGoal? = null,
+    viewModel: FinanceViewModel = androidx.lifecycle.viewmodel.compose.viewModel(),
     onDismiss: () -> Unit,
     onSave: (name: String, target: Double, category: String, imageUri: String?, targetDate: Long) -> Unit
 ) {
     val haptic = LocalHapticFeedback.current
+    val goalCategoriesList by viewModel.goalCategories.collectAsStateWithLifecycle()
+
     var name by remember { mutableStateOf(goalToEdit?.name ?: "") }
     var targetStr by remember { mutableStateOf(goalToEdit?.targetAmount?.takeIf { it > 0 }?.toString() ?: "") }
     var category by remember { mutableStateOf(goalToEdit?.category ?: "Saving") }
     var imageUriStr by remember { mutableStateOf<String?>(goalToEdit?.imageUri) }
 
-    var selectedPresetMonths by remember { mutableIntStateOf(6) }
+    var selectedPresetMonths by remember {
+        mutableIntStateOf(if (goalToEdit != null && goalToEdit.targetDate <= 0L) 0 else 6)
+    }
     var errorMessage by remember { mutableStateOf<String?>(null) }
+    var showInlineAddCategory by remember { mutableStateOf(false) }
+    var inlineCategoryName by remember { mutableStateOf("") }
 
     // Custom Image Launcher
     val imagePickerLauncher = rememberLauncherForActivityResult(
@@ -750,11 +1026,6 @@ fun AddEditSavingsGoalDialog(
             imageUriStr = uri.toString()
         }
     }
-
-    val availableCategories = listOf(
-        "Saving", "Investment", "Expenditure", "Travel", "Tech",
-        "Shopping", "Vehicle", "Education", "Emergency"
-    )
 
     Dialog(onDismissRequest = onDismiss) {
         Card(
@@ -829,17 +1100,90 @@ fun AddEditSavingsGoalDialog(
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    availableCategories.forEach { cat ->
+                    goalCategoriesList.forEach { cat ->
                         val isSel = category.equals(cat, ignoreCase = true)
+                        val isDeletable = cat !in listOf("Saving", "Investment", "Expenditure")
+
                         FilterChip(
                             selected = isSel,
                             onClick = {
                                 haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                 category = cat
                             },
-                            label = { Text(cat, fontSize = 12.sp) },
+                            label = {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Text(cat, fontSize = 12.sp)
+                                    if (isDeletable) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(16.dp)
+                                                .clip(CircleShape)
+                                                .clickable {
+                                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                    if (category.equals(cat, ignoreCase = true)) {
+                                                        category = "Saving"
+                                                    }
+                                                    viewModel.deleteGoalCategory(cat)
+                                                },
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Rounded.Close,
+                                                contentDescription = "Delete Category",
+                                                tint = SleekTextSecondary,
+                                                modifier = Modifier.size(10.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            },
                             shape = RoundedCornerShape(12.dp)
                         )
+                    }
+
+                    FilterChip(
+                        selected = showInlineAddCategory,
+                        onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            showInlineAddCategory = !showInlineAddCategory
+                        },
+                        label = { Text("+ New", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = SleekPrimary) },
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                }
+
+                AnimatedVisibility(visible = showInlineAddCategory) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        OutlinedTextField(
+                            value = inlineCategoryName,
+                            onValueChange = { inlineCategoryName = it },
+                            placeholder = { Text("Category Name") },
+                            singleLine = true,
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.weight(1f)
+                        )
+                        Button(
+                            onClick = {
+                                if (inlineCategoryName.isNotBlank()) {
+                                    val trimmed = inlineCategoryName.trim()
+                                    viewModel.addGoalCategory(trimmed)
+                                    category = trimmed
+                                    inlineCategoryName = ""
+                                    showInlineAddCategory = false
+                                }
+                            },
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = SleekPrimary)
+                        ) {
+                            Text("Add")
+                        }
                     }
                 }
 
@@ -852,10 +1196,16 @@ fun AddEditSavingsGoalDialog(
                 )
 
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    listOf(3 to "3 Mon", 6 to "6 Mon", 12 to "1 Year", 24 to "2 Years").forEach { (months, label) ->
+                    listOf(
+                        0 to "Undefined",
+                        3 to "3 Mon",
+                        6 to "6 Mon",
+                        12 to "1 Year",
+                        24 to "2 Years"
+                    ).forEach { (months, label) ->
                         val isSel = selectedPresetMonths == months
                         Box(
                             modifier = Modifier
@@ -868,7 +1218,7 @@ fun AddEditSavingsGoalDialog(
                         ) {
                             Text(
                                 text = label,
-                                fontSize = 11.sp,
+                                fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = if (isSel) Color.White else SleekTextSecondary
                             )
@@ -966,9 +1316,13 @@ fun AddEditSavingsGoalDialog(
                                 return@Button
                             }
 
-                            val cal = Calendar.getInstance()
-                            cal.add(Calendar.MONTH, selectedPresetMonths)
-                            val calcDate = cal.timeInMillis
+                            val calcDate = if (selectedPresetMonths == 0) {
+                                0L
+                            } else {
+                                val cal = Calendar.getInstance()
+                                cal.add(Calendar.MONTH, selectedPresetMonths)
+                                cal.timeInMillis
+                            }
 
                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                             onSave(name.trim(), targetVal, category, imageUriStr, calcDate)

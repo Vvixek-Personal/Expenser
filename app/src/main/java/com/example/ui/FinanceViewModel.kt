@@ -281,6 +281,16 @@ class FinanceViewModel(
     val defaultIncomeCategories = listOf("Salary", "Freelance", "Investments", "Gifts", "Others")
     val defaultCategories = (defaultExpenseCategories + defaultIncomeCategories).distinct()
 
+    val defaultGoalCategories = listOf(
+        "Saving", "Investment", "Expenditure", "Travel", "Tech",
+        "Shopping", "Vehicle", "Education", "Emergency"
+    )
+
+    private val _customGoalCategories = MutableStateFlow<List<String>>(emptyList())
+    val goalCategories: StateFlow<List<String>> = _customGoalCategories.map { custom ->
+        (defaultGoalCategories + custom).distinct()
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), defaultGoalCategories)
+
     val allCategories = _customCategories.map { custom ->
         (defaultCategories + custom).distinct()
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), defaultCategories)
@@ -312,6 +322,9 @@ class FinanceViewModel(
         _customExpenseCategories.value = expSet.toList().sorted()
         _customIncomeCategories.value = incSet.toList().sorted()
         _customCategories.value = (expSet + incSet + savedCats).distinct().sorted()
+
+        val savedGoalCats = sharedPrefs.getStringSet("custom_goal_categories", emptySet()) ?: emptySet()
+        _customGoalCategories.value = savedGoalCats.toList().sorted()
         
         _themeIndex.value = sharedPrefs.getInt("theme_index", 0)
         _customThemeHue.value = sharedPrefs.getFloat("custom_theme_hue", 200f)
@@ -511,6 +524,34 @@ class FinanceViewModel(
             // Save matched icon
             sharedPrefs.edit().putString("cat_icon_$trimmed", finalIcon).apply()
             _categoryIcons.value = _categoryIcons.value + (trimmed to finalIcon)
+        }
+    }
+
+    fun addGoalCategory(category: String) {
+        val trimmed = category.trim()
+        if (trimmed.isBlank()) return
+        val current = sharedPrefs.getStringSet("custom_goal_categories", emptySet()) ?: emptySet()
+        val updated = (current + trimmed).sorted()
+        sharedPrefs.edit().putStringSet("custom_goal_categories", updated.toSet()).apply()
+        _customGoalCategories.value = updated
+    }
+
+    fun deleteGoalCategory(category: String) {
+        val trimmed = category.trim()
+        if (trimmed.isBlank()) return
+        val current = sharedPrefs.getStringSet("custom_goal_categories", emptySet()) ?: emptySet()
+        val updated = (current - trimmed).sorted()
+        sharedPrefs.edit().putStringSet("custom_goal_categories", updated.toSet()).apply()
+        _customGoalCategories.value = updated
+
+        // Reassign any goals using deleted category to "Saving"
+        viewModelScope.launch {
+            val allGoals = repository.allSavingsGoals.first()
+            allGoals.forEach { g ->
+                if (g.category.equals(trimmed, ignoreCase = true)) {
+                    repository.updateSavingsGoal(g.copy(category = "Saving"))
+                }
+            }
         }
     }
 
