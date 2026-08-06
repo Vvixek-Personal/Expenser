@@ -1,6 +1,9 @@
 package com.example.ui
 
+import android.net.Uri
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -20,6 +23,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -27,6 +31,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import coil.compose.AsyncImage
 import com.example.ui.theme.*
 import java.text.SimpleDateFormat
 import java.util.*
@@ -52,6 +57,7 @@ fun PersonalDataScreen(
     val currentJob by viewModel.userJob.collectAsStateWithLifecycle()
     val currentIncome by viewModel.userMonthlyIncome.collectAsStateWithLifecycle()
     val currentGender by viewModel.userGender.collectAsStateWithLifecycle()
+    val profileImageUri by viewModel.userProfileImageUri.collectAsStateWithLifecycle()
 
     var nameText by remember { mutableStateOf(currentName ?: "William John Malik") }
     var dobText by remember { mutableStateOf(currentDob) }
@@ -60,6 +66,15 @@ fun PersonalDataScreen(
     var genderOption by remember { mutableStateOf(currentGender) }
 
     val context = LocalContext.current
+
+    val imagePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            viewModel.updateUserProfileImageUri(uri.toString())
+            Toast.makeText(context, "Profile picture updated successfully!", Toast.LENGTH_SHORT).show()
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -91,7 +106,7 @@ fun PersonalDataScreen(
                     }
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "Personal Data",
+                        text = "Profile & Account",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = SleekTextPrimary
@@ -122,29 +137,43 @@ fun PersonalDataScreen(
                     .padding(vertical = 12.dp),
                 contentAlignment = Alignment.Center
             ) {
-                Box(contentAlignment = Alignment.BottomEnd) {
+                Box(
+                    modifier = Modifier.clickable { imagePickerLauncher.launch("image/*") },
+                    contentAlignment = Alignment.BottomEnd
+                ) {
                     Box(
                         modifier = Modifier
-                            .size(96.dp)
-                            .clip(RoundedCornerShape(24.dp))
-                            .background(Color(0xFFE2E8F0)),
+                            .size(100.dp)
+                            .clip(CircleShape)
+                            .background(SleekPrimaryContainer)
+                            .border(2.dp, SleekPrimary, CircleShape),
                         contentAlignment = Alignment.Center
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Person,
-                            contentDescription = "Profile Photo",
-                            tint = Color(0xFF64748B),
-                            modifier = Modifier.size(56.dp)
-                        )
+                        if (!profileImageUri.isNullOrBlank()) {
+                            AsyncImage(
+                                model = profileImageUri,
+                                contentDescription = "Profile Photo",
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        } else {
+                            val initials = nameText.split(" ")
+                                .mapNotNull { it.firstOrNull()?.uppercaseChar() }
+                                .joinToString("").take(2)
+                                .ifEmpty { "U" }
+                            Text(
+                                text = initials,
+                                style = MaterialTheme.typography.headlineMedium,
+                                color = SleekOnPrimaryContainer,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
                     }
                     Box(
                         modifier = Modifier
                             .size(32.dp)
                             .clip(CircleShape)
-                            .background(Color(0xFF3B82F6))
-                            .clickable {
-                                Toast.makeText(context, "Upload/Change photo tapped", Toast.LENGTH_SHORT).show()
-                            },
+                            .background(SleekPrimary),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(

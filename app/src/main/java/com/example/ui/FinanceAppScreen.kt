@@ -4928,16 +4928,6 @@ fun SidebarDrawerContent(
     val userName by viewModel.userName.collectAsStateWithLifecycle()
     val selectedLanguage by viewModel.selectedLanguage.collectAsStateWithLifecycle()
     val profileImageUri by viewModel.userProfileImageUri.collectAsStateWithLifecycle()
-    var showEditNameDialog by remember { mutableStateOf(false) }
-
-    val imagePickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
-    ) { uri: Uri? ->
-        if (uri != null) {
-            viewModel.updateUserProfileImageUri(uri.toString())
-            Toast.makeText(context, "Profile picture updated successfully!", Toast.LENGTH_SHORT).show()
-        }
-    }
 
     Column(
         modifier = Modifier
@@ -4969,7 +4959,7 @@ fun SidebarDrawerContent(
             }
         }
         
-        // 1. Profile Card
+        // 1. Profile Option Card
         val initials = if (!userName.isNullOrBlank()) {
             userName!!.split(" ").mapNotNull { it.firstOrNull()?.uppercaseChar() }.joinToString("").take(2)
         } else "U"
@@ -4978,7 +4968,12 @@ fun SidebarDrawerContent(
             colors = CardDefaults.cardColors(containerColor = SleekSurface),
             border = BorderStroke(1.dp, SleekBorder),
             shape = RoundedCornerShape(20.dp),
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable {
+                    onCloseDrawer()
+                    onOpenSettingsScreen(SettingsSubScreen.PersonalData)
+                }
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -4991,8 +4986,7 @@ fun SidebarDrawerContent(
                     modifier = Modifier
                         .size(52.dp)
                         .clip(CircleShape)
-                        .background(SleekPrimaryContainer)
-                        .clickable { imagePickerLauncher.launch("image/*") },
+                        .background(SleekPrimaryContainer),
                     contentAlignment = Alignment.Center
                 ) {
                     if (!profileImageUri.isNullOrBlank()) {
@@ -5010,21 +5004,6 @@ fun SidebarDrawerContent(
                             fontWeight = FontWeight.Bold
                         )
                     }
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .size(18.dp)
-                            .clip(CircleShape)
-                            .background(SleekPrimary),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.CameraAlt,
-                            contentDescription = "Change Photo",
-                            tint = Color.White,
-                            modifier = Modifier.size(10.dp)
-                        )
-                    }
                 }
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
@@ -5034,24 +5013,17 @@ fun SidebarDrawerContent(
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = "Tap avatar to change photo",
+                        text = "Tap to view profile & account",
                         style = MaterialTheme.typography.bodySmall,
                         color = SleekTextSecondary
                     )
                 }
-                IconButton(
-                    onClick = { onOpenSettingsScreen(SettingsSubScreen.PersonalData) },
-                    modifier = Modifier
-                        .size(36.dp)
-                        .background(SleekBorder.copy(alpha = 0.5f), CircleShape)
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.Edit,
-                        contentDescription = "Edit Profile",
-                        tint = SleekPrimary,
-                        modifier = Modifier.size(16.dp)
-                    )
-                }
+                Icon(
+                    imageVector = Icons.Default.ChevronRight,
+                    contentDescription = "View Profile Page",
+                    tint = SleekTextSecondary,
+                    modifier = Modifier.size(20.dp)
+                )
             }
         }
         
@@ -5143,17 +5115,6 @@ fun SidebarDrawerContent(
         }
         
         Spacer(modifier = Modifier.height(110.dp))
-    }
-    
-    if (showEditNameDialog) {
-        EditNameDialog(
-            currentName = userName ?: "",
-            onDismiss = { showEditNameDialog = false },
-            onConfirm = {
-                viewModel.saveUserName(it)
-                showEditNameDialog = false
-            }
-        )
     }
 }
 
