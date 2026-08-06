@@ -2,11 +2,7 @@ package com.example.ui
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -47,7 +43,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.Expense
 import com.example.ui.theme.*
@@ -452,6 +450,15 @@ fun DashboardTab(
     val accounts by viewModel.accounts.collectAsStateWithLifecycle()
     val selectedLanguage by viewModel.selectedLanguage.collectAsStateWithLifecycle()
     val profileImageUri by viewModel.userProfileImageUri.collectAsStateWithLifecycle()
+    val currentStreak by viewModel.currentStreak.collectAsStateWithLifecycle()
+    val showStreakDialog by viewModel.showStreakDialog.collectAsStateWithLifecycle()
+
+    if (showStreakDialog) {
+        DailyStreakCelebrationDialog(
+            streakCount = currentStreak,
+            onDismiss = { viewModel.dismissStreakDialog() }
+        )
+    }
 
     val currentCalendar = Calendar.getInstance()
     val currentMonth = currentCalendar.get(Calendar.MONTH)
@@ -591,20 +598,47 @@ fun DashboardTab(
                 }
             }
 
-            // Quick Add Action Button
-            IconButton(
-                onClick = onAddExpenseClick,
-                modifier = Modifier
-                    .size(44.dp)
-                    .clip(CircleShape)
-                    .background(SleekPrimary)
-                    .testTag("dashboard_add_expense_fab")
+            // Streak Badge beside profile & Quick Add Action Button
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Icon(
-                    imageVector = Icons.Default.Add,
-                    contentDescription = "Add Expense",
-                    tint = Color.White
-                )
+                Surface(
+                    onClick = { viewModel.triggerShowStreakDialog() },
+                    shape = RoundedCornerShape(20.dp),
+                    color = Color(0xFFFFF7ED),
+                    border = BorderStroke(1.dp, Color(0xFFF97316)),
+                    shadowElevation = 1.dp
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                    ) {
+                        Text("🔥", fontSize = 13.sp)
+                        Text(
+                            text = "$currentStreak Day Streak",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFFC2410C)
+                        )
+                    }
+                }
+
+                IconButton(
+                    onClick = onAddExpenseClick,
+                    modifier = Modifier
+                        .size(44.dp)
+                        .clip(CircleShape)
+                        .background(SleekPrimary)
+                        .testTag("dashboard_add_expense_fab")
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Add,
+                        contentDescription = "Add Expense",
+                        tint = Color.White
+                    )
+                }
             }
         }
 
@@ -4928,6 +4962,7 @@ fun SidebarDrawerContent(
     val userName by viewModel.userName.collectAsStateWithLifecycle()
     val selectedLanguage by viewModel.selectedLanguage.collectAsStateWithLifecycle()
     val profileImageUri by viewModel.userProfileImageUri.collectAsStateWithLifecycle()
+    val currentStreak by viewModel.currentStreak.collectAsStateWithLifecycle()
 
     Column(
         modifier = Modifier
@@ -5006,12 +5041,30 @@ fun SidebarDrawerContent(
                     }
                 }
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = userName ?: "Guest User",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = SleekTextPrimary,
-                        fontWeight = FontWeight.Bold
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text(
+                            text = userName ?: "Guest User",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = SleekTextPrimary,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = Color(0xFFFFF7ED),
+                            border = BorderStroke(1.dp, Color(0xFFF97316))
+                        ) {
+                            Text(
+                                text = "🔥 $currentStreak Day",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFFC2410C),
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
                     Text(
                         text = "Tap to view profile & account",
                         style = MaterialTheme.typography.bodySmall,
@@ -5739,6 +5792,216 @@ fun ImageInspiredAnalyticsChartCard(
                             end = Offset(paddingLeft + chartWidth - 5.dp.toPx(), height - paddingBottom + 5.dp.toPx()),
                             strokeWidth = 2.dp.toPx()
                         )
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ==========================================
+// DAILY STREAK CELEBRATION ANIMATED DIALOG
+// ==========================================
+@Composable
+fun DailyStreakCelebrationDialog(
+    streakCount: Int,
+    onDismiss: () -> Unit
+) {
+    val infiniteTransition = rememberInfiniteTransition(label = "streak_anim")
+
+    val rayRotation by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(12000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "ray_rotation"
+    )
+
+    val badgeScale by infiniteTransition.animateFloat(
+        initialValue = 0.94f,
+        targetValue = 1.06f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1000, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "badge_scale"
+    )
+
+    val flameScale by infiniteTransition.animateFloat(
+        initialValue = 0.9f,
+        targetValue = 1.15f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(600, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "flame_scale"
+    )
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.82f))
+                .clickable { onDismiss() },
+            contentAlignment = Alignment.Center
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+                modifier = Modifier
+                    .padding(24.dp)
+                    .clickable(enabled = false) {}
+            ) {
+                // Central Streak Emblem Container with Radiating Sunburst Rays
+                Box(
+                    modifier = Modifier.size(260.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Canvas(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .graphicsLayer { rotationZ = rayRotation }
+                    ) {
+                        val centerPx = Offset(size.width / 2f, size.height / 2f)
+                        val rayCount = 20
+                        val angleStep = 360f / rayCount
+                        val rayLength = size.width / 2f
+
+                        for (i in 0 until rayCount) {
+                            val angleRad = Math.toRadians((i * angleStep).toDouble())
+                            val endX = centerPx.x + (rayLength * Math.cos(angleRad)).toFloat()
+                            val endY = centerPx.y + (rayLength * Math.sin(angleRad)).toFloat()
+
+                            drawLine(
+                                color = Color(0xFFFCD34D).copy(alpha = if (i % 2 == 0) 0.5f else 0.25f),
+                                start = centerPx,
+                                end = Offset(endX, endY),
+                                strokeWidth = if (i % 2 == 0) 6f else 3f,
+                                cap = StrokeCap.Round
+                            )
+                        }
+                    }
+
+                    // Outer Red Ring & Pulsing Inner Badge
+                    Box(
+                        modifier = Modifier
+                            .size(170.dp)
+                            .graphicsLayer {
+                                scaleX = badgeScale
+                                scaleY = badgeScale
+                            }
+                            .clip(CircleShape)
+                            .background(Color(0xFFFEF2F2))
+                            .border(6.dp, Color(0xFFEF4444), CircleShape)
+                            .border(10.dp, Color(0xFFFEE2E2), CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            // Streak Number at top of badge
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(Color(0xFFDC2626))
+                                    .padding(horizontal = 14.dp, vertical = 3.dp)
+                            ) {
+                                Text(
+                                    text = "$streakCount",
+                                    fontSize = 24.sp,
+                                    fontWeight = FontWeight.Black,
+                                    color = Color.White
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.height(4.dp))
+
+                            // Laurel & Burning Flame
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center
+                            ) {
+                                Text(
+                                    text = "🌿",
+                                    fontSize = 24.sp,
+                                    modifier = Modifier.graphicsLayer { scaleX = -1f }
+                                )
+                                Text(
+                                    text = "🔥",
+                                    fontSize = 44.sp,
+                                    modifier = Modifier.graphicsLayer {
+                                        scaleX = flameScale
+                                        scaleY = flameScale
+                                    }
+                                )
+                                Text(
+                                    text = "🌿",
+                                    fontSize = 24.sp
+                                )
+                            }
+
+                            Text(
+                                text = "STREAK",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = Color(0xFF991B1B),
+                                letterSpacing = 1.sp
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Title & Subtitle Card
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF1E293B)),
+                    shape = RoundedCornerShape(24.dp),
+                    border = BorderStroke(1.dp, Color(0xFFF97316).copy(alpha = 0.5f)),
+                    modifier = Modifier.fillMaxWidth(0.9f)
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.padding(20.dp)
+                    ) {
+                        Text(
+                            text = if (streakCount == 1) "1 Day Streak Started! 🔥" else "$streakCount Day Streak! 🔥",
+                            fontSize = 22.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White,
+                            textAlign = TextAlign.Center
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = if (streakCount == 1)
+                                "Welcome back! Open the app daily to keep your streak burning hot."
+                            else
+                                "You're on fire! You have opened the app $streakCount days in a row.",
+                            fontSize = 13.sp,
+                            color = Color(0xFF94A3B8),
+                            textAlign = TextAlign.Center
+                        )
+                        Spacer(modifier = Modifier.height(18.dp))
+                        Button(
+                            onClick = onDismiss,
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF97316)),
+                            shape = RoundedCornerShape(14.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = "Awesome! 🔥",
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 15.sp,
+                                modifier = Modifier.padding(vertical = 4.dp)
+                            )
+                        }
                     }
                 }
             }

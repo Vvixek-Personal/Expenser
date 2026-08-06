@@ -157,6 +157,69 @@ class FinanceViewModel(
     private val _userGender = MutableStateFlow("Male")
     val userGender: StateFlow<String> = _userGender.asStateFlow()
 
+    // Daily Streak State & Logic
+    private val _currentStreak = MutableStateFlow(1)
+    val currentStreak: StateFlow<Int> = _currentStreak.asStateFlow()
+
+    private val _showStreakDialog = MutableStateFlow(false)
+    val showStreakDialog: StateFlow<Boolean> = _showStreakDialog.asStateFlow()
+
+    fun dismissStreakDialog() {
+        _showStreakDialog.value = false
+    }
+
+    fun triggerShowStreakDialog() {
+        _showStreakDialog.value = true
+    }
+
+    private fun checkAndCalculateDailyStreak() {
+        val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+        val todayStr = sdf.format(Date())
+        val lastStreakDate = sharedPrefs.getString("last_streak_date", null)
+        var streak = sharedPrefs.getInt("current_streak", 0)
+
+        if (lastStreakDate == null) {
+            streak = 1
+            sharedPrefs.edit()
+                .putString("last_streak_date", todayStr)
+                .putInt("current_streak", streak)
+                .apply()
+            _currentStreak.value = streak
+            _showStreakDialog.value = true
+        } else if (lastStreakDate == todayStr) {
+            _currentStreak.value = if (streak < 1) 1 else streak
+            _showStreakDialog.value = false
+        } else {
+            try {
+                val lastDate = sdf.parse(lastStreakDate)
+                val todayDate = sdf.parse(todayStr)
+                if (lastDate != null && todayDate != null) {
+                    val diffInMillis = todayDate.time - lastDate.time
+                    val diffInDays = (diffInMillis / (1000 * 60 * 60 * 24)).toInt()
+
+                    if (diffInDays == 1) {
+                        streak += 1
+                    } else if (diffInDays > 1) {
+                        streak = 1
+                    } else {
+                        if (streak < 1) streak = 1
+                    }
+                } else {
+                    streak = 1
+                }
+            } catch (e: Exception) {
+                streak = 1
+            }
+
+            sharedPrefs.edit()
+                .putString("last_streak_date", todayStr)
+                .putInt("current_streak", streak)
+                .apply()
+            _currentStreak.value = streak
+            _showStreakDialog.value = true
+        }
+    }
+
     private val _monthlyBudget = MutableStateFlow(25000.0)
     val monthlyBudget: StateFlow<Double> = _monthlyBudget.asStateFlow()
 
@@ -231,6 +294,7 @@ class FinanceViewModel(
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), defaultIncomeCategories)
 
     init {
+        checkAndCalculateDailyStreak()
         _userName.value = sharedPrefs.getString("user_name", null)
         _userProfileImageUri.value = sharedPrefs.getString("user_profile_image_uri", null)
         _userDob.value = sharedPrefs.getString("user_dob", "24 December 1999") ?: "24 December 1999"
