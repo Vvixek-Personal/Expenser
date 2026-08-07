@@ -529,7 +529,7 @@ object DataExporter {
         val imageFile = File(cachePath, "finance_statement.jpg")
 
         FileOutputStream(imageFile).use { out ->
-            bitmap.compress(Bitmap.CompressFormat.JPEG, 90, out)
+            bitmap.compress(Bitmap.CompressFormat.JPEG, 100, out)
         }
 
         val uri = FileProvider.getUriForFile(context, "${context.packageName}.provider", imageFile)

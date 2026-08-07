@@ -60,20 +60,12 @@ fun ExpenseDetailDialog(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
         if (uri != null) {
-            try {
-                val bitmap = if (Build.VERSION.SDK_INT < 28) {
-                    @Suppress("DEPRECATION")
-                    MediaStore.Images.Media.getBitmap(context.contentResolver, uri)
-                } else {
-                    val source = ImageDecoder.createSource(context.contentResolver, uri)
-                    ImageDecoder.decodeBitmap(source) { decoder, _, _ ->
-                        decoder.isMutableRequired = true
-                    }
-                }
+            val bitmap = loadFullResolutionBitmap(context, uri)
+            if (bitmap != null) {
                 activeBitmapForEdit = bitmap
                 showCropper = true
-            } catch (e: Exception) {
-                Toast.makeText(context, "Error loading image: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(context, "Error loading full-resolution image", Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -430,7 +422,7 @@ fun ImageEditDialog(
                             try {
                                 val file = File(context.filesDir, "receipt_${System.currentTimeMillis()}.jpg")
                                 FileOutputStream(file).use { out ->
-                                    finalBitmap.compress(Bitmap.CompressFormat.JPEG, 90, out)
+                                    finalBitmap.compress(Bitmap.CompressFormat.JPEG, 100, out)
                                 }
                                 onSave(file.absolutePath)
                             } catch (e: Exception) {

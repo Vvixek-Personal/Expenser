@@ -1013,6 +1013,7 @@ fun AddEditSavingsGoalDialog(
     onSave: (name: String, target: Double, category: String, imageUri: String?, targetDate: Long) -> Unit
 ) {
     val haptic = LocalHapticFeedback.current
+    val context = LocalContext.current
     val goalCategoriesList by viewModel.goalCategories.collectAsStateWithLifecycle()
 
     var name by remember { mutableStateOf(goalToEdit?.name ?: "") }
@@ -1032,7 +1033,13 @@ fun AddEditSavingsGoalDialog(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
         if (uri != null) {
-            imageUriStr = uri.toString()
+            val bitmap = loadFullResolutionBitmap(context, uri)
+            if (bitmap != null) {
+                val savedPath = saveBitmapToInternalStorage(context, bitmap, "goal")
+                if (savedPath != null) {
+                    imageUriStr = savedPath
+                }
+            }
         }
     }
 

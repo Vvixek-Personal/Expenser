@@ -1,5 +1,6 @@
 package com.example.ui
 
+import android.graphics.Bitmap
 import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -66,13 +67,30 @@ fun PersonalDataScreen(
     var genderOption by remember { mutableStateOf(currentGender) }
 
     val context = LocalContext.current
+    var pfpEditingBitmap by remember { mutableStateOf<Bitmap?>(null) }
+    var showPfpCropperDialog by remember { mutableStateOf(false) }
+    var showPhotoOptionSheet by remember { mutableStateOf(false) }
 
     val imagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
         if (uri != null) {
-            viewModel.updateUserProfileImageUri(uri.toString())
-            Toast.makeText(context, "Profile picture updated successfully!", Toast.LENGTH_SHORT).show()
+            val bitmap = loadFullResolutionBitmap(context, uri)
+            if (bitmap != null) {
+                pfpEditingBitmap = bitmap
+                showPfpCropperDialog = true
+            } else {
+                Toast.makeText(context, "Unable to load image", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    val cameraLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.TakePicturePreview()
+    ) { bitmap: Bitmap? ->
+        if (bitmap != null) {
+            pfpEditingBitmap = bitmap
+            showPfpCropperDialog = true
         }
     }
 
@@ -138,7 +156,7 @@ fun PersonalDataScreen(
                 contentAlignment = Alignment.Center
             ) {
                 Box(
-                    modifier = Modifier.clickable { imagePickerLauncher.launch("image/*") },
+                    modifier = Modifier.clickable { showPhotoOptionSheet = true },
                     contentAlignment = Alignment.BottomEnd
                 ) {
                     Box(
@@ -350,6 +368,79 @@ fun PersonalDataScreen(
 
             Spacer(modifier = Modifier.height(40.dp))
         }
+    }
+
+    if (showPhotoOptionSheet) {
+        AlertDialog(
+            onDismissRequest = { showPhotoOptionSheet = false },
+            title = { Text("Profile Photo Options", fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TextButton(
+                        onClick = {
+                            showPhotoOptionSheet = false
+                            imagePickerLauncher.launch("image/*")
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.PhotoLibrary, contentDescription = null, tint = SleekPrimary)
+                            Text("Choose from Gallery", color = SleekTextPrimary, fontWeight = FontWeight.SemiBold)
+                        }
+                    }
+
+                    TextButton(
+                        onClick = {
+                            showPhotoOptionSheet = false
+                            cameraLauncher.launch(null)
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.PhotoCamera, contentDescription = null, tint = SleekPrimary)
+                            Text("Take Photo with Camera", color = SleekTextPrimary, fontWeight = FontWeight.SemiBold)
+                        }
+                    }
+
+                    if (!profileImageUri.isNullOrBlank()) {
+                        TextButton(
+                            onClick = {
+                                showPhotoOptionSheet = false
+                                viewModel.updateUserProfileImageUri(null)
+                                Toast.makeText(context, "Profile photo removed", Toast.LENGTH_SHORT).show()
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.Delete, contentDescription = null, tint = Color(0xFFEF4444))
+                                Text("Remove Profile Photo", color = Color(0xFFEF4444), fontWeight = FontWeight.SemiBold)
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { showPhotoOptionSheet = false }) {
+                    Text("Cancel", color = SleekTextSecondary)
+                }
+            },
+            containerColor = SleekSurface,
+            shape = RoundedCornerShape(20.dp)
+        )
+    }
+
+    val currentPfpBmp = pfpEditingBitmap
+    if (showPfpCropperDialog && currentPfpBmp != null) {
+        ProfilePictureCropDialog(
+            initialBitmap = currentPfpBmp,
+            onDismiss = { showPfpCropperDialog = false },
+            onSave = { savedPath ->
+                showPfpCropperDialog = false
+                viewModel.updateUserProfileImageUri(savedPath)
+                Toast.makeText(context, "Profile picture updated successfully!", Toast.LENGTH_SHORT).show()
+            }
+        )
     }
 }
 
