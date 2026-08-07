@@ -183,6 +183,11 @@ fun FinanceAppScreen(viewModel: FinanceViewModel) {
     val incomeCategories by viewModel.incomeCategories.collectAsStateWithLifecycle()
     val categoryIcons by viewModel.categoryIcons.collectAsStateWithLifecycle()
 
+    val appPin by viewModel.appPin.collectAsStateWithLifecycle()
+    val isAppLocked by viewModel.isAppLocked.collectAsStateWithLifecycle()
+    val hasPromptedFirstRunPin by viewModel.hasPromptedFirstRunPin.collectAsStateWithLifecycle()
+
+    var showChangePinDialog by remember { mutableStateOf(false) }
     var showAddExpenseDialog by remember { mutableStateOf(false) }
     var prefilledDateForAddDialog by remember { mutableStateOf<Long?>(null) }
     var editingExpense by remember { mutableStateOf<Expense?>(null) }
@@ -256,6 +261,9 @@ fun FinanceAppScreen(viewModel: FinanceViewModel) {
                             onOpenSettingsScreen = { subScreen ->
                                 scope.launch { drawerState.close() }
                                 activeSettingsSubScreen = subScreen
+                            },
+                            onChangePasswordClick = {
+                                showChangePinDialog = true
                             }
                         )
                     }
@@ -436,6 +444,35 @@ fun FinanceAppScreen(viewModel: FinanceViewModel) {
                 null -> {}
             }
         }
+
+        // Full Screen Lock Overlay if app is locked with a PIN
+        if (isAppLocked && !appPin.isNullOrBlank()) {
+            PinLockScreen(viewModel = viewModel)
+        }
+    }
+
+    // First Run Optional PIN Setup Prompt
+    if (!isAppLocked && appPin.isNullOrBlank() && !hasPromptedFirstRunPin) {
+        FirstRunPinSetupDialog(
+            onSetPin = { newPin ->
+                viewModel.setAppPin(newPin)
+                viewModel.markFirstRunPinPrompted()
+            },
+            onMaybeLater = {
+                viewModel.markFirstRunPinPrompted()
+            }
+        )
+    }
+
+    // Change Password / PIN Dialog
+    if (showChangePinDialog) {
+        ChangePinDialog(
+            currentAppPin = appPin,
+            onDismiss = { showChangePinDialog = false },
+            onSavePin = { newPin ->
+                viewModel.setAppPin(newPin)
+            }
+        )
     }
 
     if (userName.isNullOrBlank()) {
@@ -5737,7 +5774,8 @@ fun SidebarSettingsTile(
 fun SidebarDrawerContent(
     viewModel: FinanceViewModel,
     onCloseDrawer: () -> Unit,
-    onOpenSettingsScreen: (SettingsSubScreen) -> Unit
+    onOpenSettingsScreen: (SettingsSubScreen) -> Unit,
+    onChangePasswordClick: () -> Unit
 ) {
     val context = LocalContext.current
     val userName by viewModel.userName.collectAsStateWithLifecycle()
@@ -5861,7 +5899,114 @@ fun SidebarDrawerContent(
             }
         }
         
-        Spacer(modifier = Modifier.height(20.dp))
+        Spacer(modifier = Modifier.height(18.dp))
+
+        // 2. Reference Image "General" Section Card
+        Text(
+            text = LanguageManager.tr("General", selectedLanguage),
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.Bold,
+            color = SleekTextSecondary,
+            modifier = Modifier.padding(start = 4.dp, bottom = 8.dp)
+        )
+
+        Card(
+            colors = CardDefaults.cardColors(containerColor = SleekSurface),
+            border = BorderStroke(1.dp, SleekBorder),
+            shape = RoundedCornerShape(20.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                // Item 1: Personal details
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            onCloseDrawer()
+                            onOpenSettingsScreen(SettingsSubScreen.PersonalData)
+                        }
+                        .padding(16.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(38.dp)
+                            .clip(CircleShape)
+                            .background(Color(0xFFFFF7ED)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Person,
+                            contentDescription = "Personal details",
+                            tint = Color(0xFFF97316),
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    Text(
+                        text = LanguageManager.tr("Personal details", selectedLanguage),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = SleekTextPrimary,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Icon(
+                        imageVector = Icons.Default.ChevronRight,
+                        contentDescription = null,
+                        tint = SleekTextSecondary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+
+                HorizontalDivider(
+                    color = SleekBorder.copy(alpha = 0.5f),
+                    modifier = Modifier.padding(horizontal = 16.dp)
+                )
+
+                // Item 2: Change password
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            onCloseDrawer()
+                            onChangePasswordClick()
+                        }
+                        .padding(16.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(38.dp)
+                            .clip(CircleShape)
+                            .background(Color(0xFFFFF7ED)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Lock,
+                            contentDescription = "Change password",
+                            tint = Color(0xFFF97316),
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    Text(
+                        text = LanguageManager.tr("Change password", selectedLanguage),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = SleekTextPrimary,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Icon(
+                        imageVector = Icons.Default.ChevronRight,
+                        contentDescription = null,
+                        tint = SleekTextSecondary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(18.dp))
 
         Text(
             text = LanguageManager.tr("App Configuration", selectedLanguage),

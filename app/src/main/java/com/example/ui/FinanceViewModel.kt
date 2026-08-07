@@ -157,6 +157,47 @@ class FinanceViewModel(
     private val _userGender = MutableStateFlow("Male")
     val userGender: StateFlow<String> = _userGender.asStateFlow()
 
+    // Passcode Security PIN State & Logic
+    private val _appPin = MutableStateFlow<String?>(null)
+    val appPin: StateFlow<String?> = _appPin.asStateFlow()
+
+    private val _hasPromptedFirstRunPin = MutableStateFlow<Boolean>(false)
+    val hasPromptedFirstRunPin: StateFlow<Boolean> = _hasPromptedFirstRunPin.asStateFlow()
+
+    private val _isAppLocked = MutableStateFlow<Boolean>(false)
+    val isAppLocked: StateFlow<Boolean> = _isAppLocked.asStateFlow()
+
+    fun setAppPin(pin: String?) {
+        _appPin.value = pin
+        if (pin.isNullOrBlank()) {
+            sharedPrefs.edit().remove("app_pin").apply()
+            _isAppLocked.value = false
+        } else {
+            sharedPrefs.edit().putString("app_pin", pin).apply()
+            _isAppLocked.value = false
+        }
+    }
+
+    fun markFirstRunPinPrompted() {
+        _hasPromptedFirstRunPin.value = true
+        sharedPrefs.edit().putBoolean("pin_prompted_first_run", true).apply()
+    }
+
+    fun unlockAppWithPin(enteredPin: String): Boolean {
+        val currentPin = _appPin.value
+        if (currentPin != null && currentPin == enteredPin) {
+            _isAppLocked.value = false
+            return true
+        }
+        return false
+    }
+
+    fun lockApp() {
+        if (!_appPin.value.isNullOrBlank()) {
+            _isAppLocked.value = true
+        }
+    }
+
     // Daily Streak State & Logic
     private val _currentStreak = MutableStateFlow(1)
     val currentStreak: StateFlow<Int> = _currentStreak.asStateFlow()
@@ -333,6 +374,14 @@ class FinanceViewModel(
         
         // Load Dark Mode setting
         com.example.ui.theme.isDarkModeActive = sharedPrefs.getBoolean("dark_mode_active", false)
+
+        // Load Passcode PIN Security Settings
+        val savedPin = sharedPrefs.getString("app_pin", null)
+        _appPin.value = savedPin
+        _hasPromptedFirstRunPin.value = sharedPrefs.getBoolean("pin_prompted_first_run", false)
+        if (!savedPin.isNullOrBlank()) {
+            _isAppLocked.value = true
+        }
         com.example.ui.theme.updateThemeColors(_themeIndex.value, _customThemeHue.value)
 
         // Load GST and Monthly Safe settings
