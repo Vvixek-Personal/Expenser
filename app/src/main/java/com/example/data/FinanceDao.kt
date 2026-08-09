@@ -5,25 +5,13 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface FinanceDao {
-    // Expenses
-    @Query("SELECT * FROM expenses ORDER BY date DESC")
-    fun getAllExpenses(): Flow<List<Expense>>
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertExpense(expense: Expense): Long
-
-    @Update
-    suspend fun updateExpense(expense: Expense)
-
-    @Delete
-    suspend fun deleteExpense(expense: Expense)
-
-    // Accounts
+    // --- Accounts ---
     @Query("SELECT * FROM accounts ORDER BY name ASC")
     fun getAllAccounts(): Flow<List<Account>>
 
     @Query("SELECT * FROM accounts WHERE id = :id")
-    suspend fun getAccountById(id: Int): Account?
+    suspend fun getAccountById(id: Long): Account?
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAccount(account: Account): Long
@@ -34,12 +22,16 @@ interface FinanceDao {
     @Delete
     suspend fun deleteAccount(account: Account)
 
-    // Transactions
+
+    // --- Transactions ---
     @Query("SELECT * FROM transactions ORDER BY timestamp DESC")
     fun getAllTransactions(): Flow<List<Transaction>>
 
     @Query("SELECT * FROM transactions WHERE accountId = :accountId ORDER BY timestamp DESC")
-    fun getTransactionsByAccount(accountId: Int): Flow<List<Transaction>>
+    fun getTransactionsByAccount(accountId: Long): Flow<List<Transaction>>
+
+    @Query("SELECT * FROM transactions WHERE timestamp BETWEEN :startDate AND :endDate ORDER BY timestamp DESC")
+    fun getTransactionsByDateRange(startDate: Long, endDate: Long): Flow<List<Transaction>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertTransaction(transaction: Transaction): Long
@@ -50,7 +42,11 @@ interface FinanceDao {
     @Delete
     suspend fun deleteTransaction(transaction: Transaction)
 
-    // Budgets
+
+    // --- Budgets ---
+    @Query("SELECT * FROM budgets WHERE monthYear = :monthYear")
+    fun getBudgetsForMonth(monthYear: String): Flow<List<Budget>>
+
     @Query("SELECT * FROM budgets")
     fun getAllBudgets(): Flow<List<Budget>>
 
@@ -63,7 +59,8 @@ interface FinanceDao {
     @Delete
     suspend fun deleteBudget(budget: Budget)
 
-    // Savings Goals
+
+    // --- Savings Goals ---
     @Query("SELECT * FROM savings_goals")
     fun getAllSavingsGoals(): Flow<List<SavingsGoal>>
 

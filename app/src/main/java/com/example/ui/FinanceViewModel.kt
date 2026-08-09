@@ -5,13 +5,17 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import com.example.data.*
 import com.example.api.GeminiClient
+import com.example.data.*
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import java.time.LocalDate
+import java.time.YearMonth
+import java.time.format.DateTimeFormatter
 import java.util.Locale
-import java.text.SimpleDateFormat
-import java.util.Date
+
+// --- Data Models ---
 
 data class ChatMessage(
     val text: String,
@@ -19,7 +23,13 @@ data class ChatMessage(
     val timestamp: Long = System.currentTimeMillis()
 )
 
-data class BillEntry(val id: String, val title: String, val amount: Double, val dueDate: String)
+data class BillEntry(
+    val id: String,
+    val title: String,
+    val amount: Double,
+    val dueDate: String
+)
+
 data class ReminderEntry(
     val id: String,
     val text: String,
@@ -28,1431 +38,231 @@ data class ReminderEntry(
     val isEnabled: Boolean = true
 )
 
+data class FinancialSummaryState(
+    val totalIncome: Double = 0.0,
+    val totalExpenses: Double = 0.0,
+    val netBalance: Double = 0.0,
+    val activeBudgetsCount: Int = 0,
+    val totalSavings: Double = 0.0,
+    val isLoading: Boolean = true
+)
+
+// --- Helper Utilities ---
+
+private object DateUtils {
+    val monthYearFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("MM-yyyy", Locale.getDefault())
+    val isoDateFormatter: DateTimeFormatter = DateTimeFormatter.ISO_LOCAL_DATE
+}
+
+// --- ViewModel Implementation ---
+
 class FinanceViewModel(
     application: Application,
     private val repository: FinanceRepository
 ) : AndroidViewModel(application) {
 
-    val billsList = androidx.compose.runtime.mutableStateListOf<BillEntry>()
+    // --- Core Reactive Flow Inputs from Repository ---
+    val expenses: StateFlow<List<Expense>> = repository.getAllExpenses()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    val remindersList = androidx.compose.runtime.mutableStateListOf<ReminderEntry>()
+    val transactions: StateFlow<List<Transaction>> = repository.getAllTransactions()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    // Database states
-    val expenses = repository.allExpenses.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = emptyList()
-    )
+    val budgets: StateFlow<List<Budget>> = repository.getBudgets()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    // Selected Date Range (Long: start timestamp, Long: end timestamp)
-    private val _selectedDateRange = MutableStateFlow<Pair<Long, Long>?>(null)
-    val selectedDateRange: StateFlow<Pair<Long, Long>?> = _selectedDateRange.asStateFlow()
+    val savingsGoals: StateFlow<List<SavingsGoal>> = repository.getSavingsGoals()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    fun setDateRange(start: Long?, end: Long?) {
-        _selectedDateRange.value = if (start != null && end != null) Pair(start, end) else null
-    }
+    // --- ViewModel Local State Flows ---
+    private val _billsList = MutableStateFlow<List<BillEntry>>(emptyList())
+    val billsList: StateFlow<List<BillEntry>> = _billsList.asStateFlow()
 
-    // Filtered Expenses based on date range
-    val filteredExpenses = combine(expenses, _selectedDateRange) { list, range ->
-        if (range == null) {
-            list
-        } else {
-            // Include dates inside the inclusive range
-            list.filter { it.date >= range.first && it.date <= range.second }
-        }
-    }.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = emptyList()
-    )
+    private val _remindersList = MutableStateFlow<List<ReminderEntry>>(emptyList())
+    val remindersList: StateFlow<List<ReminderEntry>> = _remindersList.asStateFlow()
 
-    val accounts = repository.allAccounts.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = emptyList()
-    )
-
-    val transactions = repository.allTransactions.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = emptyList()
-    )
-
-    val budgets = repository.allBudgets.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = emptyList()
-    )
-
-    val savingsGoals = repository.allSavingsGoals.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = emptyList()
-    )
-
-    // Chat and AI states
     private val _chatMessages = MutableStateFlow<List<ChatMessage>>(
-        listOf(
-            ChatMessage(
-                text = "Hello! I am your AI Financial Advisor. Ask me anything about budgeting, savings strategies, or request a complete 'AI Financial Audit' of your current finances using the dashboard button!",
-                isUser = false
-            )
-        )
+        listOf(ChatMessage("Hello! I am your AI financial assistant. How can I help you manage your money today?", isUser = false))
     )
     val chatMessages: StateFlow<List<ChatMessage>> = _chatMessages.asStateFlow()
 
-    private val _isChatLoading = MutableStateFlow(false)
-    val isChatLoading: StateFlow<Boolean> = _isChatLoading.asStateFlow()
-
-    private val _aiAuditReport = MutableStateFlow<String?>(null)
-    val aiAuditReport: StateFlow<String?> = _aiAuditReport.asStateFlow()
-
-    private val _isAuditLoading = MutableStateFlow(false)
-    val isAuditLoading: StateFlow<Boolean> = _isAuditLoading.asStateFlow()
-
-    // Selected Language Preference
-    private val _selectedLanguage = MutableStateFlow("English")
-    val selectedLanguage: StateFlow<String> = _selectedLanguage.asStateFlow()
-
-    // SharedPreferences for local configuration
-    private val _themeIndex = MutableStateFlow(0)
-    val themeIndex: StateFlow<Int> = _themeIndex.asStateFlow()
-
-    private val _customThemeHue = MutableStateFlow(200f)
-    val customThemeHue: StateFlow<Float> = _customThemeHue.asStateFlow()
-
-    private val _themeMode = MutableStateFlow("light")
-    val themeMode: StateFlow<String> = _themeMode.asStateFlow()
-
-    private val _isFollowDeviceColors = MutableStateFlow(false)
-    val isFollowDeviceColors: StateFlow<Boolean> = _isFollowDeviceColors.asStateFlow()
-
-    private val sharedPrefs = getApplication<Application>().getSharedPreferences("finance_prefs", android.content.Context.MODE_PRIVATE)
-
-    // Live Storage and Network/Data Usage states
-    private val _storageSize = MutableStateFlow("0.0 KB")
-    val storageSize: StateFlow<String> = _storageSize.asStateFlow()
-
-    private val _dataSize = MutableStateFlow("0.0 KB")
-    val dataSize: StateFlow<String> = _dataSize.asStateFlow()
-
-    // Map storing Category Name to Material Icon Name (e.g. "Restaurant", "Star", "Pending" during load)
-    private val _categoryIcons = MutableStateFlow<Map<String, String>>(emptyMap())
-    val categoryIcons: StateFlow<Map<String, String>> = _categoryIcons.asStateFlow()
-
-    private val _userName = MutableStateFlow<String?>(null)
-    val userName: StateFlow<String?> = _userName.asStateFlow()
-
-    private val _userProfileImageUri = MutableStateFlow<String?>(null)
-    val userProfileImageUri: StateFlow<String?> = _userProfileImageUri.asStateFlow()
-
-    fun updateUserProfileImageUri(uriString: String?) {
-        _userProfileImageUri.value = uriString
-        sharedPrefs.edit().putString("user_profile_image_uri", uriString).apply()
-    }
-
-    private val _userDob = MutableStateFlow("24 December 1999")
-    val userDob: StateFlow<String> = _userDob.asStateFlow()
-
-    private val _userJob = MutableStateFlow("Successor Designer")
-    val userJob: StateFlow<String> = _userJob.asStateFlow()
-
-    private val _userMonthlyIncome = MutableStateFlow("500 - 3000 / year")
-    val userMonthlyIncome: StateFlow<String> = _userMonthlyIncome.asStateFlow()
-
-    private val _userGender = MutableStateFlow("Male")
-    val userGender: StateFlow<String> = _userGender.asStateFlow()
-
-    // Passcode Security PIN State & Logic
-    private val _appPin = MutableStateFlow<String?>(null)
-    val appPin: StateFlow<String?> = _appPin.asStateFlow()
-
-    private val _hasPromptedFirstRunPin = MutableStateFlow<Boolean>(false)
-    val hasPromptedFirstRunPin: StateFlow<Boolean> = _hasPromptedFirstRunPin.asStateFlow()
-
-    private val _isAppLocked = MutableStateFlow<Boolean>(false)
-    val isAppLocked: StateFlow<Boolean> = _isAppLocked.asStateFlow()
-
-    fun setAppPin(pin: String?) {
-        _appPin.value = pin
-        if (pin.isNullOrBlank()) {
-            sharedPrefs.edit().remove("app_pin").apply()
-            _isAppLocked.value = false
-        } else {
-            sharedPrefs.edit().putString("app_pin", pin).apply()
-            _isAppLocked.value = false
-        }
-    }
-
-    fun markFirstRunPinPrompted() {
-        _hasPromptedFirstRunPin.value = true
-        sharedPrefs.edit().putBoolean("pin_prompted_first_run", true).apply()
-    }
-
-    fun unlockAppWithPin(enteredPin: String): Boolean {
-        val currentPin = _appPin.value
-        if (currentPin != null && currentPin == enteredPin) {
-            _isAppLocked.value = false
-            return true
-        }
-        return false
-    }
-
-    fun lockApp() {
-        if (!_appPin.value.isNullOrBlank()) {
-            _isAppLocked.value = true
-        }
-    }
-
-    // Daily Streak State & Logic
-    private val _currentStreak = MutableStateFlow(1)
-    val currentStreak: StateFlow<Int> = _currentStreak.asStateFlow()
-
-    private val _showStreakDialog = MutableStateFlow(false)
-    val showStreakDialog: StateFlow<Boolean> = _showStreakDialog.asStateFlow()
-
-    fun dismissStreakDialog() {
-        _showStreakDialog.value = false
-    }
-
-    fun triggerShowStreakDialog() {
-        _showStreakDialog.value = true
-    }
-
-    private fun checkAndCalculateDailyStreak() {
-        val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-        val todayStr = sdf.format(Date())
-        val lastStreakDate = sharedPrefs.getString("last_streak_date", null)
-        var streak = sharedPrefs.getInt("current_streak", 0)
-
-        if (lastStreakDate == null) {
-            streak = 1
-            sharedPrefs.edit()
-                .putString("last_streak_date", todayStr)
-                .putInt("current_streak", streak)
-                .apply()
-            _currentStreak.value = streak
-            _showStreakDialog.value = true
-        } else if (lastStreakDate == todayStr) {
-            _currentStreak.value = if (streak < 1) 1 else streak
-            _showStreakDialog.value = false
-        } else {
-            try {
-                val lastDate = sdf.parse(lastStreakDate)
-                val todayDate = sdf.parse(todayStr)
-                if (lastDate != null && todayDate != null) {
-                    val diffInMillis = todayDate.time - lastDate.time
-                    val diffInDays = (diffInMillis / (1000 * 60 * 60 * 24)).toInt()
-
-                    if (diffInDays == 1) {
-                        streak += 1
-                    } else if (diffInDays > 1) {
-                        streak = 1
-                    } else {
-                        if (streak < 1) streak = 1
-                    }
-                } else {
-                    streak = 1
-                }
-            } catch (e: Exception) {
-                streak = 1
-            }
-
-            sharedPrefs.edit()
-                .putString("last_streak_date", todayStr)
-                .putInt("current_streak", streak)
-                .apply()
-            _currentStreak.value = streak
-            _showStreakDialog.value = true
-        }
-    }
-
-    private val _monthlyBudget = MutableStateFlow(25000.0)
-    val monthlyBudget: StateFlow<Double> = _monthlyBudget.asStateFlow()
-
-    private val _customCategories = MutableStateFlow<List<String>>(emptyList())
-    val customCategories: StateFlow<List<String>> = _customCategories.asStateFlow()
-
-    private val _customExpenseCategories = MutableStateFlow<List<String>>(emptyList())
-    val customExpenseCategories: StateFlow<List<String>> = _customExpenseCategories.asStateFlow()
-
-    private val _customIncomeCategories = MutableStateFlow<List<String>>(emptyList())
-    val customIncomeCategories: StateFlow<List<String>> = _customIncomeCategories.asStateFlow()
-
-    // GST Auto-Tax Reserve State
-    private val _isGstEnabled = MutableStateFlow(true)
-    val isGstEnabled: StateFlow<Boolean> = _isGstEnabled.asStateFlow()
-
-    private val _gstRatePercent = MutableStateFlow(18.0)
-    val gstRatePercent: StateFlow<Double> = _gstRatePercent.asStateFlow()
-
-    // Monthly ₹50 Safe Vault State
-    private val _isMonthlySafeEnabled = MutableStateFlow(true)
-    val isMonthlySafeEnabled: StateFlow<Boolean> = _isMonthlySafeEnabled.asStateFlow()
-
-    private val _monthlySafeAmount = MutableStateFlow(50.0)
-    val monthlySafeAmount: StateFlow<Double> = _monthlySafeAmount.asStateFlow()
-
-    // Currency Settings
-    private val _selectedCurrencyCode = MutableStateFlow("INR")
-    val selectedCurrencyCode: StateFlow<String> = _selectedCurrencyCode.asStateFlow()
-
-    private val _selectedCurrencySymbol = MutableStateFlow("₹")
-    val selectedCurrencySymbol: StateFlow<String> = _selectedCurrencySymbol.asStateFlow()
-
-    private val _selectedCurrencyName = MutableStateFlow("Indian Rupee")
-    val selectedCurrencyName: StateFlow<String> = _selectedCurrencyName.asStateFlow()
-
-    private val _statsCurrencyCode = MutableStateFlow("INR")
-    val statsCurrencyCode: StateFlow<String> = _statsCurrencyCode.asStateFlow()
-
-    private val _statsCurrencySymbol = MutableStateFlow("₹")
-    val statsCurrencySymbol: StateFlow<String> = _statsCurrencySymbol.asStateFlow()
-
-    private val _lastExchangeRateUpdate = MutableStateFlow("Today (Cached)")
-    val lastExchangeRateUpdate: StateFlow<String> = _lastExchangeRateUpdate.asStateFlow()
-
-    // Appearance & Layout Preferences
-    private val _textSizeOption = MutableStateFlow("Medium")
-    val textSizeOption: StateFlow<String> = _textSizeOption.asStateFlow()
-
-    private val _isCompactLayout = MutableStateFlow(false)
-    val isCompactLayout: StateFlow<Boolean> = _isCompactLayout.asStateFlow()
-
-    private val _isAnimationEnabled = MutableStateFlow(true)
-    val isAnimationEnabled: StateFlow<Boolean> = _isAnimationEnabled.asStateFlow()
-
-    // Date & Time Preferences
-    private val _dateFormat = MutableStateFlow("dd/MM/yyyy")
-    val dateFormat: StateFlow<String> = _dateFormat.asStateFlow()
-
-    private val _firstDayOfWeek = MutableStateFlow("Monday")
-    val firstDayOfWeek: StateFlow<String> = _firstDayOfWeek.asStateFlow()
-
-    // Bill Preferences
-    private val _billReminderTiming = MutableStateFlow("1 Day Before")
-    val billReminderTiming: StateFlow<String> = _billReminderTiming.asStateFlow()
-
-    private val _billAutoMarkPaid = MutableStateFlow(false)
-    val billAutoMarkPaid: StateFlow<Boolean> = _billAutoMarkPaid.asStateFlow()
-
-    private val _billOverdueAlert = MutableStateFlow(true)
-    val billOverdueAlert: StateFlow<Boolean> = _billOverdueAlert.asStateFlow()
-
-    // Budget Preferences
-    private val _budgetWarning80 = MutableStateFlow(true)
-    val budgetWarning80: StateFlow<Boolean> = _budgetWarning80.asStateFlow()
-
-    private val _budgetWarning90 = MutableStateFlow(true)
-    val budgetWarning90: StateFlow<Boolean> = _budgetWarning90.asStateFlow()
-
-    private val _budgetWarning100 = MutableStateFlow(true)
-    val budgetWarning100: StateFlow<Boolean> = _budgetWarning100.asStateFlow()
-
-    // Savings Goals Preferences
-    private val _goalViewMode = MutableStateFlow("Grid")
-    val goalViewMode: StateFlow<String> = _goalViewMode.asStateFlow()
-
-    private val _goalProgressStyle = MutableStateFlow("Circle")
-    val goalProgressStyle: StateFlow<String> = _goalProgressStyle.asStateFlow()
-
-    // Transaction Preferences
-    private val _defaultTxType = MutableStateFlow("EXPENSE")
-    val defaultTxType: StateFlow<String> = _defaultTxType.asStateFlow()
-
-    private val _rememberLastCategory = MutableStateFlow(true)
-    val rememberLastCategory: StateFlow<Boolean> = _rememberLastCategory.asStateFlow()
-
-    private val _confirmTxDelete = MutableStateFlow(true)
-    val confirmTxDelete: StateFlow<Boolean> = _confirmTxDelete.asStateFlow()
-
-    private val _groupByDate = MutableStateFlow(true)
-    val groupByDate: StateFlow<Boolean> = _groupByDate.asStateFlow()
-
-    // Security & Privacy Preferences
-    private val _lockOnRestart = MutableStateFlow(true)
-    val lockOnRestart: StateFlow<Boolean> = _lockOnRestart.asStateFlow()
-
-    private val _autoLockDuration = MutableStateFlow("Immediately")
-    val autoLockDuration: StateFlow<String> = _autoLockDuration.asStateFlow()
-
-    private val _biometricEnabled = MutableStateFlow(false)
-    val biometricEnabled: StateFlow<Boolean> = _biometricEnabled.asStateFlow()
-
-    private val _hideSensitiveAmounts = MutableStateFlow(false)
-    val hideSensitiveAmounts: StateFlow<Boolean> = _hideSensitiveAmounts.asStateFlow()
-
-    private val _screenshotProtection = MutableStateFlow(false)
-    val screenshotProtection: StateFlow<Boolean> = _screenshotProtection.asStateFlow()
-
-    private val _privacyModeEnabled = MutableStateFlow(false)
-    val privacyModeEnabled: StateFlow<Boolean> = _privacyModeEnabled.asStateFlow()
-
-    // Backup & Restore Preferences
-    private val _autoBackupEnabled = MutableStateFlow(true)
-    val autoBackupEnabled: StateFlow<Boolean> = _autoBackupEnabled.asStateFlow()
-
-    private val _lastBackupTimestamp = MutableStateFlow("Never")
-    val lastBackupTimestamp: StateFlow<String> = _lastBackupTimestamp.asStateFlow()
-
-    private val _toastMessage = MutableStateFlow<String?>(null)
-    val toastMessage: StateFlow<String?> = _toastMessage.asStateFlow()
-
-    fun clearToastMessage() {
-        _toastMessage.value = null
-    }
-
-    fun toggleGstEnabled(enabled: Boolean) {
-        _isGstEnabled.value = enabled
-        sharedPrefs.edit().putBoolean("is_gst_enabled", enabled).apply()
-    }
-
-    fun updateGstRate(rate: Double) {
-        if (rate in 0.0..100.0) {
-            _gstRatePercent.value = rate
-            sharedPrefs.edit().putFloat("gst_rate_percent", rate.toFloat()).apply()
-        }
-    }
-
-    fun toggleMonthlySafeEnabled(enabled: Boolean) {
-        _isMonthlySafeEnabled.value = enabled
-        sharedPrefs.edit().putBoolean("is_monthly_safe_enabled", enabled).apply()
-    }
-
-    fun updateMonthlySafeAmount(amount: Double) {
-        if (amount > 0) {
-            _monthlySafeAmount.value = amount
-            sharedPrefs.edit().putFloat("monthly_safe_amount", amount.toFloat()).apply()
-        }
-    }
-
-    val defaultExpenseCategories = listOf("Food", "Travel", "Rent", "Utilities", "Entertainment", "Shopping", "Home", "Others")
-    val defaultIncomeCategories = listOf("Salary", "Freelance", "Investments", "Gifts", "Others")
-    val defaultCategories = (defaultExpenseCategories + defaultIncomeCategories).distinct()
-
-    val defaultGoalCategories = listOf(
-        "Saving", "Investment", "Expenditure", "Travel", "Tech",
-        "Shopping", "Vehicle", "Education", "Emergency"
-    )
-
-    private val _customGoalCategories = MutableStateFlow<List<String>>(emptyList())
-    val goalCategories: StateFlow<List<String>> = _customGoalCategories.map { custom ->
-        (defaultGoalCategories + custom).distinct()
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), defaultGoalCategories)
-
-    val allCategories = _customCategories.map { custom ->
-        (defaultCategories + custom).distinct()
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), defaultCategories)
-
-    val expenseCategories = _customExpenseCategories.map { custom ->
-        (defaultExpenseCategories + custom).distinct()
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), defaultExpenseCategories)
-
-    val incomeCategories = _customIncomeCategories.map { custom ->
-        (defaultIncomeCategories + custom).distinct()
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), defaultIncomeCategories)
-
-    init {
-        checkAndCalculateDailyStreak()
-        _userName.value = sharedPrefs.getString("user_name", null)
-        _userProfileImageUri.value = sharedPrefs.getString("user_profile_image_uri", null)
-        _userDob.value = sharedPrefs.getString("user_dob", "24 December 1999") ?: "24 December 1999"
-        _userJob.value = sharedPrefs.getString("user_job", "Successor Designer") ?: "Successor Designer"
-        _userMonthlyIncome.value = sharedPrefs.getString("user_monthly_income", "500 - 3000 / year") ?: "500 - 3000 / year"
-        _userGender.value = sharedPrefs.getString("user_gender", "Male") ?: "Male"
-        _monthlyBudget.value = sharedPrefs.getFloat("monthly_budget", 25000.0f).toDouble()
-        val savedCats = sharedPrefs.getStringSet("custom_categories", emptySet()) ?: emptySet()
-        val savedExpenseCats = sharedPrefs.getStringSet("custom_expense_categories", null)
-        val savedIncomeCats = sharedPrefs.getStringSet("custom_income_categories", null)
-
-        val expSet = savedExpenseCats ?: (savedCats - defaultIncomeCategories.toSet())
-        val incSet = savedIncomeCats ?: emptySet()
-
-        _customExpenseCategories.value = expSet.toList().sorted()
-        _customIncomeCategories.value = incSet.toList().sorted()
-        _customCategories.value = (expSet + incSet + savedCats).distinct().sorted()
-
-        val savedGoalCats = sharedPrefs.getStringSet("custom_goal_categories", emptySet()) ?: emptySet()
-        _customGoalCategories.value = savedGoalCats.toList().sorted()
-        
-        _themeIndex.value = sharedPrefs.getInt("theme_index", 0)
-        _customThemeHue.value = sharedPrefs.getFloat("custom_theme_hue", 200f)
-        _selectedLanguage.value = sharedPrefs.getString("selected_language", "English") ?: "English"
-        LanguageManager.applyAppLocale(getApplication(), _selectedLanguage.value)
-        
-        // Load Theme Mode & Follow Device Colors
-        val defaultMode = if (sharedPrefs.getBoolean("dark_mode_active", false)) "dark" else "light"
-        val savedMode = sharedPrefs.getString("theme_mode", defaultMode) ?: defaultMode
-        _themeMode.value = savedMode
-        com.example.ui.theme.themeModeState = savedMode
-        com.example.ui.theme.isDarkModeActive = (savedMode == "dark")
-
-        val savedFollowColors = sharedPrefs.getBoolean("follow_device_colors", false)
-        _isFollowDeviceColors.value = savedFollowColors
-        com.example.ui.theme.isFollowDeviceColorsState = savedFollowColors
-
-        // Load Passcode PIN Security Settings
-        val savedPin = sharedPrefs.getString("app_pin", null)
-        _appPin.value = savedPin
-        _hasPromptedFirstRunPin.value = sharedPrefs.getBoolean("pin_prompted_first_run", false)
-        if (!savedPin.isNullOrBlank()) {
-            _isAppLocked.value = true
-        }
-        com.example.ui.theme.updateThemeColors(_themeIndex.value, _customThemeHue.value)
-
-        // Load GST and Monthly Safe settings
-        _isGstEnabled.value = sharedPrefs.getBoolean("is_gst_enabled", true)
-        _gstRatePercent.value = sharedPrefs.getFloat("gst_rate_percent", 18.0f).toDouble()
-        _isMonthlySafeEnabled.value = sharedPrefs.getBoolean("is_monthly_safe_enabled", true)
-        _monthlySafeAmount.value = sharedPrefs.getFloat("monthly_safe_amount", 50.0f).toDouble()
-
-        // Load custom category icons
-        val iconsMap = mutableMapOf<String, String>()
-        savedCats.forEach { cat ->
-            iconsMap[cat] = sharedPrefs.getString("cat_icon_$cat", "Star") ?: "Star"
-        }
-        _categoryIcons.value = iconsMap
-
-        // Compute initial storage & network values
-        refreshUsageData()
-
-        // Ensure no prefilled default goals are added automatically
-        val hasSeeded = sharedPrefs.getBoolean("has_seeded_savings_goals", false)
-        if (!hasSeeded) {
-            sharedPrefs.edit().putBoolean("has_seeded_savings_goals", true).apply()
-        }
-    }
-
-
-
-    fun updateLanguage(language: String) {
-        _selectedLanguage.value = language
-        sharedPrefs.edit().putString("selected_language", language).apply()
-        LanguageManager.applyAppLocale(getApplication(), language)
-    }
-
-    fun updateThemeMode(mode: String) {
-        _themeMode.value = mode
-        sharedPrefs.edit().putString("theme_mode", mode).apply()
-        com.example.ui.theme.themeModeState = mode
-        com.example.ui.theme.isDarkModeActive = (mode == "dark")
-        com.example.ui.theme.updateThemeColors(_themeIndex.value, _customThemeHue.value)
-    }
-
-    fun toggleFollowDeviceColors(enabled: Boolean) {
-        _isFollowDeviceColors.value = enabled
-        sharedPrefs.edit().putBoolean("follow_device_colors", enabled).apply()
-        com.example.ui.theme.isFollowDeviceColorsState = enabled
-    }
-
-    fun toggleDarkMode() {
-        val nextMode = if (com.example.ui.theme.isDarkModeActive) "light" else "dark"
-        updateThemeMode(nextMode)
-    }
-
-    fun refreshUsageData() {
-        val context = getApplication<Application>()
-        
-        // 1. Storage Size
-        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-            val dbFile = context.getDatabasePath("finance_database")
-            var bytes = if (dbFile.exists()) dbFile.length() else 0L
-            val dbJournal = context.getDatabasePath("finance_database-journal")
-            if (dbJournal.exists()) bytes += dbJournal.length()
-            val dbWal = context.getDatabasePath("finance_database-wal")
-            if (dbWal.exists()) bytes += dbWal.length()
-            val dbShm = context.getDatabasePath("finance_database-shm")
-            if (dbShm.exists()) bytes += dbShm.length()
-
-            fun getFolderSize(dir: java.io.File?): Long {
-                if (dir == null || !dir.exists()) return 0
-                if (dir.isFile) return dir.length()
-                var sum = 0L
-                dir.listFiles()?.forEach { sum += getFolderSize(it) }
-                return sum
-            }
-            bytes += getFolderSize(context.filesDir)
-            bytes += getFolderSize(context.cacheDir)
-
-            val kb = bytes / 1024.0
-            val formatted = if (kb < 1024.0) {
-                String.format(Locale.getDefault(), "%.2f KB", kb)
-            } else {
-                String.format(Locale.getDefault(), "%.2f MB", kb / 1024.0)
-            }
-            _storageSize.value = formatted
-        }
-
-        // 2. Data/Network Usage
-        val uid = android.os.Process.myUid()
-        val rx = android.net.TrafficStats.getUidRxBytes(uid)
-        val tx = android.net.TrafficStats.getUidTxBytes(uid)
-        val netBytes = (if (rx == android.net.TrafficStats.UNSUPPORTED.toLong()) 0L else rx) +
-                       (if (tx == android.net.TrafficStats.UNSUPPORTED.toLong()) 0L else tx)
-        
-        val netKb = netBytes / 1024.0
-        val formattedNet = if (netKb < 1024.0) {
-            String.format(Locale.getDefault(), "%.2f KB", netKb)
-        } else {
-            String.format(Locale.getDefault(), "%.2f MB", netKb / 1024.0)
-        }
-        _dataSize.value = formattedNet
-    }
-
-    fun updateTheme(index: Int) {
-        sharedPrefs.edit().putInt("theme_index", index).apply()
-        _themeIndex.value = index
-        com.example.ui.theme.updateThemeColors(index, _customThemeHue.value)
-    }
-
-    fun updateCustomThemeHue(hue: Float) {
-        sharedPrefs.edit().putFloat("custom_theme_hue", hue).apply()
-        _customThemeHue.value = hue
-        com.example.ui.theme.updateThemeColors(_themeIndex.value, hue)
-    }
-
-    fun saveUserName(name: String) {
-        val trimmed = name.trim()
-        if (trimmed.isNotEmpty()) {
-            sharedPrefs.edit().putString("user_name", trimmed).apply()
-            _userName.value = trimmed
-        }
-    }
-
-    fun saveUserProfile(name: String, dob: String, job: String, income: String, gender: String) {
-        val trimmedName = name.trim()
-        if (trimmedName.isNotEmpty()) {
-            sharedPrefs.edit()
-                .putString("user_name", trimmedName)
-                .putString("user_dob", dob)
-                .putString("user_job", job)
-                .putString("user_monthly_income", income)
-                .putString("user_gender", gender)
-                .apply()
-            _userName.value = trimmedName
-            _userDob.value = dob
-            _userJob.value = job
-            _userMonthlyIncome.value = income
-            _userGender.value = gender
-        }
-    }
-
-    fun updateMonthlyBudget(newLimit: Double) {
-        if (newLimit > 0.0) {
-            sharedPrefs.edit().putFloat("monthly_budget", newLimit.toFloat()).apply()
-            _monthlyBudget.value = newLimit
-        }
-    }
-
-    fun addCustomCategory(category: String, type: String = "EXPENSE") {
-        val trimmed = category.trim()
-        if (trimmed.isEmpty()) return
-
-        val prefKey = if (type == "INCOME") "custom_income_categories" else "custom_expense_categories"
-        val currentTyped = sharedPrefs.getStringSet(prefKey, emptySet()) ?: emptySet()
-        val updatedTyped = currentTyped + trimmed
-
-        val currentLegacy = sharedPrefs.getStringSet("custom_categories", emptySet()) ?: emptySet()
-        val updatedLegacy = currentLegacy + trimmed
-
-        sharedPrefs.edit()
-            .putStringSet(prefKey, updatedTyped)
-            .putStringSet("custom_categories", updatedLegacy)
-            .apply()
-
-        if (type == "INCOME") {
-            _customIncomeCategories.value = updatedTyped.toList().sorted()
-        } else {
-            _customExpenseCategories.value = updatedTyped.toList().sorted()
-        }
-        _customCategories.value = updatedLegacy.toList().sorted()
-
-        // Set pending icon state in-memory first
-        _categoryIcons.value = _categoryIcons.value + (trimmed to "Pending")
-
-        // Map best Material Icon in background using Gemini API
-        viewModelScope.launch {
-            val prompt = """
-                For a personal finance category named "$trimmed", what is the single best Material Icon name from this list of exact names?
-                List of options:
-                Home, ShoppingCart, DirectionsCar, Restaurant, LocalHospital, School, Work, Flight, SportsEsports, CardGiftcard, MonetizationOn, Settings, Pets, Star, Construction, Fastfood, Movie, FlightTakeoff, Coffee, ElectricBolt, WaterDrop, Checkroom, DirectionsBus, LocalGasStation, FitnessCenter, Event, Spa, Healing
-                
-                Reply with ONLY the exact name of the selected icon from the options, nothing else. No punctuation, no markdown.
-            """.trimIndent()
-            
-            val chosenIcon = try {
-                GeminiClient.getFinancialAdvice(
-                    prompt = prompt,
-                    systemPrompt = "You are a system adapter that maps category keywords to standard Material Icon names. Always output exactly one name."
-                ).trim()
-            } catch (e: Exception) {
-                "Star"
-            }
-
-            val validIcons = listOf(
-                "Home", "ShoppingCart", "DirectionsCar", "Restaurant", "LocalHospital", "School", "Work", "Flight", 
-                "SportsEsports", "CardGiftcard", "MonetizationOn", "Settings", "Pets", "Star", "Construction", "Fastfood", 
-                "Movie", "FlightTakeoff", "Coffee", "ElectricBolt", "WaterDrop", "Checkroom", "DirectionsBus", "LocalGasStation",
-                "FitnessCenter", "Event", "Spa", "Healing"
+    private val _isAiLoading = MutableStateFlow(false)
+    val isAiLoading: StateFlow<Boolean> = _isAiLoading.asStateFlow()
+
+    // --- Combined Unified Dashboard State ---
+    val financialSummary: StateFlow<FinancialSummaryState> = combine(
+        expenses,
+        transactions,
+        budgets,
+        savingsGoals
+    ) { currentExpenses, currentTransactions, currentBudgets, currentGoals ->
+        val income = currentTransactions.filter { it.type.equals("INCOME", ignoreCase = true) }.sumOf { it.amount }
+        val spent = currentExpenses.sumOf { it.amount }
+        val savings = currentGoals.sumOf { it.currentAmount }
+
+        FinancialSummaryState(
+            totalIncome = income,
+            totalExpenses = spent,
+            netBalance = income - spent,
+            activeBudgetsCount = currentBudgets.size,
+            totalSavings = savings,
+            isLoading = false
+        )
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), FinancialSummaryState())
+
+    // --- Expenses & Transactions Operations ---
+    fun addExpense(title: String, amount: Double, category: String, date: String = LocalDate.now().format(DateUtils.isoDateFormatter)) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val expense = Expense(
+                title = title,
+                amount = amount,
+                category = category,
+                date = date
             )
-            val finalIcon = if (validIcons.contains(chosenIcon)) chosenIcon else "Star"
-
-            // Save matched icon
-            sharedPrefs.edit().putString("cat_icon_$trimmed", finalIcon).apply()
-            _categoryIcons.value = _categoryIcons.value + (trimmed to finalIcon)
-        }
-    }
-
-    fun addGoalCategory(category: String) {
-        val trimmed = category.trim()
-        if (trimmed.isBlank()) return
-        val current = sharedPrefs.getStringSet("custom_goal_categories", emptySet()) ?: emptySet()
-        val updated = (current + trimmed).sorted()
-        sharedPrefs.edit().putStringSet("custom_goal_categories", updated.toSet()).apply()
-        _customGoalCategories.value = updated
-    }
-
-    fun deleteGoalCategory(category: String) {
-        val trimmed = category.trim()
-        if (trimmed.isBlank()) return
-        val current = sharedPrefs.getStringSet("custom_goal_categories", emptySet()) ?: emptySet()
-        val updated = (current - trimmed).sorted()
-        sharedPrefs.edit().putStringSet("custom_goal_categories", updated.toSet()).apply()
-        _customGoalCategories.value = updated
-
-        // Reassign any goals using deleted category to "Saving"
-        viewModelScope.launch {
-            val allGoals = repository.allSavingsGoals.first()
-            allGoals.forEach { g ->
-                if (g.category.equals(trimmed, ignoreCase = true)) {
-                    repository.updateSavingsGoal(g.copy(category = "Saving"))
-                }
-            }
-        }
-    }
-
-    fun deleteCustomCategory(category: String) {
-        val trimmed = category.trim()
-        val current = sharedPrefs.getStringSet("custom_categories", emptySet()) ?: emptySet()
-        val updated = current - trimmed
-        sharedPrefs.edit()
-            .putStringSet("custom_categories", updated)
-            .remove("cat_icon_$trimmed")
-            .apply()
-        _customCategories.value = updated.toList().sorted()
-        _categoryIcons.value = _categoryIcons.value - trimmed
-        
-        // Update all existing expenses/transactions that belong to the deleted category to "Others"
-        viewModelScope.launch {
-            val allExpensesList = repository.allExpenses.first()
-            allExpensesList.forEach { exp ->
-                if (exp.category == trimmed) {
-                    repository.updateExpense(exp.copy(category = "Others"))
-                }
-            }
-        }
-    }
-
-    fun renameCustomCategory(oldName: String, newName: String) {
-        val trimmedOld = oldName.trim()
-        val trimmedNew = newName.trim()
-        if (trimmedNew.isEmpty() || trimmedOld == trimmedNew) return
-        
-        val current = sharedPrefs.getStringSet("custom_categories", emptySet()) ?: emptySet()
-        if (current.contains(trimmedOld)) {
-            val updated = current - trimmedOld + trimmedNew
-            val savedIcon = sharedPrefs.getString("cat_icon_$trimmedOld", "Star") ?: "Star"
-            sharedPrefs.edit()
-                .putStringSet("custom_categories", updated)
-                .remove("cat_icon_$trimmedOld")
-                .putString("cat_icon_$trimmedNew", savedIcon)
-                .apply()
-            _customCategories.value = updated.toList().sorted()
-            
-            // Update in categoryIcons map
-            val updatedIcons = _categoryIcons.value.toMutableMap()
-            updatedIcons.remove(trimmedOld)
-            updatedIcons[trimmedNew] = savedIcon
-            _categoryIcons.value = updatedIcons
-            
-            // Update all existing expenses/transactions that belong to the old category to the new category name
-            viewModelScope.launch {
-                val allExpensesList = repository.allExpenses.first()
-                allExpensesList.forEach { exp ->
-                    if (exp.category == trimmedOld) {
-                        repository.updateExpense(exp.copy(category = trimmedNew))
-                    }
-                }
-            }
-        }
-    }
-
-    fun getAvailableNetBalance(): Double {
-        val allExp = expenses.value
-        val totalInc = allExp.filter { it.type == "INCOME" }.sumOf { it.amount }
-        val totalExp = allExp.filter { it.type != "INCOME" }.sumOf { it.amount }
-        return totalInc - totalExp
-    }
-
-    // DB Operations
-    fun addExpense(
-        amount: Double,
-        category: String,
-        date: Long,
-        note: String?,
-        imagePath: String? = null,
-        type: String = "EXPENSE"
-    ) {
-        if (type == "EXPENSE") {
-            val available = getAvailableNetBalance()
-            if (amount > available) {
-                _toastMessage.value = "🔒 Total Balance Locked: Cannot expense ₹%,.2f! Exceeds available net balance (₹%,.2f)".format(amount, available.coerceAtLeast(0.0))
-                return
-            }
-        }
-        viewModelScope.launch {
-            repository.insertExpense(
-                Expense(
-                    amount = amount,
-                    category = category,
-                    date = date,
-                    note = note,
-                    imagePath = imagePath,
-                    type = type
-                )
-            )
+            repository.insertExpense(expense)
         }
     }
 
     fun deleteExpense(expense: Expense) {
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
             repository.deleteExpense(expense)
         }
     }
 
-    fun deleteExpenses(expensesList: List<Expense>) {
-        viewModelScope.launch {
-            expensesList.forEach { repository.deleteExpense(it) }
-        }
-    }
-
-    fun updateExpense(expense: Expense) {
-        viewModelScope.launch {
-            repository.updateExpense(expense)
-        }
-    }
-
-    fun addAccount(name: String, balance: Double, type: String) {
-        viewModelScope.launch {
-            repository.insertAccount(Account(name = name, balance = balance, type = type))
-        }
-    }
-
-    fun deleteAccount(account: Account) {
-        viewModelScope.launch {
-            repository.deleteAccount(account)
-        }
-    }
-
-    fun addTransaction(title: String, amount: Double, type: String, category: String, accountId: Int) {
-        if (type == "EXPENSE") {
-            val available = getAvailableNetBalance()
-            if (amount > available) {
-                _toastMessage.value = "🔒 Total Balance Locked: Cannot expense ₹%,.2f! Exceeds available net balance (₹%,.2f)".format(amount, available.coerceAtLeast(0.0))
-                return
-            }
-        }
-        viewModelScope.launch {
-            repository.insertTransaction(
-                Transaction(
-                    title = title,
-                    amount = amount,
-                    type = type,
-                    category = category,
-                    timestamp = System.currentTimeMillis(),
-                    accountId = accountId
-                )
+    fun addTransaction(title: String, amount: Double, type: String, category: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val transaction = Transaction(
+                title = title,
+                amount = amount,
+                type = type,
+                category = category,
+                date = LocalDate.now().format(DateUtils.isoDateFormatter)
             )
+            repository.insertTransaction(transaction)
         }
     }
 
-    fun deleteTransaction(transaction: Transaction) {
-        viewModelScope.launch {
-            repository.deleteTransaction(transaction)
-        }
-    }
-
-    fun addBudget(category: String, amountLimit: Double) {
-        viewModelScope.launch {
-            repository.insertBudget(Budget(category = category, amountLimit = amountLimit, monthYear = "07-2026"))
-        }
-    }
-
-    fun deleteBudget(budget: Budget) {
-        viewModelScope.launch {
-            repository.deleteBudget(budget)
-        }
-    }
-
-    fun addSavingsGoal(
-        name: String,
-        targetAmount: Double,
-        initialAmount: Double = 0.0,
-        targetDate: Long = 0L,
-        frequency: String = "WEEKLY",
-        contributionAmount: Double = 0.0,
-        isAutoGap: Boolean = true,
-        iconTag: String = "🎯",
-        category: String = "Saving",
-        imageUri: String? = null
-    ) {
-        viewModelScope.launch {
-            repository.insertSavingsGoal(
-                SavingsGoal(
-                    name = name,
-                    targetAmount = targetAmount,
-                    currentAmount = initialAmount,
-                    targetDate = targetDate,
-                    frequency = frequency,
-                    contributionAmount = contributionAmount,
-                    isAutoGap = isAutoGap,
-                    iconTag = iconTag,
-                    category = category,
-                    imageUri = imageUri
-                )
+    // --- Budgets Operations ---
+    fun addBudget(category: String, targetAmount: Double) {
+        val currentMonthYear = YearMonth.now().format(DateUtils.monthYearFormatter)
+        viewModelScope.launch(Dispatchers.IO) {
+            val newBudget = Budget(
+                category = category,
+                targetAmount = targetAmount,
+                monthYear = currentMonthYear
             )
-            if (initialAmount > 0) {
-                repository.insertExpense(
-                    Expense(
-                        amount = initialAmount,
-                        category = "Locked Savings",
-                        date = System.currentTimeMillis(),
-                        note = "🔒 Initial savings locked in goal: $name",
-                        type = "EXPENSE"
-                    )
-                )
-            }
+            repository.insertBudget(newBudget)
         }
     }
 
-    fun updateSavingsGoal(goal: SavingsGoal) {
-        viewModelScope.launch {
-            repository.updateSavingsGoal(goal)
-        }
-    }
-
-    fun quickDepositToGoal(goal: SavingsGoal, amount: Double) {
-        if (amount <= 0) return
-        val available = getAvailableNetBalance()
-        if (amount > available) {
-            _toastMessage.value = "🔒 Goal Deposit Locked: Cannot deposit ₹%,.2f! Exceeds available net balance (₹%,.2f)".format(amount, available.coerceAtLeast(0.0))
-            return
-        }
-        viewModelScope.launch {
-            val updated = goal.copy(currentAmount = goal.currentAmount + amount)
-            repository.updateSavingsGoal(updated)
-
-            // Insert Locked Savings transaction to deduct from spendable balance
-            repository.insertExpense(
-                Expense(
-                    amount = amount,
-                    category = "Locked Savings",
-                    date = System.currentTimeMillis(),
-                    note = "🔒 Saved & locked in ${goal.name}",
-                    type = "EXPENSE"
-                )
+    // --- Savings Goals Operations ---
+    fun addSavingsGoal(title: String, targetAmount: Double, targetDate: String, category: String = "General") {
+        viewModelScope.launch(Dispatchers.IO) {
+            val goal = SavingsGoal(
+                title = title,
+                targetAmount = targetAmount,
+                currentAmount = 0.0,
+                targetDate = targetDate,
+                category = category
             )
-
-            // Deduct from primary bank account if exists
-            val primaryAccount = accounts.value.firstOrNull()
-            if (primaryAccount != null) {
-                val updatedAcc = primaryAccount.copy(balance = (primaryAccount.balance - amount).coerceAtLeast(0.0))
-                repository.updateAccount(updatedAcc)
-            }
+            repository.insertSavingsGoal(goal)
         }
     }
 
-    fun quickDeductFromGoal(goal: SavingsGoal, amount: Double) {
-        if (amount <= 0 || goal.currentAmount <= 0) return
-        val deductAmount = amount.coerceAtMost(goal.currentAmount)
-        viewModelScope.launch {
-            val updated = goal.copy(currentAmount = (goal.currentAmount - deductAmount).coerceAtLeast(0.0))
-            repository.updateSavingsGoal(updated)
-
-            // Insert Goal Withdrawal transaction to add back to spendable balance
-            repository.insertExpense(
-                Expense(
-                    amount = deductAmount,
-                    category = "Goal Withdrawal",
-                    date = System.currentTimeMillis(),
-                    note = "🔓 Deducted/unlocked from ${goal.name}",
-                    type = "INCOME"
-                )
-            )
-
-            // Add back to primary bank account if exists
-            val primaryAccount = accounts.value.firstOrNull()
-            if (primaryAccount != null) {
-                val updatedAcc = primaryAccount.copy(balance = primaryAccount.balance + deductAmount)
-                repository.updateAccount(updatedAcc)
-            }
-        }
-    }
-
-    // Automated Safe Vault (₹50/Month Auto-Reserve Safe)
-    fun processMonthlySafeVault(monthlyRate: Double = 50.0) {
-        val currentMonth = SimpleDateFormat("MM-yyyy", Locale.getDefault()).format(Date())
-        val lastProcessedMonth = sharedPrefs.getString("last_safe_vault_month", "")
-
-        viewModelScope.launch {
-            val currentGoals = repository.allSavingsGoals.first()
-            var safeGoal = currentGoals.find { it.name.contains("Safe Vault", ignoreCase = true) || it.name.contains("Monthly Safe", ignoreCase = true) }
-
-            if (safeGoal == null) {
-                val newId = repository.insertSavingsGoal(
-                    SavingsGoal(
-                        name = "Safe Vault 🔒",
-                        targetAmount = 1200.0,
-                        currentAmount = monthlyRate,
-                        frequency = "MONTHLY",
-                        contributionAmount = monthlyRate,
-                        isAutoGap = false,
-                        iconTag = "🔐"
-                    )
-                )
-                sharedPrefs.edit().putString("last_safe_vault_month", currentMonth).apply()
-                repository.insertExpense(
-                    Expense(
-                        amount = monthlyRate,
-                        category = "Locked Savings",
-                        date = System.currentTimeMillis(),
-                        note = "🔒 Monthly Safe Vault Deposit (₹%,.0f auto-reserved)".format(monthlyRate),
-                        type = "EXPENSE"
-                    )
-                )
-            } else if (lastProcessedMonth != currentMonth) {
-                val updated = safeGoal.copy(currentAmount = safeGoal.currentAmount + monthlyRate)
-                repository.updateSavingsGoal(updated)
-                sharedPrefs.edit().putString("last_safe_vault_month", currentMonth).apply()
-                repository.insertExpense(
-                    Expense(
-                        amount = monthlyRate,
-                        category = "Locked Savings",
-                        date = System.currentTimeMillis(),
-                        note = "🔒 Monthly Safe Vault Deposit (₹%,.0f auto-reserved for $currentMonth)".format(monthlyRate),
-                        type = "EXPENSE"
-                    )
-                )
-            }
-        }
-    }
-
-    fun deleteSavingsGoal(goal: SavingsGoal) {
-        viewModelScope.launch {
-            repository.deleteSavingsGoal(goal)
-        }
-    }
-
-    fun allocateToGoal(goal: SavingsGoal, account: Account, amount: Double) {
-        if (amount <= 0) return
-        viewModelScope.launch {
-            val success = repository.allocateToSavingsGoal(goal, account, amount)
-            if (success) {
-                repository.insertExpense(
-                    Expense(
-                        amount = amount,
-                        category = "Locked Savings",
-                        date = System.currentTimeMillis(),
-                        note = "🔒 Saved & locked in ${goal.name}",
-                        type = "EXPENSE"
-                    )
-                )
-            }
-        }
-    }
-
-    fun withdrawFromGoal(goal: SavingsGoal, account: Account, amount: Double) {
-        if (amount <= 0 || goal.currentAmount < amount) return
-        viewModelScope.launch {
-            val success = repository.withdrawFromSavingsGoal(goal, account, amount)
-            if (success) {
-                repository.insertExpense(
-                    Expense(
-                        amount = amount,
-                        category = "Goal Withdrawal",
-                        date = System.currentTimeMillis(),
-                        note = "Unlocked from goal: ${goal.name}",
-                        type = "INCOME"
-                    )
-                )
-            }
-        }
-    }
-
-    fun deductFromSavingsGoal(goal: SavingsGoal, amountToDeduct: Double, accountId: Int? = null) {
-        if (amountToDeduct <= 0 || goal.currentAmount <= 0) return
-        val actualDeduction = amountToDeduct.coerceAtMost(goal.currentAmount)
-        viewModelScope.launch {
-            val updatedGoal = goal.copy(currentAmount = goal.currentAmount - actualDeduction)
+    fun contributeToGoal(goal: SavingsGoal, amount: Double) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val updatedGoal = goal.copy(currentAmount = goal.currentAmount + amount)
             repository.updateSavingsGoal(updatedGoal)
-
-            repository.insertExpense(
-                Expense(
-                    amount = actualDeduction,
-                    category = "Goal Withdrawal",
-                    date = System.currentTimeMillis(),
-                    note = "🔓 Unlocked ₹%,.0f from goal: ${goal.name}".format(actualDeduction),
-                    type = "INCOME"
-                )
-            )
-
-            if (accountId != null) {
-                val accList = accounts.value
-                val acc = accList.find { it.id == accountId }
-                if (acc != null) {
-                    repository.updateAccount(acc.copy(balance = acc.balance + actualDeduction))
-                }
-            }
-
-            _toastMessage.value = "🔓 Deducted ₹%,.0f from ${goal.name}".format(actualDeduction)
         }
     }
 
-    fun depositToSafe(amount: Double) {
-        if (amount <= 0) return
-        viewModelScope.launch {
-            val allGoals = savingsGoals.first()
-            var safeGoal = allGoals.find { it.name.contains("Monthly Safe", ignoreCase = true) || it.name.contains("Safe Vault", ignoreCase = true) }
-            if (safeGoal == null) {
-                safeGoal = SavingsGoal(
-                    name = "Monthly Safe Vault 🔐",
-                    targetAmount = 600.0,
-                    currentAmount = amount,
-                    frequency = "MONTHLY",
-                    contributionAmount = 50.0,
-                    isAutoGap = true,
-                    iconTag = "🔐"
-                )
-                repository.insertSavingsGoal(safeGoal)
-            } else {
-                repository.updateSavingsGoal(safeGoal.copy(currentAmount = safeGoal.currentAmount + amount))
-            }
+    fun resetGoalCategoryBatch(oldCategory: String, newCategory: String = "General") {
+        viewModelScope.launch(Dispatchers.IO) {
+            val updatedGoals = savingsGoals.value
+                .filter { it.category == oldCategory }
+                .map { it.copy(category = newCategory) }
 
-            repository.insertExpense(
-                Expense(
-                    amount = amount,
-                    category = "Locked Savings",
-                    date = System.currentTimeMillis(),
-                    note = "🔐 Manual deposit to Safe Vault (₹%,.0f)".format(amount),
-                    type = "EXPENSE"
-                )
-            )
-            _toastMessage.value = "🔐 Deposited ₹%,.0f to Safe Vault".format(amount)
-        }
-    }
-
-    fun withdrawFromSafe(amount: Double) {
-        if (amount <= 0) return
-        viewModelScope.launch {
-            val allGoals = savingsGoals.first()
-            val safeGoal = allGoals.find { it.name.contains("Monthly Safe", ignoreCase = true) || it.name.contains("Safe Vault", ignoreCase = true) }
-            if (safeGoal != null && safeGoal.currentAmount > 0) {
-                val actual = amount.coerceAtMost(safeGoal.currentAmount)
-                repository.updateSavingsGoal(safeGoal.copy(currentAmount = safeGoal.currentAmount - actual))
-
-                repository.insertExpense(
-                    Expense(
-                        amount = actual,
-                        category = "Goal Withdrawal",
-                        date = System.currentTimeMillis(),
-                        note = "🔓 Unlocked ₹%,.0f from Safe Vault".format(actual),
-                        type = "INCOME"
-                    )
-                )
-                _toastMessage.value = "🔓 Unlocked ₹%,.0f from Safe Vault".format(actual)
+            if (updatedGoals.isNotEmpty()) {
+                repository.updateSavingsGoalsBatch(updatedGoals)
             }
         }
     }
 
-    // AI Advisor Interface
-    fun sendChatMessage(text: String) {
-        if (text.isBlank()) return
-        val userMsg = ChatMessage(text = text, isUser = true)
-        _chatMessages.value = _chatMessages.value + userMsg
+    // --- Bills & Reminders Operations ---
+    fun addBill(title: String, amount: Double, dueDate: String) {
+        val newBill = BillEntry(
+            id = java.util.UUID.randomUUID().toString(),
+            title = title,
+            amount = amount,
+            dueDate = dueDate
+        )
+        _billsList.update { it + newBill }
+    }
 
-        _isChatLoading.value = true
-        viewModelScope.launch {
-            // Include summary of current financial standing to make the chat context-aware!
-            val contextSummary = buildFinancialContextSummary()
-            val fullPrompt = "$contextSummary\n\nUser Question: $text\n\nRemember to keep your advice friendly, brief (1-3 sentences or clear bullet points), and highly practical."
+    fun removeBill(id: String) {
+        _billsList.update { list -> list.filterNot { it.id == id } }
+    }
 
-            val aiResponse = GeminiClient.getFinancialAdvice(fullPrompt)
-            _chatMessages.value = _chatMessages.value + ChatMessage(text = aiResponse, isUser = false)
-            _isChatLoading.value = false
+    fun addReminder(text: String, dueDate: String) {
+        val newReminder = ReminderEntry(
+            id = java.util.UUID.randomUUID().toString(),
+            text = text,
+            dueDate = dueDate
+        )
+        _remindersList.update { it + newReminder }
+    }
+
+    fun toggleReminder(id: String) {
+        _remindersList.update { list ->
+            list.map { if (it.id == id) it.copy(isCompleted = !it.isCompleted) else it }
         }
     }
 
-    // AI Financial Audit Generator
-    fun generateAiAuditReport() {
-        _isAuditLoading.value = true
-        viewModelScope.launch {
-            val contextSummary = buildFinancialContextSummary()
-            val prompt = """
-                Perform a professional, encouraging, and detailed 'AI Financial Audit' of my finances.
-                Here is my current transaction history and budgeting data:
-                $contextSummary
-                
-                Please provide the report using this specific layout:
-                1. 📊 **Financial Standing Review**: A quick summary of my current assets vs spending.
-                2. 📈 **Budget Performance**: Analyze how well I'm sticking to my category budgets. Highlight any exceeded budgets.
-                3. 🚀 **3 Smart Steps to Save**: 3 highly specific, creative, and action-oriented tips based on my actual transactions (e.g., shopping or grocery patterns).
-                4. 🎯 **Savings Milestones**: A word of encouragement regarding my active goals.
-                
-                Keep it concise but highly engaging and professional. Use dollar signs ($) for money formatting.
-            """.trimIndent()
+    // --- AI Chat Assistant Operations ---
+    fun sendChatMessage(userText: String, geminiClient: GeminiClient) {
+        if (userText.isBlank()) return
 
-            val response = GeminiClient.getFinancialAdvice(
-                prompt = prompt,
-                systemPrompt = "You are an expert Certified Financial Planner (CFP) AI. You analyze a user's transaction data to compile actionable, encouraging, and highly specific financial audits. Be clear, objective, and supportive."
-            )
-            _aiAuditReport.value = response
-            _isAuditLoading.value = false
-        }
-    }
+        val userMessage = ChatMessage(text = userText, isUser = true)
+        _chatMessages.update { it + userMessage }
+        _isAiLoading.value = true
 
-    fun clearAuditReport() {
-        _aiAuditReport.value = null
-    }
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val contextSummary = buildFinancialContextSummary()
+                val prompt = "User Context:\n$contextSummary\n\nUser Question: $userText"
+                val responseText = geminiClient.generateContent(prompt) ?: "I am currently unable to generate advice. Please try again."
 
-    fun updateDefaultCurrency(code: String, symbol: String, name: String, convertExisting: Boolean) {
-        val oldCode = _selectedCurrencyCode.value
-        _selectedCurrencyCode.value = code
-        _selectedCurrencySymbol.value = symbol
-        _selectedCurrencyName.value = name
-
-        sharedPrefs.edit()
-            .putString("selected_currency_code", code)
-            .putString("selected_currency_symbol", symbol)
-            .putString("selected_currency_name", name)
-            .apply()
-
-        if (convertExisting && oldCode != code) {
-            viewModelScope.launch {
-                val currentExpList = repository.allExpenses.first()
-                currentExpList.forEach { exp ->
-                    val convertedAmount = CurrencyManager.convert(exp.amount, oldCode, code)
-                    repository.updateExpense(exp.copy(amount = convertedAmount))
-                }
+                _chatMessages.update { it + ChatMessage(text = responseText, isUser = false) }
+            } catch (e: Exception) {
+                _chatMessages.update { it + ChatMessage(text = "Error getting response: ${e.localizedMessage}", isUser = false) }
+            } finally {
+                _isAiLoading.value = false
             }
         }
-    }
-
-    fun updateStatsCurrency(code: String, symbol: String) {
-        _statsCurrencyCode.value = code
-        _statsCurrencySymbol.value = symbol
-        sharedPrefs.edit()
-            .putString("stats_currency_code", code)
-            .putString("stats_currency_symbol", symbol)
-            .apply()
-    }
-
-    fun refreshExchangeRates() {
-        val sdf = SimpleDateFormat("dd MMM yyyy, HH:mm", Locale.getDefault())
-        val now = sdf.format(Date())
-        _lastExchangeRateUpdate.value = "$now (Local Cache)"
-        sharedPrefs.edit().putString("last_exchange_rate_update", _lastExchangeRateUpdate.value).apply()
-        _toastMessage.value = "Exchange rates updated & cached successfully."
-    }
-
-    fun updateTextSizeOption(size: String) {
-        _textSizeOption.value = size
-        sharedPrefs.edit().putString("text_size_option", size).apply()
-    }
-
-    fun toggleCompactLayout(compact: Boolean) {
-        _isCompactLayout.value = compact
-        sharedPrefs.edit().putBoolean("is_compact_layout", compact).apply()
-    }
-
-    fun toggleAnimationEnabled(enabled: Boolean) {
-        _isAnimationEnabled.value = enabled
-        sharedPrefs.edit().putBoolean("is_animation_enabled", enabled).apply()
-    }
-
-    fun updateDateFormat(format: String) {
-        _dateFormat.value = format
-        sharedPrefs.edit().putString("date_format", format).apply()
-    }
-
-    fun updateFirstDayOfWeek(day: String) {
-        _firstDayOfWeek.value = day
-        sharedPrefs.edit().putString("first_day_of_week", day).apply()
-    }
-
-    fun updateBillReminderTiming(timing: String) {
-        _billReminderTiming.value = timing
-        sharedPrefs.edit().putString("bill_reminder_timing", timing).apply()
-    }
-
-    fun toggleBillAutoMarkPaid(enabled: Boolean) {
-        _billAutoMarkPaid.value = enabled
-        sharedPrefs.edit().putBoolean("bill_auto_mark_paid", enabled).apply()
-    }
-
-    fun toggleBillOverdueAlert(enabled: Boolean) {
-        _billOverdueAlert.value = enabled
-        sharedPrefs.edit().putBoolean("bill_overdue_alert", enabled).apply()
-    }
-
-    fun toggleBudgetWarning(threshold: Int, enabled: Boolean) {
-        when (threshold) {
-            80 -> {
-                _budgetWarning80.value = enabled
-                sharedPrefs.edit().putBoolean("budget_warning_80", enabled).apply()
-            }
-            90 -> {
-                _budgetWarning90.value = enabled
-                sharedPrefs.edit().putBoolean("budget_warning_90", enabled).apply()
-            }
-            100 -> {
-                _budgetWarning100.value = enabled
-                sharedPrefs.edit().putBoolean("budget_warning_100", enabled).apply()
-            }
-        }
-    }
-
-    fun updateGoalViewMode(mode: String) {
-        _goalViewMode.value = mode
-        sharedPrefs.edit().putString("goal_view_mode", mode).apply()
-    }
-
-    fun updateGoalProgressStyle(style: String) {
-        _goalProgressStyle.value = style
-        sharedPrefs.edit().putString("goal_progress_style", style).apply()
-    }
-
-    fun updateDefaultTxType(type: String) {
-        _defaultTxType.value = type
-        sharedPrefs.edit().putString("default_tx_type", type).apply()
-    }
-
-    fun toggleRememberLastCategory(enabled: Boolean) {
-        _rememberLastCategory.value = enabled
-        sharedPrefs.edit().putBoolean("remember_last_category", enabled).apply()
-    }
-
-    fun toggleConfirmTxDelete(enabled: Boolean) {
-        _confirmTxDelete.value = enabled
-        sharedPrefs.edit().putBoolean("confirm_tx_delete", enabled).apply()
-    }
-
-    fun toggleGroupByDate(enabled: Boolean) {
-        _groupByDate.value = enabled
-        sharedPrefs.edit().putBoolean("group_by_date", enabled).apply()
-    }
-
-    fun toggleLockOnRestart(enabled: Boolean) {
-        _lockOnRestart.value = enabled
-        sharedPrefs.edit().putBoolean("lock_on_restart", enabled).apply()
-    }
-
-    fun updateAutoLockDuration(duration: String) {
-        _autoLockDuration.value = duration
-        sharedPrefs.edit().putString("auto_lock_duration", duration).apply()
-    }
-
-    fun toggleBiometricEnabled(enabled: Boolean) {
-        _biometricEnabled.value = enabled
-        sharedPrefs.edit().putBoolean("biometric_enabled", enabled).apply()
-    }
-
-    fun toggleHideSensitiveAmounts(enabled: Boolean) {
-        _hideSensitiveAmounts.value = enabled
-        sharedPrefs.edit().putBoolean("hide_sensitive_amounts", enabled).apply()
-    }
-
-    fun toggleScreenshotProtection(enabled: Boolean) {
-        _screenshotProtection.value = enabled
-        sharedPrefs.edit().putBoolean("screenshot_protection", enabled).apply()
-    }
-
-    fun togglePrivacyModeEnabled(enabled: Boolean) {
-        _privacyModeEnabled.value = enabled
-        sharedPrefs.edit().putBoolean("privacy_mode_enabled", enabled).apply()
-    }
-
-    fun toggleAutoBackupEnabled(enabled: Boolean) {
-        _autoBackupEnabled.value = enabled
-        sharedPrefs.edit().putBoolean("auto_backup_enabled", enabled).apply()
-    }
-
-    fun markBackupPerformed() {
-        val sdf = SimpleDateFormat("dd MMM yyyy, HH:mm", Locale.getDefault())
-        val timestamp = sdf.format(Date())
-        _lastBackupTimestamp.value = timestamp
-        sharedPrefs.edit().putString("last_backup_timestamp", timestamp).apply()
-    }
-
-    fun clearAllData() {
-        sharedPrefs.edit().clear().apply()
-        _toastMessage.value = "All settings reset to defaults."
     }
 
     private fun buildFinancialContextSummary(): String {
-        val currentAccounts = accounts.value
-        val currentTransactions = transactions.value
-        val currentBudgets = budgets.value
-        val currentGoals = savingsGoals.value
-
-        val accountsText = currentAccounts.joinToString("\n") { "Account: ${it.name} (${it.type}) - Balance: $${it.balance}" }
-        
-        // Sum expenses by category
-        val expensesByCategory = currentTransactions
-            .filter { it.type == "EXPENSE" }
-            .groupBy { it.category }
-            .mapValues { entry -> entry.value.sumOf { it.amount } }
-
-        val expensesText = expensesByCategory.entries.joinToString("\n") { "- ${it.key}: Spent $${it.value}" }
-        
-        val budgetsText = currentBudgets.joinToString("\n") { "- Category '${it.category}': Limit $${it.amountLimit}" }
-        val goalsText = currentGoals.joinToString("\n") { "- Goal '${it.name}': Saved $${it.currentAmount} of $${it.targetAmount}" }
-
-        val recentTxText = currentTransactions.take(10).joinToString("\n") { 
-            "  * [${it.type}] ${it.title} - $${it.amount} (${it.category})" 
-        }
-
+        val summary = financialSummary.value
         return """
-            --- FINANCIAL STANDING CONTEXT ---
-            
-            ACCOUNTS:
-            $accountsText
-            
-            BUDGET LIMITS:
-            $budgetsText
-            
-            SAVINGS GOALS:
-            $goalsText
-            
-            ACTUAL SPENDING BY CATEGORY:
-            $expensesText
-            
-            RECENT TRANSACTIONS (Last 10):
-            $recentTxText
-            
-            ----------------------------------
+            Total Income: $${summary.totalIncome}
+            Total Spent: $${summary.totalExpenses}
+            Net Available Balance: $${summary.netBalance}
+            Active Budgets Count: ${summary.activeBudgetsCount}
+            Total Savings: $${summary.totalSavings}
         """.trimIndent()
     }
-}
 
-class FinanceViewModelFactory(
-    private val application: Application,
-    private val repository: FinanceRepository
-) : ViewModelProvider.Factory {
-    override fun <T : ViewModel> create(modelClass: Class<T>): T {
-        if (modelClass.isAssignableFrom(FinanceViewModel::class.java)) {
-            @Suppress("UNCHECKED_CAST")
-            return FinanceViewModel(application, repository) as T
+    // --- ViewModel Factory ---
+    class Factory(
+        private val application: Application,
+        private val repository: FinanceRepository
+    ) : ViewModelProvider.Factory {
+        @Suppress("UNCHECKED_CAST")
+        override fun <T : ViewModel> create(modelClass: Class<T>): T {
+            if (modelClass.isAssignableFrom(FinanceViewModel::class.java)) {
+                return FinanceViewModel(application, repository) as T
+            }
+            throw IllegalArgumentException("Unknown ViewModel class")
         }
-        throw IllegalArgumentException("Unknown ViewModel class")
     }
 }
