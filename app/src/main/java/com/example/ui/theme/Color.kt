@@ -43,6 +43,42 @@ fun getPresetThemeColors(index: Int, customHue: Float): Triple<Color, Color, Col
 }
 
 var isDarkModeActive by mutableStateOf(false)
+var themeModeState by mutableStateOf("light") // "light", "dark", "device"
+var isFollowDeviceColorsState by mutableStateOf(false)
+
+data class PalettePreviewColors(
+    val topLeft: Color,
+    val topRight: Color,
+    val bottomLeft: Color,
+    val bottomRight: Color
+)
+
+fun getThemePalettePreview(index: Int, customHue: Float): PalettePreviewColors {
+    return when (index) {
+        0 -> PalettePreviewColors(Color(0xFF80B3FF), Color(0xFFC2D6F0), Color(0xFF0052CC), Color(0xFFA0B0C0))
+        1 -> PalettePreviewColors(Color(0xFFB0C4DE), Color(0xFFE0E6ED), Color(0xFF0052CC), Color(0xFFB8C4D0))
+        2 -> PalettePreviewColors(Color(0xFFC6D8FF), Color(0xFFE8EEFF), Color(0xFF335C98), Color(0xFF94ABCF))
+        3 -> PalettePreviewColors(Color(0xFFC8D4E6), Color(0xFFE4EBF5), Color(0xFF4A607A), Color(0xFF8A9DB5))
+        4 -> PalettePreviewColors(Color(0xFFC5D9DB), Color(0xFFE2ECED), Color(0xFF405659), Color(0xFF8CA1A3))
+        5 -> PalettePreviewColors(Color(0xFF80F0E3), Color(0xFFB8F8F0), Color(0xFF007A70), Color(0xFF40C0B0))
+        6 -> PalettePreviewColors(Color(0xFFA8E6A3), Color(0xFFD4F5D2), Color(0xFF2E7D32), Color(0xFF81C784))
+        7 -> PalettePreviewColors(Color(0xFFC8E0B8), Color(0xFFE4F0DC), Color(0xFF4D6638), Color(0xFF90A880))
+        8 -> PalettePreviewColors(Color(0xFFFDE047), Color(0xFFFEF08A), Color(0xFF715A00), Color(0xFFCA8A04))
+        9 -> PalettePreviewColors(Color(0xFFFED7AA), Color(0xFFFFEDD5), Color(0xFF9A3412), Color(0xFFFB923C))
+        10 -> PalettePreviewColors(Color(0xFFF5D0FE), Color(0xFFFAE8FF), Color(0xFF701A75), Color(0xFFC084FC))
+        11 -> PalettePreviewColors(Color(0xFFFECDD3), Color(0xFFFFE4E6), Color(0xFF881337), Color(0xFFFB7185))
+        12 -> PalettePreviewColors(Color(0xFFFBCFE8), Color(0xFFFCE7F3), Color(0xFF831843), Color(0xFFF472B6))
+        13 -> PalettePreviewColors(Color(0xFFF0ABFC), Color(0xFFFA88FF), Color(0xFF701A75), Color(0xFFE879F9))
+        14 -> PalettePreviewColors(Color(0xFFDDD6FE), Color(0xFFEDE9FE), Color(0xFF5B21B6), Color(0xFFA78BFA))
+        15 -> {
+            val p = Color.hsv(customHue, 0.75f, 0.65f)
+            val pc = Color.hsv(customHue, 0.25f, 0.92f)
+            val darkPc = Color.hsv(customHue, 0.40f, 0.70f)
+            PalettePreviewColors(pc, Color(0xFFE5E7EB), p, darkPc)
+        }
+        else -> PalettePreviewColors(Color(0xFF80B3FF), Color(0xFFC2D6F0), Color(0xFF0052CC), Color(0xFFA0B0C0))
+    }
+}
 
 fun updateThemeColors(index: Int, customHue: Float) {
     val (p, pc, opc) = getPresetThemeColors(index, customHue)

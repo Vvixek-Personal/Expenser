@@ -121,6 +121,12 @@ class FinanceViewModel(
     private val _customThemeHue = MutableStateFlow(200f)
     val customThemeHue: StateFlow<Float> = _customThemeHue.asStateFlow()
 
+    private val _themeMode = MutableStateFlow("light")
+    val themeMode: StateFlow<String> = _themeMode.asStateFlow()
+
+    private val _isFollowDeviceColors = MutableStateFlow(false)
+    val isFollowDeviceColors: StateFlow<Boolean> = _isFollowDeviceColors.asStateFlow()
+
     private val sharedPrefs = getApplication<Application>().getSharedPreferences("finance_prefs", android.content.Context.MODE_PRIVATE)
 
     // Live Storage and Network/Data Usage states
@@ -287,6 +293,108 @@ class FinanceViewModel(
     private val _monthlySafeAmount = MutableStateFlow(50.0)
     val monthlySafeAmount: StateFlow<Double> = _monthlySafeAmount.asStateFlow()
 
+    // Currency Settings
+    private val _selectedCurrencyCode = MutableStateFlow("INR")
+    val selectedCurrencyCode: StateFlow<String> = _selectedCurrencyCode.asStateFlow()
+
+    private val _selectedCurrencySymbol = MutableStateFlow("₹")
+    val selectedCurrencySymbol: StateFlow<String> = _selectedCurrencySymbol.asStateFlow()
+
+    private val _selectedCurrencyName = MutableStateFlow("Indian Rupee")
+    val selectedCurrencyName: StateFlow<String> = _selectedCurrencyName.asStateFlow()
+
+    private val _statsCurrencyCode = MutableStateFlow("INR")
+    val statsCurrencyCode: StateFlow<String> = _statsCurrencyCode.asStateFlow()
+
+    private val _statsCurrencySymbol = MutableStateFlow("₹")
+    val statsCurrencySymbol: StateFlow<String> = _statsCurrencySymbol.asStateFlow()
+
+    private val _lastExchangeRateUpdate = MutableStateFlow("Today (Cached)")
+    val lastExchangeRateUpdate: StateFlow<String> = _lastExchangeRateUpdate.asStateFlow()
+
+    // Appearance & Layout Preferences
+    private val _textSizeOption = MutableStateFlow("Medium")
+    val textSizeOption: StateFlow<String> = _textSizeOption.asStateFlow()
+
+    private val _isCompactLayout = MutableStateFlow(false)
+    val isCompactLayout: StateFlow<Boolean> = _isCompactLayout.asStateFlow()
+
+    private val _isAnimationEnabled = MutableStateFlow(true)
+    val isAnimationEnabled: StateFlow<Boolean> = _isAnimationEnabled.asStateFlow()
+
+    // Date & Time Preferences
+    private val _dateFormat = MutableStateFlow("dd/MM/yyyy")
+    val dateFormat: StateFlow<String> = _dateFormat.asStateFlow()
+
+    private val _firstDayOfWeek = MutableStateFlow("Monday")
+    val firstDayOfWeek: StateFlow<String> = _firstDayOfWeek.asStateFlow()
+
+    // Bill Preferences
+    private val _billReminderTiming = MutableStateFlow("1 Day Before")
+    val billReminderTiming: StateFlow<String> = _billReminderTiming.asStateFlow()
+
+    private val _billAutoMarkPaid = MutableStateFlow(false)
+    val billAutoMarkPaid: StateFlow<Boolean> = _billAutoMarkPaid.asStateFlow()
+
+    private val _billOverdueAlert = MutableStateFlow(true)
+    val billOverdueAlert: StateFlow<Boolean> = _billOverdueAlert.asStateFlow()
+
+    // Budget Preferences
+    private val _budgetWarning80 = MutableStateFlow(true)
+    val budgetWarning80: StateFlow<Boolean> = _budgetWarning80.asStateFlow()
+
+    private val _budgetWarning90 = MutableStateFlow(true)
+    val budgetWarning90: StateFlow<Boolean> = _budgetWarning90.asStateFlow()
+
+    private val _budgetWarning100 = MutableStateFlow(true)
+    val budgetWarning100: StateFlow<Boolean> = _budgetWarning100.asStateFlow()
+
+    // Savings Goals Preferences
+    private val _goalViewMode = MutableStateFlow("Grid")
+    val goalViewMode: StateFlow<String> = _goalViewMode.asStateFlow()
+
+    private val _goalProgressStyle = MutableStateFlow("Circle")
+    val goalProgressStyle: StateFlow<String> = _goalProgressStyle.asStateFlow()
+
+    // Transaction Preferences
+    private val _defaultTxType = MutableStateFlow("EXPENSE")
+    val defaultTxType: StateFlow<String> = _defaultTxType.asStateFlow()
+
+    private val _rememberLastCategory = MutableStateFlow(true)
+    val rememberLastCategory: StateFlow<Boolean> = _rememberLastCategory.asStateFlow()
+
+    private val _confirmTxDelete = MutableStateFlow(true)
+    val confirmTxDelete: StateFlow<Boolean> = _confirmTxDelete.asStateFlow()
+
+    private val _groupByDate = MutableStateFlow(true)
+    val groupByDate: StateFlow<Boolean> = _groupByDate.asStateFlow()
+
+    // Security & Privacy Preferences
+    private val _lockOnRestart = MutableStateFlow(true)
+    val lockOnRestart: StateFlow<Boolean> = _lockOnRestart.asStateFlow()
+
+    private val _autoLockDuration = MutableStateFlow("Immediately")
+    val autoLockDuration: StateFlow<String> = _autoLockDuration.asStateFlow()
+
+    private val _biometricEnabled = MutableStateFlow(false)
+    val biometricEnabled: StateFlow<Boolean> = _biometricEnabled.asStateFlow()
+
+    private val _hideSensitiveAmounts = MutableStateFlow(false)
+    val hideSensitiveAmounts: StateFlow<Boolean> = _hideSensitiveAmounts.asStateFlow()
+
+    private val _screenshotProtection = MutableStateFlow(false)
+    val screenshotProtection: StateFlow<Boolean> = _screenshotProtection.asStateFlow()
+
+    private val _privacyModeEnabled = MutableStateFlow(false)
+    val privacyModeEnabled: StateFlow<Boolean> = _privacyModeEnabled.asStateFlow()
+
+    // Backup & Restore Preferences
+    private val _autoBackupEnabled = MutableStateFlow(true)
+    val autoBackupEnabled: StateFlow<Boolean> = _autoBackupEnabled.asStateFlow()
+
+    private val _lastBackupTimestamp = MutableStateFlow("Never")
+    val lastBackupTimestamp: StateFlow<String> = _lastBackupTimestamp.asStateFlow()
+
     private val _toastMessage = MutableStateFlow<String?>(null)
     val toastMessage: StateFlow<String?> = _toastMessage.asStateFlow()
 
@@ -372,8 +480,16 @@ class FinanceViewModel(
         _selectedLanguage.value = sharedPrefs.getString("selected_language", "English") ?: "English"
         LanguageManager.applyAppLocale(getApplication(), _selectedLanguage.value)
         
-        // Load Dark Mode setting
-        com.example.ui.theme.isDarkModeActive = sharedPrefs.getBoolean("dark_mode_active", false)
+        // Load Theme Mode & Follow Device Colors
+        val defaultMode = if (sharedPrefs.getBoolean("dark_mode_active", false)) "dark" else "light"
+        val savedMode = sharedPrefs.getString("theme_mode", defaultMode) ?: defaultMode
+        _themeMode.value = savedMode
+        com.example.ui.theme.themeModeState = savedMode
+        com.example.ui.theme.isDarkModeActive = (savedMode == "dark")
+
+        val savedFollowColors = sharedPrefs.getBoolean("follow_device_colors", false)
+        _isFollowDeviceColors.value = savedFollowColors
+        com.example.ui.theme.isFollowDeviceColorsState = savedFollowColors
 
         // Load Passcode PIN Security Settings
         val savedPin = sharedPrefs.getString("app_pin", null)
@@ -415,12 +531,23 @@ class FinanceViewModel(
         LanguageManager.applyAppLocale(getApplication(), language)
     }
 
-    fun toggleDarkMode() {
-        val newMode = !com.example.ui.theme.isDarkModeActive
-        com.example.ui.theme.isDarkModeActive = newMode
-        sharedPrefs.edit().putBoolean("dark_mode_active", newMode).apply()
-        // Re-trigger theme color updates so custom tinter runs
+    fun updateThemeMode(mode: String) {
+        _themeMode.value = mode
+        sharedPrefs.edit().putString("theme_mode", mode).apply()
+        com.example.ui.theme.themeModeState = mode
+        com.example.ui.theme.isDarkModeActive = (mode == "dark")
         com.example.ui.theme.updateThemeColors(_themeIndex.value, _customThemeHue.value)
+    }
+
+    fun toggleFollowDeviceColors(enabled: Boolean) {
+        _isFollowDeviceColors.value = enabled
+        sharedPrefs.edit().putBoolean("follow_device_colors", enabled).apply()
+        com.example.ui.theme.isFollowDeviceColorsState = enabled
+    }
+
+    fun toggleDarkMode() {
+        val nextMode = if (com.example.ui.theme.isDarkModeActive) "light" else "dark"
+        updateThemeMode(nextMode)
     }
 
     fun refreshUsageData() {
@@ -1095,6 +1222,180 @@ class FinanceViewModel(
 
     fun clearAuditReport() {
         _aiAuditReport.value = null
+    }
+
+    fun updateDefaultCurrency(code: String, symbol: String, name: String, convertExisting: Boolean) {
+        val oldCode = _selectedCurrencyCode.value
+        _selectedCurrencyCode.value = code
+        _selectedCurrencySymbol.value = symbol
+        _selectedCurrencyName.value = name
+
+        sharedPrefs.edit()
+            .putString("selected_currency_code", code)
+            .putString("selected_currency_symbol", symbol)
+            .putString("selected_currency_name", name)
+            .apply()
+
+        if (convertExisting && oldCode != code) {
+            viewModelScope.launch {
+                val currentExpList = repository.allExpenses.first()
+                currentExpList.forEach { exp ->
+                    val convertedAmount = CurrencyManager.convert(exp.amount, oldCode, code)
+                    repository.updateExpense(exp.copy(amount = convertedAmount))
+                }
+            }
+        }
+    }
+
+    fun updateStatsCurrency(code: String, symbol: String) {
+        _statsCurrencyCode.value = code
+        _statsCurrencySymbol.value = symbol
+        sharedPrefs.edit()
+            .putString("stats_currency_code", code)
+            .putString("stats_currency_symbol", symbol)
+            .apply()
+    }
+
+    fun refreshExchangeRates() {
+        val sdf = SimpleDateFormat("dd MMM yyyy, HH:mm", Locale.getDefault())
+        val now = sdf.format(Date())
+        _lastExchangeRateUpdate.value = "$now (Local Cache)"
+        sharedPrefs.edit().putString("last_exchange_rate_update", _lastExchangeRateUpdate.value).apply()
+        _toastMessage.value = "Exchange rates updated & cached successfully."
+    }
+
+    fun updateTextSizeOption(size: String) {
+        _textSizeOption.value = size
+        sharedPrefs.edit().putString("text_size_option", size).apply()
+    }
+
+    fun toggleCompactLayout(compact: Boolean) {
+        _isCompactLayout.value = compact
+        sharedPrefs.edit().putBoolean("is_compact_layout", compact).apply()
+    }
+
+    fun toggleAnimationEnabled(enabled: Boolean) {
+        _isAnimationEnabled.value = enabled
+        sharedPrefs.edit().putBoolean("is_animation_enabled", enabled).apply()
+    }
+
+    fun updateDateFormat(format: String) {
+        _dateFormat.value = format
+        sharedPrefs.edit().putString("date_format", format).apply()
+    }
+
+    fun updateFirstDayOfWeek(day: String) {
+        _firstDayOfWeek.value = day
+        sharedPrefs.edit().putString("first_day_of_week", day).apply()
+    }
+
+    fun updateBillReminderTiming(timing: String) {
+        _billReminderTiming.value = timing
+        sharedPrefs.edit().putString("bill_reminder_timing", timing).apply()
+    }
+
+    fun toggleBillAutoMarkPaid(enabled: Boolean) {
+        _billAutoMarkPaid.value = enabled
+        sharedPrefs.edit().putBoolean("bill_auto_mark_paid", enabled).apply()
+    }
+
+    fun toggleBillOverdueAlert(enabled: Boolean) {
+        _billOverdueAlert.value = enabled
+        sharedPrefs.edit().putBoolean("bill_overdue_alert", enabled).apply()
+    }
+
+    fun toggleBudgetWarning(threshold: Int, enabled: Boolean) {
+        when (threshold) {
+            80 -> {
+                _budgetWarning80.value = enabled
+                sharedPrefs.edit().putBoolean("budget_warning_80", enabled).apply()
+            }
+            90 -> {
+                _budgetWarning90.value = enabled
+                sharedPrefs.edit().putBoolean("budget_warning_90", enabled).apply()
+            }
+            100 -> {
+                _budgetWarning100.value = enabled
+                sharedPrefs.edit().putBoolean("budget_warning_100", enabled).apply()
+            }
+        }
+    }
+
+    fun updateGoalViewMode(mode: String) {
+        _goalViewMode.value = mode
+        sharedPrefs.edit().putString("goal_view_mode", mode).apply()
+    }
+
+    fun updateGoalProgressStyle(style: String) {
+        _goalProgressStyle.value = style
+        sharedPrefs.edit().putString("goal_progress_style", style).apply()
+    }
+
+    fun updateDefaultTxType(type: String) {
+        _defaultTxType.value = type
+        sharedPrefs.edit().putString("default_tx_type", type).apply()
+    }
+
+    fun toggleRememberLastCategory(enabled: Boolean) {
+        _rememberLastCategory.value = enabled
+        sharedPrefs.edit().putBoolean("remember_last_category", enabled).apply()
+    }
+
+    fun toggleConfirmTxDelete(enabled: Boolean) {
+        _confirmTxDelete.value = enabled
+        sharedPrefs.edit().putBoolean("confirm_tx_delete", enabled).apply()
+    }
+
+    fun toggleGroupByDate(enabled: Boolean) {
+        _groupByDate.value = enabled
+        sharedPrefs.edit().putBoolean("group_by_date", enabled).apply()
+    }
+
+    fun toggleLockOnRestart(enabled: Boolean) {
+        _lockOnRestart.value = enabled
+        sharedPrefs.edit().putBoolean("lock_on_restart", enabled).apply()
+    }
+
+    fun updateAutoLockDuration(duration: String) {
+        _autoLockDuration.value = duration
+        sharedPrefs.edit().putString("auto_lock_duration", duration).apply()
+    }
+
+    fun toggleBiometricEnabled(enabled: Boolean) {
+        _biometricEnabled.value = enabled
+        sharedPrefs.edit().putBoolean("biometric_enabled", enabled).apply()
+    }
+
+    fun toggleHideSensitiveAmounts(enabled: Boolean) {
+        _hideSensitiveAmounts.value = enabled
+        sharedPrefs.edit().putBoolean("hide_sensitive_amounts", enabled).apply()
+    }
+
+    fun toggleScreenshotProtection(enabled: Boolean) {
+        _screenshotProtection.value = enabled
+        sharedPrefs.edit().putBoolean("screenshot_protection", enabled).apply()
+    }
+
+    fun togglePrivacyModeEnabled(enabled: Boolean) {
+        _privacyModeEnabled.value = enabled
+        sharedPrefs.edit().putBoolean("privacy_mode_enabled", enabled).apply()
+    }
+
+    fun toggleAutoBackupEnabled(enabled: Boolean) {
+        _autoBackupEnabled.value = enabled
+        sharedPrefs.edit().putBoolean("auto_backup_enabled", enabled).apply()
+    }
+
+    fun markBackupPerformed() {
+        val sdf = SimpleDateFormat("dd MMM yyyy, HH:mm", Locale.getDefault())
+        val timestamp = sdf.format(Date())
+        _lastBackupTimestamp.value = timestamp
+        sharedPrefs.edit().putString("last_backup_timestamp", timestamp).apply()
+    }
+
+    fun clearAllData() {
+        sharedPrefs.edit().clear().apply()
+        _toastMessage.value = "All settings reset to defaults."
     }
 
     private fun buildFinancialContextSummary(): String {

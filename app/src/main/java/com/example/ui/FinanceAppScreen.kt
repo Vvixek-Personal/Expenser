@@ -17,6 +17,7 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -422,6 +423,70 @@ fun FinanceAppScreen(viewModel: FinanceViewModel) {
         if (activeSettingsSubScreen != null) {
             when (activeSettingsSubScreen) {
                 SettingsSubScreen.PersonalData -> PersonalDataScreen(
+                    viewModel = viewModel,
+                    onBack = { activeSettingsSubScreen = null }
+                )
+                SettingsSubScreen.Appearance -> AppearanceScreen(
+                    viewModel = viewModel,
+                    onBack = { activeSettingsSubScreen = null }
+                )
+                SettingsSubScreen.Language -> LanguageScreen(
+                    viewModel = viewModel,
+                    onBack = { activeSettingsSubScreen = null }
+                )
+                SettingsSubScreen.Currency -> CurrencyScreen(
+                    viewModel = viewModel,
+                    onBack = { activeSettingsSubScreen = null }
+                )
+                SettingsSubScreen.DateTime -> DateTimeScreen(
+                    viewModel = viewModel,
+                    onBack = { activeSettingsSubScreen = null }
+                )
+                SettingsSubScreen.Bills -> BillsSettingsScreen(
+                    viewModel = viewModel,
+                    onBack = { activeSettingsSubScreen = null }
+                )
+                SettingsSubScreen.CategoriesTags -> CategoriesTagsScreen(
+                    viewModel = viewModel,
+                    onBack = { activeSettingsSubScreen = null }
+                )
+                SettingsSubScreen.Budgets -> BudgetSettingsScreen(
+                    viewModel = viewModel,
+                    onBack = { activeSettingsSubScreen = null }
+                )
+                SettingsSubScreen.SavingsGoals -> SavingsGoalsSettingsScreen(
+                    viewModel = viewModel,
+                    onBack = { activeSettingsSubScreen = null }
+                )
+                SettingsSubScreen.Calculations -> CalculationsScreen(
+                    viewModel = viewModel,
+                    onBack = { activeSettingsSubScreen = null }
+                )
+                SettingsSubScreen.Transactions -> TransactionsSettingsScreen(
+                    viewModel = viewModel,
+                    onBack = { activeSettingsSubScreen = null }
+                )
+                SettingsSubScreen.BackupRestore -> BackupRestoreScreen(
+                    viewModel = viewModel,
+                    onBack = { activeSettingsSubScreen = null }
+                )
+                SettingsSubScreen.DataManagement -> DataManagementScreen(
+                    viewModel = viewModel,
+                    onBack = { activeSettingsSubScreen = null }
+                )
+                SettingsSubScreen.Security -> SecuritySettingsScreen(
+                    viewModel = viewModel,
+                    onBack = { activeSettingsSubScreen = null }
+                )
+                SettingsSubScreen.Privacy -> PrivacySettingsScreen(
+                    viewModel = viewModel,
+                    onBack = { activeSettingsSubScreen = null }
+                )
+                SettingsSubScreen.AboutApp -> AboutAppScreen(
+                    viewModel = viewModel,
+                    onBack = { activeSettingsSubScreen = null }
+                )
+                SettingsSubScreen.HelpSupport -> HelpSupportScreen(
                     viewModel = viewModel,
                     onBack = { activeSettingsSubScreen = null }
                 )
@@ -901,13 +966,9 @@ fun DashboardTab(
             }
         }
 
+        Spacer(modifier = Modifier.height(16.dp))
 
-
-
-
-
-
-        // Quick Shortcuts Feed
+        // Quick Shortcuts Feed (Always directly below Balance Card per user request)
         QuickServicesCategorySection(
             viewModel = viewModel,
             selectedLanguage = selectedLanguage,
@@ -916,6 +977,14 @@ fun DashboardTab(
             onBillsClick = { showBillsScreen = true },
             onReminderClick = { showRemindersScreen = true },
             onGoalsClick = { showSavingGoalsScreen = true }
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Dynamic Small Fluid Wave Budget Status Bar
+        SmallFluidBudgetBar(
+            thisMonthTotal = thisMonthTotal,
+            monthlyBudget = monthlyBudget
         )
 
         Spacer(modifier = Modifier.height(24.dp))
@@ -5769,6 +5838,261 @@ fun SidebarSettingsTile(
     }
 }
 
+@Composable
+fun SmallFluidBudgetBar(
+    thisMonthTotal: Double,
+    monthlyBudget: Double,
+    modifier: Modifier = Modifier
+) {
+    val safeBudget = if (monthlyBudget <= 0) 1.0 else monthlyBudget
+    val rawProgress = (thisMonthTotal / safeBudget).coerceIn(0.0, 1.2)
+    val animatedProgress by animateFloatAsState(
+        targetValue = rawProgress.toFloat(),
+        animationSpec = tween(durationMillis = 1000, easing = FastOutSlowInEasing),
+        label = "smallFluidProgress"
+    )
+
+    val infiniteTransition = rememberInfiniteTransition(label = "smallWaveTransition")
+    val wavePhase by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = (2 * Math.PI).toFloat(),
+        animationSpec = infiniteRepeatable(
+            animation = tween(2200, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "smallWavePhase"
+    )
+
+    // Dynamic color transition: Green (0-65%) -> Amber (65-85%) -> Red (85%+)
+    val statusColor = when {
+        rawProgress >= 0.85 -> Color(0xFFEF4444) // Bright Red
+        rawProgress >= 0.65 -> Color(0xFFF59E0B) // Amber
+        else -> Color(0xFF10B981)               // Green
+    }
+
+    val remaining = monthlyBudget - thisMonthTotal
+    val isOver = thisMonthTotal > monthlyBudget
+
+    Card(
+        colors = CardDefaults.cardColors(containerColor = SleekSurface),
+        border = BorderStroke(1.dp, SleekBorder),
+        shape = RoundedCornerShape(20.dp),
+        modifier = modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
+        ) {
+            // Header Row: Spent Status on Left, Percentage Badge on Right
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(8.dp)
+                            .clip(CircleShape)
+                            .background(statusColor)
+                    )
+                    Text(
+                        text = String.format("Spent Status: ₹%,.0f / ₹%,.0f", thisMonthTotal, monthlyBudget),
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = SleekTextPrimary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+
+                Surface(
+                    shape = CircleShape,
+                    color = statusColor.copy(alpha = 0.15f),
+                    border = BorderStroke(1.dp, statusColor.copy(alpha = 0.3f))
+                ) {
+                    Text(
+                        text = String.format("%.0f%% Spent", rawProgress * 100),
+                        color = statusColor,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Sleek Small Fluid Wave Meter Bar
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(28.dp)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(statusColor.copy(alpha = 0.12f))
+                    .border(1.dp, statusColor.copy(alpha = 0.25f), RoundedCornerShape(14.dp))
+            ) {
+                Canvas(modifier = Modifier.fillMaxSize()) {
+                    val width = size.width
+                    val height = size.height
+                    val fillWidth = (width * animatedProgress.coerceAtMost(1.0f))
+
+                    if (fillWidth > 0f) {
+                        val path = Path()
+                        path.moveTo(0f, height)
+                        path.lineTo(0f, 0f)
+
+                        val waveAmplitude = 3.dp.toPx()
+                        val waveFrequency = (2 * Math.PI / (width * 0.35f)).toFloat()
+
+                        var x = 0f
+                        while (x <= fillWidth) {
+                            val y = (java.lang.Math.sin((x * waveFrequency + wavePhase).toDouble()) * waveAmplitude).toFloat() + 3.dp.toPx()
+                            path.lineTo(x, y)
+                            x += 4f
+                        }
+
+                        path.lineTo(fillWidth, height)
+                        path.close()
+
+                        drawPath(
+                            path = path,
+                            brush = Brush.horizontalGradient(
+                                colors = listOf(
+                                    statusColor.copy(alpha = 0.75f),
+                                    statusColor
+                                )
+                            )
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(6.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = if (isOver) String.format("Over limit by ₹%,.0f", Math.abs(remaining))
+                           else String.format("₹%,.0f remaining this month", remaining),
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = if (isOver) Color(0xFFEF4444) else SleekTextSecondary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+
+                Text(
+                    text = if (isOver) "Over Budget" else if (rawProgress >= 0.8) "Near Limit" else "On Track",
+                    color = statusColor,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+    }
+}
+
+data class SidebarMenuItemData(
+    val icon: ImageVector,
+    val iconColor: Color,
+    val iconBgColor: Color,
+    val titleKey: String,
+    val subtitleKey: String,
+    val onClick: () -> Unit
+)
+
+@Composable
+fun SidebarGroupCard(
+    sectionTitle: String,
+    items: List<SidebarMenuItemData>,
+    selectedLanguage: String
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text = LanguageManager.tr(sectionTitle, selectedLanguage),
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.Bold,
+            color = SleekTextSecondary,
+            modifier = Modifier.padding(start = 4.dp, bottom = 8.dp, top = 16.dp)
+        )
+
+        Card(
+            colors = CardDefaults.cardColors(containerColor = SleekSurface),
+            border = BorderStroke(1.dp, SleekBorder),
+            shape = RoundedCornerShape(20.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                items.forEachIndexed { index, item ->
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(14.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { item.onClick() }
+                            .padding(16.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(38.dp)
+                                .clip(CircleShape)
+                                .background(item.iconBgColor),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = item.icon,
+                                contentDescription = item.titleKey,
+                                tint = item.iconColor,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = LanguageManager.tr(item.titleKey, selectedLanguage),
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = SleekTextPrimary,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = LanguageManager.tr(item.subtitleKey, selectedLanguage),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = SleekTextSecondary,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                        Icon(
+                            imageVector = Icons.Default.ChevronRight,
+                            contentDescription = null,
+                            tint = SleekTextSecondary,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+
+                    if (index < items.size - 1) {
+                        HorizontalDivider(
+                            color = SleekBorder.copy(alpha = 0.5f),
+                            modifier = Modifier.padding(horizontal = 16.dp)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun SidebarDrawerContent(
@@ -5799,10 +6123,10 @@ fun SidebarDrawerContent(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = LanguageManager.tr("Settings & Preferences", selectedLanguage),
-                style = MaterialTheme.typography.titleSmall,
+                text = LanguageManager.tr("Settings", selectedLanguage),
+                style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
-                color = SleekTextSecondary
+                color = SleekTextPrimary
             )
             IconButton(onClick = onCloseDrawer) {
                 Icon(
@@ -5813,7 +6137,9 @@ fun SidebarDrawerContent(
             }
         }
         
-        // 1. Profile Option Card
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // 1. User Profile Top Section Card
         val initials = if (!userName.isNullOrBlank()) {
             userName!!.split(" ").mapNotNull { it.firstOrNull()?.uppercaseChar() }.joinToString("").take(2)
         } else "U"
@@ -5821,7 +6147,7 @@ fun SidebarDrawerContent(
         Card(
             colors = CardDefaults.cardColors(containerColor = SleekSurface),
             border = BorderStroke(1.dp, SleekBorder),
-            shape = RoundedCornerShape(20.dp),
+            shape = RoundedCornerShape(24.dp),
             modifier = Modifier
                 .fillMaxWidth()
                 .clickable {
@@ -5831,14 +6157,14 @@ fun SidebarDrawerContent(
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(14.dp),
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(16.dp)
+                    .padding(18.dp)
             ) {
                 Box(
                     modifier = Modifier
-                        .size(52.dp)
+                        .size(60.dp)
                         .clip(CircleShape)
                         .background(SleekPrimaryContainer),
                     contentAlignment = Alignment.Center
@@ -5853,207 +6179,269 @@ fun SidebarDrawerContent(
                     } else {
                         Text(
                             text = initials,
-                            style = MaterialTheme.typography.titleMedium,
+                            style = MaterialTheme.typography.titleLarge,
                             color = SleekOnPrimaryContainer,
                             fontWeight = FontWeight.Bold
                         )
                     }
                 }
+
                 Column(modifier = Modifier.weight(1f)) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    Text(
+                        text = if (!userName.isNullOrBlank()) userName!! else "Aarav Sharma",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = SleekTextPrimary,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        Text(
-                            text = userName ?: "Guest User",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = SleekTextPrimary,
-                            fontWeight = FontWeight.Bold
-                        )
                         Surface(
-                            shape = RoundedCornerShape(10.dp),
+                            shape = RoundedCornerShape(8.dp),
                             color = Color(0xFFFFF7ED),
-                            border = BorderStroke(1.dp, Color(0xFFF97316))
+                            border = BorderStroke(1.dp, Color(0xFFF97316).copy(alpha = 0.5f))
                         ) {
                             Text(
                                 text = "🔥 $currentStreak Day",
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color(0xFFC2410C),
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.5.dp)
                             )
                         }
+
+                        Text(
+                            text = "Member 2024",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = SleekTextSecondary,
+                            fontSize = 11.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
                     }
-                    Text(
-                        text = "Tap to view profile & account",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = SleekTextSecondary
-                    )
                 }
+
                 Icon(
                     imageVector = Icons.Default.ChevronRight,
                     contentDescription = "View Profile Page",
                     tint = SleekTextSecondary,
-                    modifier = Modifier.size(20.dp)
+                    modifier = Modifier.size(22.dp)
                 )
             }
         }
-        
-        Spacer(modifier = Modifier.height(18.dp))
 
-        // 2. Reference Image "General" Section Card
-        Text(
-            text = LanguageManager.tr("General", selectedLanguage),
-            style = MaterialTheme.typography.labelMedium,
-            fontWeight = FontWeight.Bold,
-            color = SleekTextSecondary,
-            modifier = Modifier.padding(start = 4.dp, bottom = 8.dp)
-        )
-
-        Card(
-            colors = CardDefaults.cardColors(containerColor = SleekSurface),
-            border = BorderStroke(1.dp, SleekBorder),
-            shape = RoundedCornerShape(20.dp),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(modifier = Modifier.fillMaxWidth()) {
-                // Item 1: Personal details
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(14.dp),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable {
-                            onCloseDrawer()
-                            onOpenSettingsScreen(SettingsSubScreen.PersonalData)
-                        }
-                        .padding(16.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(38.dp)
-                            .clip(CircleShape)
-                            .background(Color(0xFFFFF7ED)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Person,
-                            contentDescription = "Personal details",
-                            tint = Color(0xFFF97316),
-                            modifier = Modifier.size(20.dp)
-                        )
+        // Section 1: PREFERENCES
+        SidebarGroupCard(
+            sectionTitle = "PREFERENCES",
+            items = listOf(
+                SidebarMenuItemData(
+                    icon = Icons.Default.Palette,
+                    iconColor = Color(0xFF8B5CF6),
+                    iconBgColor = Color(0xFFF3E8FF),
+                    titleKey = "Appearance",
+                    subtitleKey = "Theme, colors, dark mode",
+                    onClick = {
+                        onCloseDrawer()
+                        onOpenSettingsScreen(SettingsSubScreen.Appearance)
                     }
-                    Text(
-                        text = LanguageManager.tr("Personal details", selectedLanguage),
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        color = SleekTextPrimary,
-                        modifier = Modifier.weight(1f)
-                    )
-                    Icon(
-                        imageVector = Icons.Default.ChevronRight,
-                        contentDescription = null,
-                        tint = SleekTextSecondary,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-
-                HorizontalDivider(
-                    color = SleekBorder.copy(alpha = 0.5f),
-                    modifier = Modifier.padding(horizontal = 16.dp)
+                ),
+                SidebarMenuItemData(
+                    icon = Icons.Default.Language,
+                    iconColor = Color(0xFF2563EB),
+                    iconBgColor = Color(0xFFEFF6FF),
+                    titleKey = "Language",
+                    subtitleKey = "App language and regional format",
+                    onClick = {
+                        onCloseDrawer()
+                        onOpenSettingsScreen(SettingsSubScreen.Language)
+                    }
+                ),
+                SidebarMenuItemData(
+                    icon = Icons.Default.Payments,
+                    iconColor = Color(0xFF10B981),
+                    iconBgColor = Color(0xFFDCFCE7),
+                    titleKey = "Currency",
+                    subtitleKey = "Default currency and formatting",
+                    onClick = {
+                        onCloseDrawer()
+                        onOpenSettingsScreen(SettingsSubScreen.Currency)
+                    }
                 )
-
-                // Item 2: Change password
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(14.dp),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable {
-                            onCloseDrawer()
-                            onChangePasswordClick()
-                        }
-                        .padding(16.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(38.dp)
-                            .clip(CircleShape)
-                            .background(Color(0xFFFFF7ED)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Lock,
-                            contentDescription = "Change password",
-                            tint = Color(0xFFF97316),
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-                    Text(
-                        text = LanguageManager.tr("Change password", selectedLanguage),
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        color = SleekTextPrimary,
-                        modifier = Modifier.weight(1f)
-                    )
-                    Icon(
-                        imageVector = Icons.Default.ChevronRight,
-                        contentDescription = null,
-                        tint = SleekTextSecondary,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(18.dp))
-
-        Text(
-            text = LanguageManager.tr("App Configuration", selectedLanguage),
-            style = MaterialTheme.typography.labelMedium,
-            fontWeight = FontWeight.Bold,
-            color = SleekTextSecondary,
-            modifier = Modifier.padding(start = 4.dp, bottom = 8.dp)
+            ),
+            selectedLanguage = selectedLanguage
         )
-        
-        // 2. Settings Items List
-        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            // Item 1: Data and Storage
-            SidebarSettingsTile(
-                icon = Icons.Rounded.PieChart,
-                iconBgColor = Color(0xFF3B82F6), // Vibrant Blue Squircle
-                title = LanguageManager.tr("Data and Storage", selectedLanguage),
-                subtitle = LanguageManager.tr("Storage stats & clear cache", selectedLanguage),
-                onClick = { onOpenSettingsScreen(SettingsSubScreen.DataAndStorage) }
-            )
 
-            // Item 2: Theme and Language
-            SidebarSettingsTile(
-                icon = Icons.Rounded.Palette,
-                iconBgColor = Color(0xFF8B5CF6), // Vibrant Violet Squircle
-                title = LanguageManager.tr("Theme and Language", selectedLanguage),
-                subtitle = "${if (com.example.ui.theme.isDarkModeActive) "Dark" else "Light"} Theme • $selectedLanguage",
-                onClick = { onOpenSettingsScreen(SettingsSubScreen.ThemeAndLanguage) }
-            )
+        // Section 2: FINANCE MANAGEMENT
+        SidebarGroupCard(
+            sectionTitle = "FINANCE MANAGEMENT",
+            items = listOf(
+                SidebarMenuItemData(
+                    icon = Icons.Default.Receipt,
+                    iconColor = Color(0xFF2563EB),
+                    iconBgColor = Color(0xFFEFF6FF),
+                    titleKey = "Bills & Reminders",
+                    subtitleKey = "Manage bills, due dates and payment reminders",
+                    onClick = {
+                        onCloseDrawer()
+                        onOpenSettingsScreen(SettingsSubScreen.Bills)
+                    }
+                ),
+                SidebarMenuItemData(
+                    icon = Icons.Default.Category,
+                    iconColor = Color(0xFF16A34A),
+                    iconBgColor = Color(0xFFDCFCE7),
+                    titleKey = "Categories & Tags",
+                    subtitleKey = "Manage categories, tags and custom groups",
+                    onClick = {
+                        onCloseDrawer()
+                        onOpenSettingsScreen(SettingsSubScreen.CategoriesTags)
+                    }
+                ),
+                SidebarMenuItemData(
+                    icon = Icons.Default.AccountBalanceWallet,
+                    iconColor = Color(0xFF7C3AED),
+                    iconBgColor = Color(0xFFF3E8FF),
+                    titleKey = "Budgets",
+                    subtitleKey = "Default budget settings and limits",
+                    onClick = {
+                        onCloseDrawer()
+                        onOpenSettingsScreen(SettingsSubScreen.Budgets)
+                    }
+                ),
+                SidebarMenuItemData(
+                    icon = Icons.Default.Savings,
+                    iconColor = Color(0xFFDB2777),
+                    iconBgColor = Color(0xFFFCE7F3),
+                    titleKey = "Savings Goals",
+                    subtitleKey = "Goal settings and default preferences",
+                    onClick = {
+                        onCloseDrawer()
+                        onOpenSettingsScreen(SettingsSubScreen.SavingsGoals)
+                    }
+                ),
+                SidebarMenuItemData(
+                    icon = Icons.Default.Calculate,
+                    iconColor = Color(0xFF0D9488),
+                    iconBgColor = Color(0xFFCCFBF1),
+                    titleKey = "Calculations",
+                    subtitleKey = "Rounding, precision and accounting method",
+                    onClick = {
+                        onCloseDrawer()
+                        onOpenSettingsScreen(SettingsSubScreen.Calculations)
+                    }
+                ),
+                SidebarMenuItemData(
+                    icon = Icons.Default.SwapHoriz,
+                    iconColor = Color(0xFFEA580C),
+                    iconBgColor = Color(0xFFFFEDD5),
+                    titleKey = "Transactions",
+                    subtitleKey = "Default transaction settings and behavior",
+                    onClick = {
+                        onCloseDrawer()
+                        onOpenSettingsScreen(SettingsSubScreen.Transactions)
+                    }
+                )
+            ),
+            selectedLanguage = selectedLanguage
+        )
 
-            // Item 3: Exporting
-            SidebarSettingsTile(
-                icon = Icons.Rounded.FileDownload,
-                iconBgColor = Color(0xFF10B981), // Emerald Green Squircle
-                title = LanguageManager.tr("Data Export & Reports", selectedLanguage),
-                subtitle = LanguageManager.tr("Export analytics, stats, CSV & PDF reports", selectedLanguage),
-                onClick = { onOpenSettingsScreen(SettingsSubScreen.Export) }
-            )
+        // Section 3: DATA & STORAGE
+        SidebarGroupCard(
+            sectionTitle = "DATA & STORAGE",
+            items = listOf(
+                SidebarMenuItemData(
+                    icon = Icons.Default.CloudUpload,
+                    iconColor = Color(0xFF2563EB),
+                    iconBgColor = Color(0xFFEFF6FF),
+                    titleKey = "Backup & Restore",
+                    subtitleKey = "Backup data, auto backup, restore from file",
+                    onClick = {
+                        onCloseDrawer()
+                        onOpenSettingsScreen(SettingsSubScreen.BackupRestore)
+                    }
+                ),
+                SidebarMenuItemData(
+                    icon = Icons.Default.Storage,
+                    iconColor = Color(0xFF16A34A),
+                    iconBgColor = Color(0xFFDCFCE7),
+                    titleKey = "Data Management",
+                    subtitleKey = "Export data, clear cache, reset app data",
+                    onClick = {
+                        onCloseDrawer()
+                        onOpenSettingsScreen(SettingsSubScreen.DataManagement)
+                    }
+                )
+            ),
+            selectedLanguage = selectedLanguage
+        )
 
-            // Item 4: FAQ & Support
-            SidebarSettingsTile(
-                icon = Icons.Rounded.HelpOutline,
-                iconBgColor = Color(0xFFF59E0B), // Amber Squircle
-                title = LanguageManager.tr("FAQ and Help", selectedLanguage),
-                subtitle = LanguageManager.tr("Guides, formulas & help docs", selectedLanguage),
-                onClick = { onOpenSettingsScreen(SettingsSubScreen.FaqAndHelp) }
-            )
-        }
+        // Section 4: SECURITY & PRIVACY
+        SidebarGroupCard(
+            sectionTitle = "SECURITY & PRIVACY",
+            items = listOf(
+                SidebarMenuItemData(
+                    icon = Icons.Default.Lock,
+                    iconColor = Color(0xFF16A34A),
+                    iconBgColor = Color(0xFFDCFCE7),
+                    titleKey = "Security",
+                    subtitleKey = "App lock, biometric, passcode",
+                    onClick = {
+                        onCloseDrawer()
+                        onOpenSettingsScreen(SettingsSubScreen.Security)
+                    }
+                ),
+                SidebarMenuItemData(
+                    icon = Icons.Default.Shield,
+                    iconColor = Color(0xFF2563EB),
+                    iconBgColor = Color(0xFFEFF6FF),
+                    titleKey = "Privacy",
+                    subtitleKey = "Privacy policy, data handling and permissions",
+                    onClick = {
+                        onCloseDrawer()
+                        onOpenSettingsScreen(SettingsSubScreen.Privacy)
+                    }
+                )
+            ),
+            selectedLanguage = selectedLanguage
+        )
+
+        // Section 5: APP & SUPPORT
+        SidebarGroupCard(
+            sectionTitle = "APP & SUPPORT",
+            items = listOf(
+                SidebarMenuItemData(
+                    icon = Icons.Default.Info,
+                    iconColor = Color(0xFF7C3AED),
+                    iconBgColor = Color(0xFFF3E8FF),
+                    titleKey = "About App",
+                    subtitleKey = "Version info, what's new",
+                    onClick = {
+                        onCloseDrawer()
+                        onOpenSettingsScreen(SettingsSubScreen.AboutApp)
+                    }
+                ),
+                SidebarMenuItemData(
+                    icon = Icons.Default.HelpOutline,
+                    iconColor = Color(0xFFEA580C),
+                    iconBgColor = Color(0xFFFFEDD5),
+                    titleKey = "Help & Support",
+                    subtitleKey = "Help center, FAQs, contact us",
+                    onClick = {
+                        onCloseDrawer()
+                        onOpenSettingsScreen(SettingsSubScreen.HelpSupport)
+                    }
+                )
+            ),
+            selectedLanguage = selectedLanguage
+        )
+
         Spacer(modifier = Modifier.height(24.dp))
         HorizontalDivider(color = SleekBorder)
         Spacer(modifier = Modifier.height(16.dp))
@@ -6093,7 +6481,7 @@ fun SidebarDrawerContent(
             }
         }
         
-        Spacer(modifier = Modifier.height(110.dp))
+        Spacer(modifier = Modifier.height(120.dp))
     }
 }
 

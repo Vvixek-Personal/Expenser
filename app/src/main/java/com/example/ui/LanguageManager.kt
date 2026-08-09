@@ -15,20 +15,30 @@ object LanguageManager {
 
     val supportedLanguages = listOf(
         LanguageOption("English", "English", "en", "🇬🇧"),
-        LanguageOption("Español", "Spanish", "es", "🇪🇸"),
         LanguageOption("हिंदी", "Hindi", "hi", "🇮🇳"),
+        LanguageOption("বাংলা", "Bengali", "bn", "🇮🇳"),
+        LanguageOption("मराठी", "Marathi", "mr", "🇮🇳"),
+        LanguageOption("ਪੰਜਾਬੀ", "Punjabi", "pa", "🇮🇳"),
         LanguageOption("Français", "French", "fr", "🇫🇷"),
-        LanguageOption("Deutsch", "German", "de", "🇩🇪"),
-        LanguageOption("日本語", "Japanese", "ja", "🇯🇵")
+        LanguageOption("中文", "Chinese", "zh", "🇨🇳"),
+        LanguageOption("اردو", "Urdu", "ur", "🇵🇰"),
+        LanguageOption("日本語", "Japanese", "ja", "🇯🇵"),
+        LanguageOption("Español", "Spanish", "es", "🇪🇸"),
+        LanguageOption("Deutsch", "German", "de", "🇩🇪")
     )
 
     fun getLanguageCode(language: String): String {
         return when (language.trim().lowercase()) {
-            "spanish", "español", "es" -> "es"
             "hindi", "हिंदी", "hi" -> "hi"
+            "bengali", "বাংলা", "bn" -> "bn"
+            "marathi", "मराठी", "mr" -> "mr"
+            "punjabi", "ਪੰਜਾਬੀ", "pa" -> "pa"
             "french", "français", "fr" -> "fr"
-            "german", "deutsch", "de" -> "de"
+            "chinese", "中文", "zh" -> "zh"
+            "urdu", "اردو", "ur" -> "ur"
             "japanese", "日本語", "ja" -> "ja"
+            "spanish", "español", "es" -> "es"
+            "german", "deutsch", "de" -> "de"
             else -> "en"
         }
     }

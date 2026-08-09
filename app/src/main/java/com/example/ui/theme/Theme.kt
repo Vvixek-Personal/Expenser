@@ -12,13 +12,20 @@ import androidx.compose.ui.platform.LocalContext
 
 @Composable
 fun MyApplicationTheme(
-  darkTheme: Boolean = isDarkModeActive,
-  // Force beautiful theme brand consistency
-  dynamicColor: Boolean = false,
+  darkTheme: Boolean = when (themeModeState) {
+      "dark" -> true
+      "light" -> false
+      "device" -> isSystemInDarkTheme()
+      else -> isDarkModeActive
+  },
+  dynamicColor: Boolean = isFollowDeviceColorsState && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S,
   content: @Composable () -> Unit,
 ) {
-  val colorScheme = if (darkTheme) {
-    darkColorScheme(
+  val context = LocalContext.current
+  val colorScheme = when {
+    dynamicColor && darkTheme -> dynamicDarkColorScheme(context)
+    dynamicColor && !darkTheme -> dynamicLightColorScheme(context)
+    darkTheme -> darkColorScheme(
       primary = SleekPrimary,
       secondary = SleekPrimaryContainer,
       tertiary = SavingGold,
@@ -30,8 +37,7 @@ fun MyApplicationTheme(
       onSurface = SleekTextPrimary,
       outline = SleekBorder
     )
-  } else {
-    lightColorScheme(
+    else -> lightColorScheme(
       primary = SleekPrimary,
       secondary = SleekPrimaryContainer,
       tertiary = SavingGold,
