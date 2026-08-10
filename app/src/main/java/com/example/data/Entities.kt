@@ -5,6 +5,18 @@ import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
 
+@Entity(tableName = "expenses")
+data class Expense(
+    @PrimaryKey(autoGenerate = true)
+    val id: Int = 0,
+    val amount: Double,
+    val category: String,
+    val date: Long,
+    val note: String?,
+    val imagePath: String? = null,
+    val type: String = "EXPENSE"
+)
+
 @Entity(tableName = "accounts")
 data class Account(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,

@@ -3355,7 +3355,7 @@ fun CategorySelectorGrid(
                         modifier = Modifier.size(16.dp)
                     )
                     Text(
-                        text = "Custom...",
+                        text = "Add Custom",
                         style = MaterialTheme.typography.bodyMedium,
                         color = SleekPrimary,
                         fontWeight = FontWeight.Bold
@@ -6061,16 +6061,14 @@ fun SidebarGroupCard(
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.SemiBold,
                                 color = SleekTextPrimary,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
+                                softWrap = true
                             )
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
                                 text = LanguageManager.tr(item.subtitleKey, selectedLanguage),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = SleekTextSecondary,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
+                                softWrap = true
                             )
                         }
                         Icon(
@@ -6599,7 +6597,7 @@ fun FaqAccordion(viewModel: FinanceViewModel) {
     val faqs = listOf(
         "Is my financial data secure?" to "Yes, all data is stored offline locally on your device and never uploaded to any servers.",
         "How do I set a monthly budget?" to "Click the pencil icon on the monthly card on the Dashboard to set your budget limit.",
-        "What are custom categories?" to "Select '+ Add Custom...' in the Category dropdown when adding/editing an expense to add new categories.",
+        "What are custom categories?" to "Select '+ Add Custom' in the Category dropdown when adding/editing an expense to add new categories.",
         "How do I delete or edit transactions?" to "On the Transactions tab, long press or tap on any expense row to select it, then use the floating actions bar to edit or delete."
     )
     

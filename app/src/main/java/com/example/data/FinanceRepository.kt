@@ -4,6 +4,12 @@ import kotlinx.coroutines.flow.Flow
 
 class FinanceRepository(private val dao: FinanceDao) {
 
+    // --- Expenses ---
+    val allExpenses: Flow<List<Expense>> = dao.getAllExpenses()
+    suspend fun insertExpense(expense: Expense): Long = dao.insertExpense(expense)
+    suspend fun updateExpense(expense: Expense) = dao.updateExpense(expense)
+    suspend fun deleteExpense(expense: Expense) = dao.deleteExpense(expense)
+
     // --- Accounts ---
     val allAccounts: Flow<List<Account>> = dao.getAllAccounts()
     suspend fun getAccountById(id: Long): Account? = dao.getAccountById(id)

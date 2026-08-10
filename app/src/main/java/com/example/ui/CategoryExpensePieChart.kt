@@ -75,6 +75,40 @@ fun CategoryExpensePieChart(
         categoryExpenses.filter { it.value > 0 }
     }
 
+    // Distinct vibrant palette for pie/donut chart sections (avoiding single theme palette color)
+    val chartSlicePalette = remember {
+        listOf(
+            Color(0xFFF97316), // Vivid Orange
+            Color(0xFF06B6D4), // Bright Cyan
+            Color(0xFF8B5CF6), // Purple / Violet
+            Color(0xFFEC4899), // Hot Pink
+            Color(0xFF10B981), // Emerald Green
+            Color(0xFF3B82F6), // Royal Blue
+            Color(0xFFF59E0B), // Amber Yellow
+            Color(0xFF6366F1), // Indigo
+            Color(0xFF14B8A6), // Teal
+            Color(0xFFE11D48), // Crimson Rose
+            Color(0xFF84CC16), // Lime Green
+            Color(0xFF0284C7), // Sky Blue
+            Color(0xFFA855F7), // Deep Purple
+            Color(0xFFD97706), // Warm Orange
+            Color(0xFF10B981)  // Mint Green
+        )
+    }
+
+    val resolvedCategoryColors = remember(validExpenses, categoryColors) {
+        val map = mutableMapOf<String, Color>()
+        validExpenses.keys.forEachIndexed { index, cat ->
+            val colorFromMap = categoryColors[cat]
+            map[cat] = if (colorFromMap != null && colorFromMap != SleekPrimary) {
+                colorFromMap
+            } else {
+                chartSlicePalette[index % chartSlicePalette.size]
+            }
+        }
+        map
+    }
+
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -230,7 +264,7 @@ fun CategoryExpensePieChart(
 
                     validExpenses.forEach { (cat, amount) ->
                         val sweepAngle = ((amount / totalExpense) * 360f).toFloat()
-                        val color = categoryColors[cat] ?: SleekPrimary
+                        val color = resolvedCategoryColors[cat] ?: chartSlicePalette[0]
                         val isSelected = (cat == selectedCategory)
 
                         // If selected, explode slice slightly outwards along its bisecting angle
@@ -324,7 +358,7 @@ fun CategoryExpensePieChart(
                             Text(
                                 text = selectedCategory ?: "",
                                 style = MaterialTheme.typography.labelMedium,
-                                color = categoryColors[selectedCategory] ?: SleekPrimary,
+                                color = resolvedCategoryColors[selectedCategory] ?: chartSlicePalette[0],
                                 fontWeight = FontWeight.Bold,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
@@ -369,7 +403,7 @@ fun CategoryExpensePieChart(
                 selectedCategory?.let { cat ->
                     val catAmount = validExpenses[cat] ?: 0.0
                     val catPct = if (totalExpense > 0) (catAmount / totalExpense) * 100 else 0.0
-                    val catColor = categoryColors[cat] ?: SleekPrimary
+                    val catColor = resolvedCategoryColors[cat] ?: chartSlicePalette[0]
 
                     Card(
                         colors = CardDefaults.cardColors(containerColor = catColor.copy(alpha = 0.12f)),
@@ -420,7 +454,7 @@ fun CategoryExpensePieChart(
                                 Text(
                                     text = "Tap to clear",
                                     fontSize = 10.sp,
-                                    color = SleekPrimary
+                                    color = catColor
                                 )
                             }
                         }
@@ -434,7 +468,7 @@ fun CategoryExpensePieChart(
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 validExpenses.forEach { (cat, sum) ->
-                    val catColor = categoryColors[cat] ?: SleekPrimary
+                    val catColor = resolvedCategoryColors[cat] ?: chartSlicePalette[0]
                     val catPct = (sum / totalExpense) * 100
                     val isSelected = (cat == selectedCategory)
 
