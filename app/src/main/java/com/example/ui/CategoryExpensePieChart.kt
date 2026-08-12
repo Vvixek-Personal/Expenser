@@ -75,7 +75,7 @@ fun CategoryExpensePieChart(
         categoryExpenses.filter { it.value > 0 }
     }
 
-    // Distinct vibrant palette for pie/donut chart sections (avoiding single theme palette color)
+    // Distinct, vibrant palette for pie/donut chart sections
     val chartSlicePalette = remember {
         listOf(
             Color(0xFFF97316), // Vivid Orange
@@ -84,27 +84,38 @@ fun CategoryExpensePieChart(
             Color(0xFFEC4899), // Hot Pink
             Color(0xFF10B981), // Emerald Green
             Color(0xFF3B82F6), // Royal Blue
-            Color(0xFFF59E0B), // Amber Yellow
+            Color(0xFFF59E0B), // Amber Gold
             Color(0xFF6366F1), // Indigo
             Color(0xFF14B8A6), // Teal
             Color(0xFFE11D48), // Crimson Rose
             Color(0xFF84CC16), // Lime Green
             Color(0xFF0284C7), // Sky Blue
             Color(0xFFA855F7), // Deep Purple
-            Color(0xFFD97706), // Warm Orange
-            Color(0xFF10B981)  // Mint Green
+            Color(0xFFD97706), // Warm Coral
+            Color(0xFF059669), // Mint Green
+            Color(0xFFD946EF), // Fuchsia
+            Color(0xFF22C55E), // Fresh Green
+            Color(0xFFEAB308), // Sunflower
+            Color(0xFF64748B), // Slate Blue
+            Color(0xFF38BDF8)  // Light Sky
         )
     }
 
     val resolvedCategoryColors = remember(validExpenses, categoryColors) {
         val map = mutableMapOf<String, Color>()
+        val usedColors = mutableSetOf<Color>()
+        
         validExpenses.keys.forEachIndexed { index, cat ->
             val colorFromMap = categoryColors[cat]
-            map[cat] = if (colorFromMap != null && colorFromMap != SleekPrimary) {
+            // If categoryColors has a preset color and it hasn't been assigned yet, use it; otherwise pick next unused from palette
+            val assignedColor = if (colorFromMap != null && colorFromMap != SleekPrimary && !usedColors.contains(colorFromMap)) {
                 colorFromMap
             } else {
-                chartSlicePalette[index % chartSlicePalette.size]
+                chartSlicePalette.firstOrNull { !usedColors.contains(it) } 
+                    ?: chartSlicePalette[index % chartSlicePalette.size]
             }
+            map[cat] = assignedColor
+            usedColors.add(assignedColor)
         }
         map
     }

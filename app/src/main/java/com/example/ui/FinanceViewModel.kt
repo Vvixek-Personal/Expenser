@@ -12,6 +12,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
@@ -115,6 +116,16 @@ class FinanceViewModel(
 
     private val _isAuditLoading = MutableStateFlow(false)
     val isAuditLoading: StateFlow<Boolean> = _isAuditLoading.asStateFlow()
+
+    // Daily Spending Insight states (Powered by Gemini AI Advisor)
+    private val _dailySpendingInsight = MutableStateFlow<String?>(null)
+    val dailySpendingInsight: StateFlow<String?> = _dailySpendingInsight.asStateFlow()
+
+    private val _isInsightLoading = MutableStateFlow(false)
+    val isInsightLoading: StateFlow<Boolean> = _isInsightLoading.asStateFlow()
+
+    private val _insightLastUpdated = MutableStateFlow<Long?>(null)
+    val insightLastUpdated: StateFlow<Long?> = _insightLastUpdated.asStateFlow()
 
     // Selected Language Preference
     private val _selectedLanguage = MutableStateFlow("English")
@@ -422,6 +433,9 @@ class FinanceViewModel(
     private val _budgetWarning100 = MutableStateFlow(true)
     val budgetWarning100: StateFlow<Boolean> = _budgetWarning100.asStateFlow()
 
+    private val _budgetIncludeRecurringBills = MutableStateFlow(true)
+    val budgetIncludeRecurringBills: StateFlow<Boolean> = _budgetIncludeRecurringBills.asStateFlow()
+
     // Savings Goals Preferences
     private val _goalViewMode = MutableStateFlow("Grid")
     val goalViewMode: StateFlow<String> = _goalViewMode.asStateFlow()
@@ -602,6 +616,8 @@ class FinanceViewModel(
         _billSortOrder.value = sharedPrefs.getString("bill_sort_order", "Due Date (Nearest)") ?: "Due Date (Nearest)"
         _billDefaultFilter.value = sharedPrefs.getString("bill_default_filter", "All Bills") ?: "All Bills"
         _billShowNotes.value = sharedPrefs.getBoolean("bill_show_notes", true)
+
+        _budgetIncludeRecurringBills.value = sharedPrefs.getBoolean("budget_include_recurring_bills", true)
 
         // Load Category & Tag Preferences
         _preventDeleteUsedCategories.value = sharedPrefs.getBoolean("prevent_delete_used_categories", true)
@@ -787,6 +803,7 @@ class FinanceViewModel(
     }
 
     fun updateDefaultCurrency(code: String, symbol: String, name: String, convertExisting: Boolean = false) {
+        val oldCode = _selectedCurrencyCode.value
         _selectedCurrencyCode.value = code
         _selectedCurrencySymbol.value = symbol
         _selectedCurrencyName.value = name
@@ -795,7 +812,15 @@ class FinanceViewModel(
             .putString("selected_currency_symbol", symbol)
             .putString("selected_currency_name", name)
             .apply()
-        if (convertExisting) {
+
+        if (convertExisting && oldCode != code) {
+            viewModelScope.launch {
+                val currentList = expenses.value
+                currentList.forEach { exp ->
+                    val convertedAmount = CurrencyManager.convert(exp.amount, oldCode, code)
+                    repository.updateExpense(exp.copy(amount = convertedAmount))
+                }
+            }
             _toastMessage.value = "Currency changed to $code ($symbol) and existing transactions converted using exchange rates"
         } else {
             _toastMessage.value = "Default currency updated to $code ($symbol)"
@@ -1020,6 +1045,11 @@ class FinanceViewModel(
         }
     }
 
+    fun toggleBudgetIncludeRecurringBills(enabled: Boolean) {
+        _budgetIncludeRecurringBills.value = enabled
+        sharedPrefs.edit().putBoolean("budget_include_recurring_bills", enabled).apply()
+    }
+
     fun updateGoalViewMode(mode: String) {
         _goalViewMode.value = mode
         sharedPrefs.edit().putString("goal_view_mode", mode).apply()
@@ -1202,7 +1232,8 @@ class FinanceViewModel(
         val allExp = expenses.value
         val totalInc = allExp.filter { it.type == "INCOME" }.sumOf { it.amount }
         val totalExp = allExp.filter { it.type != "INCOME" }.sumOf { it.amount }
-        return totalInc - totalExp
+        val goalsMoney = savingsGoals.value.sumOf { it.currentAmount }
+        return (totalInc - totalExp) + goalsMoney
     }
 
     fun addExpense(
@@ -1448,6 +1479,59 @@ class FinanceViewModel(
             }
             _aiAuditReport.value = report
             _isAuditLoading.value = false
+        }
+    }
+
+    fun generateDailySpendingInsight(forceRefresh: Boolean = false) {
+        if (_isInsightLoading.value && !forceRefresh) return
+        val now = System.currentTimeMillis()
+        val lastUpdated = _insightLastUpdated.value
+        if (!forceRefresh && _dailySpendingInsight.value != null && lastUpdated != null && (now - lastUpdated < 4 * 3600 * 1000L)) {
+            return
+        }
+
+        _isInsightLoading.value = true
+        viewModelScope.launch {
+            val insightText = try {
+                val allExp = expenses.value
+                val startOfToday = Calendar.getInstance().apply {
+                    set(Calendar.HOUR_OF_DAY, 0)
+                    set(Calendar.MINUTE, 0)
+                    set(Calendar.SECOND, 0)
+                    set(Calendar.MILLISECOND, 0)
+                }.timeInMillis
+
+                val todayExpenses = allExp.filter { it.date >= startOfToday && it.type != "INCOME" }
+                val todayTotal = todayExpenses.sumOf { it.amount }
+
+                val startOf7Days = System.currentTimeMillis() - 7 * 24 * 3600 * 1000L
+                val weekExpenses = allExp.filter { it.date >= startOf7Days && it.type != "INCOME" }
+                val weekTotal = weekExpenses.sumOf { it.amount }
+                val weekIncome = allExp.filter { it.date >= startOf7Days && it.type == "INCOME" }.sumOf { it.amount }
+
+                val topCategoryWeek = weekExpenses.groupBy { it.category }
+                    .mapValues { entry -> entry.value.sumOf { it.amount } }
+                    .maxByOrNull { it.value }
+
+                val prompt = """
+                    Analyze the user's spending data and generate a 2-3 sentence 'Daily Spending Insight' summary:
+                    - Today's Total Expense: ₹${"%.2f".format(todayTotal)} (${todayExpenses.size} transactions today)
+                    - Last 7 Days Total Expense: ₹${"%.2f".format(weekTotal)}
+                    - Last 7 Days Total Income: ₹${"%.2f".format(weekIncome)}
+                    - Top Expense Category (7D): ${topCategoryWeek?.key ?: "General"} (₹${"%.2f".format(topCategoryWeek?.value ?: 0.0)})
+                    Provide a friendly, concise, encouraging financial observation or warning for today. Highlight spending pace, savings tip, or notable trend. Avoid long intros or markdown headers.
+                """.trimIndent()
+
+                GeminiClient.getFinancialAdvice(
+                    prompt = prompt,
+                    systemPrompt = "You are an intelligent Gemini AI financial advisor. Return a concise, high-value 2-sentence daily spending insight summary for the user's analytics dashboard. Be direct and insightful."
+                )
+            } catch (e: Exception) {
+                "Unable to generate daily spending insight right now. Please check your network or Gemini API Key."
+            }
+            _dailySpendingInsight.value = insightText
+            _insightLastUpdated.value = System.currentTimeMillis()
+            _isInsightLoading.value = false
         }
     }
 

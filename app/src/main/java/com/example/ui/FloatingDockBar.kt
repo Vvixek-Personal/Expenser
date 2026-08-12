@@ -2,9 +2,12 @@ package com.example.ui
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.BorderStroke
@@ -16,20 +19,20 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material.icons.filled.PieChart
 import androidx.compose.material.icons.filled.ReceiptLong
 import androidx.compose.material3.Icon
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -44,10 +47,9 @@ import com.example.ui.theme.isDarkModeActive
 import com.example.ui.theme.mixPrimaryWithColor
 
 /**
- * Image-3 Inspired Floating Dock Bar:
- * Translucent glass container floating at bottom of screen.
- * Active item expands into a white capsule containing a white circle icon and text label ("Home", etc.).
- * Inactive items are sleek circular outline buttons with icons.
+ * Animated Floating Dock Bar inspired by Video Demo:
+ * Smooth sliding active pill indicator, glowing circular icon badge with spring scale bounce,
+ * and translucent dark navy glass aesthetic.
  */
 @Composable
 fun FloatingDockBar(
@@ -57,110 +59,94 @@ fun FloatingDockBar(
     modifier: Modifier = Modifier
 ) {
     val haptic = LocalHapticFeedback.current
-    // Theme-adaptive translucent glass tint
-    val baseTint = if (isDarkModeActive) Color(0xFF161922) else Color(0xFF1E293B)
-    val dockContainerBg = mixPrimaryWithColor(SleekPrimary, baseTint, 0.45f).copy(alpha = 0.88f)
-    val dockBorderColor = mixPrimaryWithColor(SleekPrimary, Color.White, 0.5f).copy(alpha = 0.4f)
+
+    val screens = remember {
+        listOf(
+            Triple(Screen.Dashboard, Icons.Default.Dashboard, "Home"),
+            Triple(Screen.Expenses, Icons.Default.ReceiptLong, "Transactions"),
+            Triple(Screen.Analytics, Icons.Default.PieChart, "Analytics"),
+            Triple(Screen.Calendar, Icons.Default.CalendarMonth, "Calendar")
+        )
+    }
+
+    val selectedIndex = remember(currentScreen) {
+        screens.indexOfFirst { it.first == currentScreen }.coerceAtLeast(0)
+    }
+
+    // Theme-adaptive dark navy glass container tint
+    val baseTint = if (isDarkModeActive) Color(0xFF081220) else Color(0xFF0F1A2A)
+    val dockContainerBg = mixPrimaryWithColor(SleekPrimary, baseTint, 0.35f).copy(alpha = 0.94f)
+    val dockBorderColor = Color(0xFF38BDF8).copy(alpha = 0.35f)
 
     Box(
         modifier = modifier
             .fillMaxWidth()
             .navigationBarsPadding()
-            .padding(horizontal = 24.dp, vertical = 12.dp),
+            .padding(horizontal = 16.dp, vertical = 10.dp),
         contentAlignment = Alignment.Center
     ) {
-        // Translucent Floating Capsule Container (3rd Image Style)
-        Row(
-            modifier = Modifier
-                .shadow(
-                    elevation = 20.dp,
-                    shape = RoundedCornerShape(40.dp),
-                    spotColor = Color.Black.copy(alpha = 0.3f)
-                )
-                .clip(RoundedCornerShape(40.dp))
-                .background(dockContainerBg)
-                .border(
-                    border = BorderStroke(1.5.dp, dockBorderColor),
-                    shape = RoundedCornerShape(40.dp)
-                )
-                .padding(horizontal = 10.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            verticalAlignment = Alignment.CenterVertically
+        // Outer Container Pill
+        Surface(
+            shape = RoundedCornerShape(42.dp),
+            color = dockContainerBg,
+            border = BorderStroke(1.5.dp, dockBorderColor),
+            shadowElevation = 18.dp,
+            tonalElevation = 6.dp,
+            modifier = Modifier.clip(RoundedCornerShape(42.dp))
         ) {
-            // Tab 1: Home (Dashboard)
-            ImageInspiredDockTile(
-                icon = Icons.Default.Dashboard,
-                title = LanguageManager.tr("Home", selectedLanguage),
-                isSelected = currentScreen == Screen.Dashboard,
-                testTag = "nav_item_dashboard",
-                onClick = {
-                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                    onScreenSelected(Screen.Dashboard)
-                }
-            )
+            Row(
+                modifier = Modifier
+                    .padding(horizontal = 8.dp, vertical = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                screens.forEachIndexed { index, (screen, icon, titleKey) ->
+                    val isSelected = currentScreen == screen
+                    val title = LanguageManager.tr(titleKey, selectedLanguage)
 
-            // Tab 2: Finance (Expenses)
-            ImageInspiredDockTile(
-                icon = Icons.Default.ReceiptLong,
-                title = LanguageManager.tr("Transactions", selectedLanguage),
-                isSelected = currentScreen == Screen.Expenses,
-                testTag = "nav_item_expenses",
-                onClick = {
-                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                    onScreenSelected(Screen.Expenses)
+                    AnimatedDockTile(
+                        icon = icon,
+                        title = title,
+                        isSelected = isSelected,
+                        testTag = "nav_item_${screen.route}",
+                        onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            onScreenSelected(screen)
+                        }
+                    )
                 }
-            )
-
-            // Tab 3: Analytics
-            ImageInspiredDockTile(
-                icon = Icons.Default.PieChart,
-                title = LanguageManager.tr("Analytics", selectedLanguage),
-                isSelected = currentScreen == Screen.Analytics,
-                testTag = "nav_item_analytics",
-                onClick = {
-                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                    onScreenSelected(Screen.Analytics)
-                }
-            )
-
-            // Tab 4: Calendar
-            ImageInspiredDockTile(
-                icon = Icons.Default.CalendarMonth,
-                title = LanguageManager.tr("Calendar", selectedLanguage),
-                isSelected = currentScreen == Screen.Calendar,
-                testTag = "nav_item_calendar",
-                onClick = {
-                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                    onScreenSelected(Screen.Calendar)
-                }
-            )
+            }
         }
     }
 }
 
 @Composable
-private fun ImageInspiredDockTile(
+private fun AnimatedDockTile(
     icon: ImageVector,
     title: String,
     isSelected: Boolean,
     testTag: String,
-    onClick: () -> Unit,
-    isActionTile: Boolean = false
+    onClick: () -> Unit
 ) {
-    val activeBg = Color.White
-    val inactiveCircleBorder = Color(0xFFC8DCCE).copy(alpha = 0.45f)
-    val inactiveIconColor = Color.White
-
-    val animatedHorizontalPadding by animateDpAsState(
-        targetValue = if (isSelected) 14.dp else 12.dp,
+    val animatedPaddingHorizontal by animateDpAsState(
+        targetValue = if (isSelected) 14.dp else 10.dp,
         animationSpec = spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioMediumBouncy),
-        label = "paddingAnim"
+        label = "tilePadding"
     )
 
-    val animatedScale by androidx.compose.animation.core.animateFloatAsState(
-        targetValue = if (isSelected) 1.05f else 1.0f,
-        animationSpec = spring(stiffness = Spring.StiffnessMedium, dampingRatio = Spring.DampingRatioMediumBouncy),
-        label = "scaleAnim"
+    val animatedScale by animateFloatAsState(
+        targetValue = if (isSelected) 1.12f else 1.0f,
+        animationSpec = spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioMediumBouncy),
+        label = "tileScale"
+    )
+
+    val activePillBg = Color(0xFF0061A4)
+    val activePillBorder = Color(0xFF38BDF8).copy(alpha = 0.8f)
+
+    val containerBg by animateColorAsState(
+        targetValue = if (isSelected) activePillBg else Color.Transparent,
+        animationSpec = tween(300, easing = FastOutSlowInEasing),
+        label = "containerBgAnim"
     )
 
     Row(
@@ -173,51 +159,74 @@ private fun ImageInspiredDockTile(
                 scaleX = animatedScale
                 scaleY = animatedScale
             }
-            .clip(CircleShape)
-            .background(if (isSelected) activeBg else Color.Transparent)
+            .clip(RoundedCornerShape(26.dp))
+            .background(containerBg)
             .border(
                 border = BorderStroke(
-                    width = if (isSelected) 0.dp else 1.dp,
-                    color = if (isSelected) Color.Transparent else inactiveCircleBorder
+                    width = if (isSelected) 1.5.dp else 0.dp,
+                    color = if (isSelected) activePillBorder else Color.Transparent
                 ),
-                shape = CircleShape
+                shape = RoundedCornerShape(26.dp)
             )
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
                 onClick = onClick
             )
-            .padding(
-                horizontal = animatedHorizontalPadding,
-                vertical = 6.dp
-            )
+            .padding(horizontal = animatedPaddingHorizontal, vertical = 6.dp)
     ) {
+        // Glowing Icon Badge Circle
         Box(
             modifier = Modifier
                 .size(34.dp)
                 .clip(CircleShape)
-                .background(if (isSelected) Color(0xFF1E293B) else Color.Transparent),
+                .background(
+                    if (isSelected) {
+                        Brush.radialGradient(
+                            colors = listOf(
+                                Color(0xFF38BDF8),
+                                Color(0xFF0284C7)
+                            )
+                        )
+                    } else {
+                        Brush.linearGradient(
+                            colors = listOf(
+                                Color.White.copy(alpha = 0.08f),
+                                Color.White.copy(alpha = 0.04f)
+                            )
+                        )
+                    }
+                )
+                .border(
+                    width = if (isSelected) 1.5.dp else 1.dp,
+                    color = if (isSelected) Color.White.copy(alpha = 0.9f) else Color.White.copy(alpha = 0.2f),
+                    shape = CircleShape
+                ),
             contentAlignment = Alignment.Center
         ) {
             Icon(
                 imageVector = icon,
                 contentDescription = title,
-                tint = if (isSelected) Color.White else (if (isActionTile) SleekPrimary else inactiveIconColor),
-                modifier = Modifier.size(if (isSelected) 18.dp else 20.dp)
+                tint = if (isSelected) Color.White else Color.White.copy(alpha = 0.75f),
+                modifier = Modifier.size(if (isSelected) 19.dp else 18.dp)
             )
         }
 
         AnimatedVisibility(
             visible = isSelected,
-            enter = androidx.compose.animation.expandHorizontally(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) + fadeIn(),
-            exit = androidx.compose.animation.shrinkHorizontally(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) + fadeOut()
+            enter = androidx.compose.animation.expandHorizontally(
+                animationSpec = spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioMediumBouncy)
+            ) + fadeIn(),
+            exit = androidx.compose.animation.shrinkHorizontally(
+                animationSpec = spring(stiffness = Spring.StiffnessMediumLow)
+            ) + fadeOut()
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
                     text = title,
-                    color = Color(0xFF1E293B),
-                    fontSize = 14.sp,
+                    color = Color.White,
+                    fontSize = 13.sp,
                     fontWeight = FontWeight.Bold,
                     maxLines = 1
                 )
@@ -225,4 +234,5 @@ private fun ImageInspiredDockTile(
         }
     }
 }
+
 

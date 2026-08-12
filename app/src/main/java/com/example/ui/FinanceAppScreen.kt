@@ -39,6 +39,7 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -426,6 +427,10 @@ fun FinanceAppScreen(viewModel: FinanceViewModel) {
                     viewModel = viewModel,
                     onBack = { activeSettingsSubScreen = null }
                 )
+                SettingsSubScreen.BadgesAndMilestones -> BadgesAndMilestonesScreen(
+                    viewModel = viewModel,
+                    onBack = { activeSettingsSubScreen = null }
+                )
                 SettingsSubScreen.Appearance -> AppearanceScreen(
                     viewModel = viewModel,
                     onBack = { activeSettingsSubScreen = null }
@@ -452,7 +457,8 @@ fun FinanceAppScreen(viewModel: FinanceViewModel) {
                 )
                 SettingsSubScreen.Budgets -> BudgetSettingsScreen(
                     viewModel = viewModel,
-                    onBack = { activeSettingsSubScreen = null }
+                    onBack = { activeSettingsSubScreen = null },
+                    onOpenCurrencySettings = { activeSettingsSubScreen = SettingsSubScreen.Currency }
                 )
                 SettingsSubScreen.SavingsGoals -> SavingsGoalsSettingsScreen(
                     viewModel = viewModel,
@@ -566,6 +572,7 @@ fun DashboardTab(
     viewModel: FinanceViewModel
 ) {
     val accounts by viewModel.accounts.collectAsStateWithLifecycle()
+    val savingsGoals by viewModel.savingsGoals.collectAsStateWithLifecycle()
     val selectedLanguage by viewModel.selectedLanguage.collectAsStateWithLifecycle()
     val profileImageUri by viewModel.userProfileImageUri.collectAsStateWithLifecycle()
     val currentStreak by viewModel.currentStreak.collectAsStateWithLifecycle()
@@ -582,6 +589,18 @@ fun DashboardTab(
     val currentMonth = currentCalendar.get(Calendar.MONTH)
     val currentYear = currentCalendar.get(Calendar.YEAR)
 
+    // All-time income, expense, and savings goals totals for Total Net Balance
+    val totalAllTimeIncome = remember(expenses) {
+        expenses.filter { it.type == "INCOME" }.sumOf { it.amount }
+    }
+    val totalAllTimeExpense = remember(expenses) {
+        expenses.filter { it.type != "INCOME" }.sumOf { it.amount }
+    }
+    val totalSavingsGoalsMoney = remember(savingsGoals) {
+        savingsGoals.sumOf { it.currentAmount }
+    }
+    val overallTotalNetBalance = (totalAllTimeIncome - totalAllTimeExpense) + totalSavingsGoalsMoney
+
     // Filter current month expenses
     val thisMonthExpenses = expenses.filter {
         val cal = Calendar.getInstance().apply { timeInMillis = it.date }
@@ -595,7 +614,6 @@ fun DashboardTab(
         cal.get(Calendar.MONTH) == currentMonth && cal.get(Calendar.YEAR) == currentYear && it.type == "INCOME"
     }
     val thisMonthIncomeTotal = thisMonthIncomes.sumOf { it.amount }
-    val thisMonthNetBalance = thisMonthIncomeTotal - thisMonthTotal
 
     // Last month expenses
     val lastMonthCalendar = Calendar.getInstance().apply {
@@ -826,11 +844,11 @@ fun DashboardTab(
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(20.dp))
-                            .background(if (thisMonthNetBalance >= 0) Color(0xFF10B981).copy(alpha = 0.25f) else Color(0xFFEF4444).copy(alpha = 0.25f))
+                            .background(if (overallTotalNetBalance >= 0) Color(0xFF10B981).copy(alpha = 0.25f) else Color(0xFFEF4444).copy(alpha = 0.25f))
                             .padding(horizontal = 10.dp, vertical = 4.dp)
                     ) {
                         Text(
-                            text = if (thisMonthNetBalance >= 0) "Safe Balance" else "Overdrawn",
+                            text = if (overallTotalNetBalance >= 0) "Safe Balance" else "Overdrawn",
                             color = Color.White,
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Bold
@@ -841,12 +859,33 @@ fun DashboardTab(
                 Spacer(modifier = Modifier.height(8.dp))
 
                 Text(
-                    text = String.format("%s₹%,.2f", if (thisMonthNetBalance >= 0) "" else "-", Math.abs(thisMonthNetBalance)),
+                    text = String.format("%s₹%,.2f", if (overallTotalNetBalance >= 0) "" else "-", Math.abs(overallTotalNetBalance)),
                     style = MaterialTheme.typography.headlineLarge,
                     color = Color.White,
                     fontWeight = FontWeight.Bold,
                     fontSize = 38.sp
                 )
+
+                if (totalSavingsGoalsMoney > 0) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        modifier = Modifier.padding(top = 4.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Savings,
+                            contentDescription = null,
+                            tint = Color(0xFFFBBF24),
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Text(
+                            text = String.format("Includes ₹%,.0f in Savings Goals", totalSavingsGoalsMoney),
+                            color = Color.White.copy(alpha = 0.85f),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
 
                 Spacer(modifier = Modifier.height(16.dp))
 
@@ -878,14 +917,14 @@ fun DashboardTab(
                         Spacer(modifier = Modifier.width(8.dp))
                         Column {
                             Text(
-                                text = "INCOME",
+                                text = "TOTAL INCOME",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = Color.White.copy(alpha = 0.6f),
                                 fontSize = 9.sp,
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
-                                text = String.format("₹%,.0f", thisMonthIncomeTotal),
+                                text = String.format("₹%,.0f", totalAllTimeIncome),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = Color.White,
                                 fontWeight = FontWeight.Bold
@@ -915,14 +954,14 @@ fun DashboardTab(
                         Spacer(modifier = Modifier.width(8.dp))
                         Column {
                             Text(
-                                text = "EXPENSE",
+                                text = "TOTAL EXPENSE",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = Color.White.copy(alpha = 0.6f),
                                 fontSize = 9.sp,
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
-                                text = String.format("₹%,.0f", thisMonthTotal),
+                                text = String.format("₹%,.0f", totalAllTimeExpense),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = Color.White,
                                 fontWeight = FontWeight.Bold
@@ -2080,6 +2119,14 @@ fun AnalyticsTab(
     val userName by viewModel.userName.collectAsStateWithLifecycle()
     val profileImageUri by viewModel.userProfileImageUri.collectAsStateWithLifecycle()
 
+    val dailyInsight by viewModel.dailySpendingInsight.collectAsStateWithLifecycle()
+    val isInsightLoading by viewModel.isInsightLoading.collectAsStateWithLifecycle()
+    val insightLastUpdated by viewModel.insightLastUpdated.collectAsStateWithLifecycle()
+
+    LaunchedEffect(Unit) {
+        viewModel.generateDailySpendingInsight(forceRefresh = false)
+    }
+
     var selectedTimeFilter by remember { mutableStateOf("7D") }
     var showExportDialog by remember { mutableStateOf(false) }
     val timeFilters = listOf("7D", "30D", "1M", "6M", "1Y", "All")
@@ -2345,6 +2392,16 @@ fun AnalyticsTab(
 
         Spacer(modifier = Modifier.height(16.dp))
 
+        // ✨ GEMINI-POWERED DAILY SPENDING INSIGHT CARD
+        DailySpendingInsightCard(
+            insight = dailyInsight,
+            isLoading = isInsightLoading,
+            lastUpdated = insightLastUpdated,
+            onRefresh = { viewModel.generateDailySpendingInsight(forceRefresh = true) }
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
         // Metrics Overview Cards Row (App Default Style)
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -2460,6 +2517,15 @@ fun AnalyticsTab(
 
         Spacer(modifier = Modifier.height(16.dp))
 
+        // 💵 CASH AT END OF THE MONTH CHART CARD
+        val currencySymbol by viewModel.selectedCurrencySymbol.collectAsStateWithLifecycle()
+        CashAtEndOfMonthChartCard(
+            allExpenses = allExpenses,
+            currencySymbol = currencySymbol
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
         // 📊 2. BAR CHART FOR CATEGORY OVER INCOME AND EXPENSE
         CategoryIncomeExpenseBarChartCard(
             expenses = filteredPeriodExpenses
@@ -2473,6 +2539,210 @@ fun AnalyticsTab(
         )
 
         Spacer(modifier = Modifier.height(110.dp))
+    }
+}
+
+// ==========================================
+// ✨ GEMINI DAILY SPENDING INSIGHT CARD
+// ==========================================
+@Composable
+fun DailySpendingInsightCard(
+    insight: String?,
+    isLoading: Boolean,
+    lastUpdated: Long?,
+    onRefresh: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val infiniteTransition = rememberInfiniteTransition(label = "ai_rot_trans")
+    val rotationAnim by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1200, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "ai_rot"
+    )
+
+    Card(
+        colors = CardDefaults.cardColors(containerColor = SleekSurface),
+        shape = RoundedCornerShape(22.dp),
+        border = BorderStroke(1.5.dp, Brush.horizontalGradient(
+            colors = listOf(
+                SleekPrimary.copy(alpha = 0.5f),
+                Color(0xFF8B5CF6).copy(alpha = 0.5f),
+                Color(0xFFEC4899).copy(alpha = 0.3f)
+            )
+        )),
+        modifier = modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(38.dp)
+                            .clip(CircleShape)
+                            .background(
+                                Brush.linearGradient(
+                                    colors = listOf(
+                                        Color(0xFF6366F1),
+                                        Color(0xFF8B5CF6),
+                                        Color(0xFFEC4899)
+                                    )
+                                )
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.AutoAwesome,
+                            contentDescription = "Gemini AI Advisor",
+                            tint = Color.White,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+
+                    Column {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Text(
+                                text = "Daily Spending Insight",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 15.sp,
+                                color = SleekTextPrimary
+                            )
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = Color(0xFF8B5CF6).copy(alpha = 0.15f)
+                            ) {
+                                Text(
+                                    text = "AI Advisor",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF8B5CF6),
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
+                        Text(
+                            text = if (lastUpdated != null) {
+                                val cal = Calendar.getInstance().apply { timeInMillis = lastUpdated }
+                                "Updated today at %02d:%02d".format(cal.get(Calendar.HOUR_OF_DAY), cal.get(Calendar.MINUTE))
+                            } else "Powered by Gemini 3.5",
+                            fontSize = 11.sp,
+                            color = SleekTextSecondary
+                        )
+                    }
+                }
+
+                IconButton(
+                    onClick = onRefresh,
+                    enabled = !isLoading,
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(CircleShape)
+                        .background(SleekBg)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Refresh,
+                        contentDescription = "Refresh Insight",
+                        tint = SleekPrimary,
+                        modifier = Modifier
+                            .size(18.dp)
+                            .graphicsLayer {
+                                if (isLoading) rotationZ = rotationAnim
+                            }
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            AnimatedContent(
+                targetState = isLoading to insight,
+                label = "insight_content"
+            ) { (loading, text) ->
+                if (loading && text == null) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(SleekBg)
+                            .padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            strokeWidth = 2.5.dp,
+                            color = SleekPrimary
+                        )
+                        Text(
+                            text = "Analyzing today's financial activity with Gemini...",
+                            fontSize = 13.sp,
+                            color = SleekTextSecondary,
+                            fontStyle = FontStyle.Italic
+                        )
+                    }
+                } else if (!text.isNullOrBlank()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(
+                                Brush.verticalGradient(
+                                    colors = listOf(
+                                        SleekPrimary.copy(alpha = 0.06f),
+                                        Color(0xFF8B5CF6).copy(alpha = 0.04f)
+                                    )
+                                )
+                            )
+                            .border(1.dp, SleekPrimary.copy(alpha = 0.12f), RoundedCornerShape(14.dp))
+                            .padding(14.dp)
+                    ) {
+                        Text(
+                            text = text,
+                            fontSize = 13.5.sp,
+                            lineHeight = 20.sp,
+                            color = SleekTextPrimary,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                } else {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(SleekBg)
+                            .padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = "Tap refresh to generate today's spending insight.",
+                            fontSize = 13.sp,
+                            color = SleekTextSecondary
+                        )
+                        TextButton(onClick = onRefresh) {
+                            Text("Generate", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = SleekPrimary)
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -2805,6 +3075,429 @@ private data class GraphPoint(
     val expense: Double,
     val timestamp: Long
 )
+
+// ==========================================
+// 💵 CASH AT END OF THE MONTH CHART CARD
+// ==========================================
+@Composable
+fun CashAtEndOfMonthChartCard(
+    allExpenses: List<Expense>,
+    currencySymbol: String = "₹",
+    modifier: Modifier = Modifier
+) {
+    val currentCalendar = remember { Calendar.getInstance() }
+    val currentYear = remember { currentCalendar.get(Calendar.YEAR) }
+    val currentMonthIdx = remember { currentCalendar.get(Calendar.MONTH) } // 0..11
+
+    var selectedMonthIndex by remember { mutableStateOf<Int?>(null) }
+    var viewMode by remember { mutableStateOf("Recent") } // "Recent" (Prev & Current Months) vs "Full Year"
+    var animPlayed by remember { mutableStateOf(false) }
+
+    val animProgress by animateFloatAsState(
+        targetValue = if (animPlayed) 1f else 0f,
+        animationSpec = tween(durationMillis = 850, easing = FastOutSlowInEasing),
+        label = "cash_at_end_of_month_anim"
+    )
+
+    LaunchedEffect(allExpenses) {
+        animPlayed = false
+        animPlayed = true
+    }
+
+    val monthsLabels = listOf("Jan", "Feb", "Mar", "Apr", "May", "June", "July", "Aug", "Sep", "Oct", "Nov", "Dec")
+
+    // Calculate real cumulative ending cash balance for each of the 12 months from user data (reflecting edited txns)
+    val monthlyBalances = remember(allExpenses, currentYear) {
+        val cal = Calendar.getInstance()
+        val priorTxns = allExpenses.filter { exp ->
+            cal.timeInMillis = exp.date
+            cal.get(Calendar.YEAR) < currentYear
+        }
+        var runningNet = priorTxns.filter { it.type == "INCOME" }.sumOf { it.amount } - priorTxns.filter { it.type != "INCOME" }.sumOf { it.amount }
+
+        (0..11).map { monthIdx ->
+            val monthTxns = allExpenses.filter { exp ->
+                cal.timeInMillis = exp.date
+                cal.get(Calendar.YEAR) == currentYear && cal.get(Calendar.MONTH) == monthIdx
+            }
+            val inc = monthTxns.filter { it.type == "INCOME" }.sumOf { it.amount }
+            val exp = monthTxns.filter { it.type != "INCOME" }.sumOf { it.amount }
+            runningNet += (inc - exp)
+            runningNet
+        }
+    }
+
+    val currentMonthCash = monthlyBalances.getOrElse(currentMonthIdx) { 0.0 }
+    val prevMonthCash = if (currentMonthIdx > 0) monthlyBalances.getOrElse(currentMonthIdx - 1) { 0.0 } else 0.0
+    val monthDiff = currentMonthCash - prevMonthCash
+
+    // Determine subset of months based on viewMode
+    val displayedIndices = remember(viewMode, currentMonthIdx) {
+        if (viewMode == "Recent") {
+            // Display from up to 5 months prior up to current month (min 3 months)
+            val startIdx = (currentMonthIdx - 4).coerceAtLeast(0)
+            (startIdx..currentMonthIdx).toList()
+        } else {
+            (0..11).toList()
+        }
+    }
+
+    val displayedBalances = remember(monthlyBalances, displayedIndices) {
+        displayedIndices.map { monthlyBalances.getOrElse(it) { 0.0 } }
+    }
+
+    val rawMin = remember(displayedBalances) { displayedBalances.minOrNull() ?: 0.0 }
+    val rawMax = remember(displayedBalances) { displayedBalances.maxOrNull() ?: 0.0 }
+
+    val chartMin = remember(rawMin) { if (rawMin < 0) rawMin else 0.0 }
+    val chartMax = remember(rawMax, chartMin) {
+        val peak = maxOf(rawMax, 1000.0)
+        Math.ceil(peak / 500.0) * 500.0
+    }
+    val chartRange = remember(chartMax, chartMin) { (chartMax - chartMin).coerceAtLeast(100.0) }
+
+    val activeIdx = selectedMonthIndex ?: currentMonthIdx
+    val activeMonth = monthsLabels.getOrElse(activeIdx) { "Month" }
+    val activeBalance = monthlyBalances.getOrElse(activeIdx) { 0.0 }
+
+    val activeTag = when (activeIdx) {
+        currentMonthIdx -> " (Current Month)"
+        currentMonthIdx - 1 -> " (Previous Month)"
+        else -> ""
+    }
+
+    Card(
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(containerColor = SleekSurface),
+        border = BorderStroke(1.dp, SleekBorder),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        modifier = modifier
+            .fillMaxWidth()
+            .testTag("cash_at_end_of_month_card")
+    ) {
+        Column(
+            modifier = Modifier
+                .padding(20.dp)
+                .fillMaxWidth()
+        ) {
+            // Card Title & View Mode Toggle Row
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text(
+                        text = "Cash at End of Month",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = SleekTextPrimary,
+                        fontSize = 17.sp
+                    )
+                    Text(
+                        text = "Real-time cashflow metrics",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = SleekTextSecondary,
+                        fontSize = 11.sp
+                    )
+                }
+
+                Row(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(SleekPrimaryContainer.copy(alpha = 0.2f))
+                        .border(1.dp, SleekBorder, RoundedCornerShape(16.dp))
+                        .padding(2.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(if (viewMode == "Recent") SleekPrimary else Color.Transparent)
+                            .clickable {
+                                viewMode = "Recent"
+                                selectedMonthIndex = currentMonthIdx
+                            }
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                    ) {
+                        Text(
+                            "Recent",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (viewMode == "Recent") Color.White else SleekTextSecondary
+                        )
+                    }
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(if (viewMode == "Full") SleekPrimary else Color.Transparent)
+                            .clickable { viewMode = "Full" }
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                    ) {
+                        Text(
+                            "Full Year",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (viewMode == "Full") Color.White else SleekTextSecondary
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // Current Month & Previous Month Cashflow Quick Summary Row
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                // Previous Month Chip
+                Card(
+                    modifier = Modifier.weight(1f),
+                    colors = CardDefaults.cardColors(containerColor = SleekNeutralLight),
+                    shape = RoundedCornerShape(12.dp),
+                    border = BorderStroke(1.dp, SleekBorder)
+                ) {
+                    Column(modifier = Modifier.padding(10.dp)) {
+                        Text(
+                            text = if (currentMonthIdx > 0) "${monthsLabels[currentMonthIdx - 1]} (Prev)" else "Prev Year",
+                            fontSize = 10.sp,
+                            color = SleekTextSecondary,
+                            fontWeight = FontWeight.Medium
+                        )
+                        Text(
+                            text = "$currencySymbol%,.0f".format(prevMonthCash),
+                            fontSize = 13.sp,
+                            color = SleekTextPrimary,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+
+                // Current Month Chip
+                Card(
+                    modifier = Modifier.weight(1f),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF0D9488).copy(alpha = 0.1f)),
+                    shape = RoundedCornerShape(12.dp),
+                    border = BorderStroke(1.5.dp, Color(0xFF0D9488))
+                ) {
+                    Column(modifier = Modifier.padding(10.dp)) {
+                        Text(
+                            text = "${monthsLabels[currentMonthIdx]} (Current)",
+                            fontSize = 10.sp,
+                            color = Color(0xFF0D9488),
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "$currencySymbol%,.0f".format(currentMonthCash),
+                            fontSize = 13.sp,
+                            color = Color(0xFF0D9488),
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+
+                // Net MoM Flow Chip
+                Card(
+                    modifier = Modifier.weight(1f),
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (monthDiff >= 0) Color(0xFF10B981).copy(alpha = 0.1f) else ExpenseRed.copy(alpha = 0.1f)
+                    ),
+                    shape = RoundedCornerShape(12.dp),
+                    border = BorderStroke(1.dp, if (monthDiff >= 0) Color(0xFF10B981) else ExpenseRed)
+                ) {
+                    Column(modifier = Modifier.padding(10.dp)) {
+                        Text(
+                            text = "MoM Flow",
+                            fontSize = 10.sp,
+                            color = if (monthDiff >= 0) Color(0xFF10B981) else ExpenseRed,
+                            fontWeight = FontWeight.Medium
+                        )
+                        Text(
+                            text = "${if (monthDiff >= 0) "+" else ""}$currencySymbol%,.0f".format(monthDiff),
+                            fontSize = 13.sp,
+                            color = if (monthDiff >= 0) Color(0xFF10B981) else ExpenseRed,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Active Inspector Row
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color(0xFF0D9488).copy(alpha = 0.08f), RoundedCornerShape(12.dp))
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "$activeMonth$activeTag Ending Cash:",
+                    fontSize = 12.sp,
+                    color = SleekTextSecondary,
+                    fontWeight = FontWeight.Medium
+                )
+                Text(
+                    text = "$currencySymbol%,.0f".format(activeBalance),
+                    fontSize = 14.sp,
+                    color = Color(0xFF0D9488),
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            val lineColor = Color(0xFF2DD4BF)
+            val nodeColor = Color(0xFF0D9488)
+            val gridColor = SleekBorder.copy(alpha = 0.5f)
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(200.dp)
+            ) {
+                Canvas(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .pointerInput(displayedIndices, monthlyBalances) {
+                            detectTapGestures { offset ->
+                                val leftPadding = 38.dp.toPx()
+                                val rightPadding = 12.dp.toPx()
+                                val width = size.width - leftPadding - rightPadding
+                                val count = displayedIndices.size
+                                val stepX = if (count > 1) width / (count - 1) else width
+
+                                val x = offset.x - leftPadding
+                                val subIndex = (x / stepX + 0.5f).toInt().coerceIn(0, count - 1)
+                                selectedMonthIndex = displayedIndices[subIndex]
+                            }
+                        }
+                ) {
+                    val leftPadding = 38.dp.toPx()
+                    val rightPadding = 12.dp.toPx()
+                    val topPadding = 15.dp.toPx()
+                    val bottomPadding = 30.dp.toPx()
+
+                    val chartWidth = size.width - leftPadding - rightPadding
+                    val chartHeight = size.height - topPadding - bottomPadding
+
+                    // Draw Y-Axis Steps & Horizontal Grid Lines
+                    val ySteps = 4
+                    val stepVal = chartRange / ySteps
+                    for (i in 0..ySteps) {
+                        val v = chartMin + i * stepVal
+                        val norm = (v - chartMin) / chartRange
+                        val y = topPadding + chartHeight - (norm * chartHeight).toFloat()
+                        drawLine(
+                            color = gridColor,
+                            start = Offset(leftPadding, y),
+                            end = Offset(size.width - rightPadding, y),
+                            strokeWidth = 1.dp.toPx()
+                        )
+                    }
+
+                    val count = displayedIndices.size
+                    val stepX = if (count > 1) chartWidth / (count - 1) else chartWidth
+
+                    // Compute Point Offsets
+                    val points = displayedIndices.mapIndexed { i, monthIdx ->
+                        val value = monthlyBalances.getOrElse(monthIdx) { 0.0 }
+                        val x = leftPadding + i * stepX
+                        val norm = ((value - chartMin) / chartRange).coerceIn(0.0, 1.0)
+                        val y = topPadding + chartHeight - (norm.toFloat() * chartHeight * animProgress)
+                        Offset(x, y)
+                    }
+
+                    // Draw Trend Line
+                    if (points.isNotEmpty()) {
+                        val path = Path()
+                        path.moveTo(points.first().x, points.first().y)
+                        for (i in 1 until points.size) {
+                            path.lineTo(points[i].x, points[i].y)
+                        }
+                        drawPath(
+                            path = path,
+                            color = lineColor,
+                            style = Stroke(width = 2.5.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
+                        )
+                    }
+
+                    // Draw Node Circles for each displayed month
+                    points.forEachIndexed { i, pt ->
+                        val monthIdx = displayedIndices[i]
+                        val isSelected = (activeIdx == monthIdx)
+                        val isCurrentMonth = (monthIdx == currentMonthIdx)
+
+                        // Outer ring
+                        drawCircle(
+                            color = Color.White,
+                            radius = if (isSelected || isCurrentMonth) 6.5.dp.toPx() else 4.5.dp.toPx(),
+                            center = pt
+                        )
+                        drawCircle(
+                            color = if (isCurrentMonth) Color(0xFF10B981) else if (isSelected) nodeColor else lineColor,
+                            radius = if (isSelected || isCurrentMonth) 6.5.dp.toPx() else 4.5.dp.toPx(),
+                            center = pt,
+                            style = Stroke(width = 2.dp.toPx())
+                        )
+                        if (isSelected || isCurrentMonth) {
+                            drawCircle(
+                                color = if (isCurrentMonth) Color(0xFF10B981) else nodeColor,
+                                radius = 3.5.dp.toPx(),
+                                center = pt
+                            )
+                        }
+                    }
+                }
+
+                // Y-Axis Labels
+                Column(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .padding(bottom = 24.dp, top = 2.dp),
+                    verticalArrangement = Arrangement.SpaceBetween
+                ) {
+                    val ySteps = 4
+                    val stepVal = chartRange / ySteps
+                    (ySteps downTo 0).forEach { i ->
+                        val labelVal = (chartMin + i * stepVal).toInt()
+                        Text(
+                            text = "$labelVal",
+                            fontSize = 9.sp,
+                            color = SleekTextSecondary,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
+
+                // X-Axis Month Labels
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .align(Alignment.BottomCenter)
+                        .padding(start = 36.dp, end = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    displayedIndices.forEach { monthIdx ->
+                        val mLabel = monthsLabels.getOrElse(monthIdx) { "" }
+                        val isSelected = (activeIdx == monthIdx)
+                        val isCurrent = (monthIdx == currentMonthIdx)
+
+                        Text(
+                            text = if (isCurrent) "$mLabel*" else mLabel,
+                            fontSize = 9.sp,
+                            fontWeight = if (isSelected || isCurrent) FontWeight.Bold else FontWeight.Normal,
+                            color = if (isCurrent) Color(0xFF10B981) else if (isSelected) nodeColor else SleekTextSecondary,
+                            modifier = Modifier.clickable { selectedMonthIndex = monthIdx }
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
 
 // ==========================================
 // 📊 2. BAR CHART FOR CATEGORIES (INCOME & EXPENSE)
@@ -6028,24 +6721,36 @@ fun SidebarGroupCard(
         Card(
             colors = CardDefaults.cardColors(containerColor = SleekSurface),
             border = BorderStroke(1.dp, SleekBorder),
-            shape = RoundedCornerShape(20.dp),
+            shape = RoundedCornerShape(22.dp),
             modifier = Modifier.fillMaxWidth()
         ) {
             Column(modifier = Modifier.fillMaxWidth()) {
                 items.forEachIndexed { index, item ->
+                    var isPressed by remember { mutableStateOf(false) }
+                    val scale by animateFloatAsState(
+                        targetValue = if (isPressed) 0.97f else 1.0f,
+                        animationSpec = spring(stiffness = Spring.StiffnessHigh),
+                        label = "sidebarPressScale"
+                    )
+
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(14.dp),
                         modifier = Modifier
                             .fillMaxWidth()
+                            .graphicsLayer {
+                                scaleX = scale
+                                scaleY = scale
+                            }
                             .clickable { item.onClick() }
                             .padding(16.dp)
                     ) {
                         Box(
                             modifier = Modifier
-                                .size(38.dp)
+                                .size(40.dp)
                                 .clip(CircleShape)
-                                .background(item.iconBgColor),
+                                .background(item.iconBgColor)
+                                .border(1.dp, item.iconColor.copy(alpha = 0.3f), CircleShape),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
@@ -6235,62 +6940,40 @@ fun SidebarDrawerContent(
             }
         }
 
-        // Section 1: PREFERENCES
+        // Section 1: PROFILE & STREAK
         SidebarGroupCard(
-            sectionTitle = "PREFERENCES",
+            sectionTitle = "ACCOUNT & PROFILE",
             items = listOf(
                 SidebarMenuItemData(
-                    icon = Icons.Default.Palette,
-                    iconColor = Color(0xFF8B5CF6),
-                    iconBgColor = Color(0xFFF3E8FF),
-                    titleKey = "Appearance",
-                    subtitleKey = "Theme, colors, dark mode",
-                    onClick = {
-                        onCloseDrawer()
-                        onOpenSettingsScreen(SettingsSubScreen.Appearance)
-                    }
-                ),
-                SidebarMenuItemData(
-                    icon = Icons.Default.Language,
+                    icon = Icons.Default.Person,
                     iconColor = Color(0xFF2563EB),
                     iconBgColor = Color(0xFFEFF6FF),
-                    titleKey = "Language",
-                    subtitleKey = "App language and regional format",
+                    titleKey = "Profile",
+                    subtitleKey = "View and edit personal profile details",
                     onClick = {
                         onCloseDrawer()
-                        onOpenSettingsScreen(SettingsSubScreen.Language)
+                        onOpenSettingsScreen(SettingsSubScreen.PersonalData)
                     }
                 ),
                 SidebarMenuItemData(
-                    icon = Icons.Default.Payments,
-                    iconColor = Color(0xFF10B981),
-                    iconBgColor = Color(0xFFDCFCE7),
-                    titleKey = "Currency",
-                    subtitleKey = "Default currency and formatting",
+                    icon = Icons.Default.Star,
+                    iconColor = Color(0xFFEA580C),
+                    iconBgColor = Color(0xFFFFEDD5),
+                    titleKey = "Badges and Milestone",
+                    subtitleKey = "Daily streaks, badges and achievements",
                     onClick = {
                         onCloseDrawer()
-                        onOpenSettingsScreen(SettingsSubScreen.Currency)
+                        onOpenSettingsScreen(SettingsSubScreen.BadgesAndMilestones)
                     }
                 )
             ),
             selectedLanguage = selectedLanguage
         )
 
-        // Section 2: FINANCE MANAGEMENT
+        // Section 2: CATEGORIES & DATA
         SidebarGroupCard(
-            sectionTitle = "FINANCE MANAGEMENT",
+            sectionTitle = "CATEGORIES & DATA",
             items = listOf(
-                SidebarMenuItemData(
-                    icon = Icons.Default.Receipt,
-                    iconColor = Color(0xFF2563EB),
-                    iconBgColor = Color(0xFFEFF6FF),
-                    titleKey = "Bills & Reminders",
-                    subtitleKey = "Manage bills, due dates and payment reminders",
-                    onClick = {
-                        onCloseDrawer()
-                        onOpenSettingsScreen(SettingsSubScreen.Bills)
-                    }
-                ),
                 SidebarMenuItemData(
                     icon = Icons.Default.Category,
                     iconColor = Color(0xFF16A34A),
@@ -6303,74 +6986,22 @@ fun SidebarDrawerContent(
                     }
                 ),
                 SidebarMenuItemData(
-                    icon = Icons.Default.AccountBalanceWallet,
-                    iconColor = Color(0xFF7C3AED),
-                    iconBgColor = Color(0xFFF3E8FF),
-                    titleKey = "Budgets",
-                    subtitleKey = "Default budget settings and limits",
+                    icon = Icons.Default.FileDownload,
+                    iconColor = Color(0xFF0284C7),
+                    iconBgColor = Color(0xFFE0F2FE),
+                    titleKey = "Export Statements",
+                    subtitleKey = "Export analytics, stats, CSV & PDF reports",
                     onClick = {
                         onCloseDrawer()
-                        onOpenSettingsScreen(SettingsSubScreen.Budgets)
-                    }
-                ),
-                SidebarMenuItemData(
-                    icon = Icons.Default.Savings,
-                    iconColor = Color(0xFFDB2777),
-                    iconBgColor = Color(0xFFFCE7F3),
-                    titleKey = "Savings Goals",
-                    subtitleKey = "Goal settings and default preferences",
-                    onClick = {
-                        onCloseDrawer()
-                        onOpenSettingsScreen(SettingsSubScreen.SavingsGoals)
-                    }
-                ),
-                SidebarMenuItemData(
-                    icon = Icons.Default.Calculate,
-                    iconColor = Color(0xFF0D9488),
-                    iconBgColor = Color(0xFFCCFBF1),
-                    titleKey = "Calculations",
-                    subtitleKey = "Rounding, precision and accounting method",
-                    onClick = {
-                        onCloseDrawer()
-                        onOpenSettingsScreen(SettingsSubScreen.Calculations)
-                    }
-                ),
-                SidebarMenuItemData(
-                    icon = Icons.Default.SwapHoriz,
-                    iconColor = Color(0xFFEA580C),
-                    iconBgColor = Color(0xFFFFEDD5),
-                    titleKey = "Transactions",
-                    subtitleKey = "Default transaction settings and behavior",
-                    onClick = {
-                        onCloseDrawer()
-                        onOpenSettingsScreen(SettingsSubScreen.Transactions)
-                    }
-                )
-            ),
-            selectedLanguage = selectedLanguage
-        )
-
-        // Section 3: DATA & STORAGE
-        SidebarGroupCard(
-            sectionTitle = "DATA & STORAGE",
-            items = listOf(
-                SidebarMenuItemData(
-                    icon = Icons.Default.CloudUpload,
-                    iconColor = Color(0xFF2563EB),
-                    iconBgColor = Color(0xFFEFF6FF),
-                    titleKey = "Backup & Restore",
-                    subtitleKey = "Backup data, auto backup, restore from file",
-                    onClick = {
-                        onCloseDrawer()
-                        onOpenSettingsScreen(SettingsSubScreen.BackupRestore)
+                        onOpenSettingsScreen(SettingsSubScreen.Export)
                     }
                 ),
                 SidebarMenuItemData(
                     icon = Icons.Default.Storage,
-                    iconColor = Color(0xFF16A34A),
-                    iconBgColor = Color(0xFFDCFCE7),
+                    iconColor = Color(0xFF10B981),
+                    iconBgColor = Color(0xFFD1FAE5),
                     titleKey = "Data Management",
-                    subtitleKey = "Export data, clear cache, reset app data",
+                    subtitleKey = "Storage usage, clear cache, reset app data",
                     onClick = {
                         onCloseDrawer()
                         onOpenSettingsScreen(SettingsSubScreen.DataManagement)
@@ -6380,60 +7011,30 @@ fun SidebarDrawerContent(
             selectedLanguage = selectedLanguage
         )
 
-        // Section 4: SECURITY & PRIVACY
+        // Section 3: SECURITY & ABOUT
         SidebarGroupCard(
-            sectionTitle = "SECURITY & PRIVACY",
+            sectionTitle = "SECURITY & ABOUT",
             items = listOf(
                 SidebarMenuItemData(
                     icon = Icons.Default.Lock,
-                    iconColor = Color(0xFF16A34A),
-                    iconBgColor = Color(0xFFDCFCE7),
-                    titleKey = "Security",
-                    subtitleKey = "App lock, biometric, passcode",
+                    iconColor = Color(0xFF8B5CF6),
+                    iconBgColor = Color(0xFFF3E8FF),
+                    titleKey = "Password & Security",
+                    subtitleKey = "App lock, passcode, biometric security",
                     onClick = {
                         onCloseDrawer()
                         onOpenSettingsScreen(SettingsSubScreen.Security)
                     }
                 ),
                 SidebarMenuItemData(
-                    icon = Icons.Default.Shield,
-                    iconColor = Color(0xFF2563EB),
-                    iconBgColor = Color(0xFFEFF6FF),
-                    titleKey = "Privacy",
-                    subtitleKey = "Privacy policy, data handling and permissions",
-                    onClick = {
-                        onCloseDrawer()
-                        onOpenSettingsScreen(SettingsSubScreen.Privacy)
-                    }
-                )
-            ),
-            selectedLanguage = selectedLanguage
-        )
-
-        // Section 5: APP & SUPPORT
-        SidebarGroupCard(
-            sectionTitle = "APP & SUPPORT",
-            items = listOf(
-                SidebarMenuItemData(
                     icon = Icons.Default.Info,
-                    iconColor = Color(0xFF7C3AED),
-                    iconBgColor = Color(0xFFF3E8FF),
-                    titleKey = "About App",
-                    subtitleKey = "Version info, what's new",
+                    iconColor = Color(0xFFDB2777),
+                    iconBgColor = Color(0xFFFCE7F3),
+                    titleKey = "What's New & About",
+                    subtitleKey = "Version info, new features and updates",
                     onClick = {
                         onCloseDrawer()
                         onOpenSettingsScreen(SettingsSubScreen.AboutApp)
-                    }
-                ),
-                SidebarMenuItemData(
-                    icon = Icons.Default.HelpOutline,
-                    iconColor = Color(0xFFEA580C),
-                    iconBgColor = Color(0xFFFFEDD5),
-                    titleKey = "Help & Support",
-                    subtitleKey = "Help center, FAQs, contact us",
-                    onClick = {
-                        onCloseDrawer()
-                        onOpenSettingsScreen(SettingsSubScreen.HelpSupport)
                     }
                 )
             ),

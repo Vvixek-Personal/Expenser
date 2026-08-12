@@ -1,11 +1,14 @@
 package com.example.ui
 
+import java.util.Calendar
+import java.util.Date
 import android.graphics.Bitmap
 import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.border
@@ -28,6 +31,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -42,6 +46,7 @@ import com.example.ui.theme.*
 
 enum class SettingsSubScreen {
     PersonalData,
+    BadgesAndMilestones,
     Appearance,
     Language,
     Currency,
@@ -252,7 +257,32 @@ fun PersonalDataScreen(
                 Text("Save Changes", fontWeight = FontWeight.Bold, color = Color.White)
             }
 
-            Spacer(modifier = Modifier.height(200.dp))
+            Spacer(modifier = Modifier.height(28.dp))
+
+            // Badges & Milestones Section in Profile
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Star,
+                    contentDescription = null,
+                    tint = Color(0xFFEA580C),
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Badges and Milestone",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = SleekTextPrimary
+                )
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+
+            ComingSoonConstructionBanner()
+
+            Spacer(modifier = Modifier.height(100.dp))
         }
     }
 
@@ -271,6 +301,300 @@ fun PersonalDataScreen(
                 TextButton(onClick = { showPhotoOptionSheet = false }) { Text("Cancel") }
             }
         )
+    }
+}
+
+// ==========================================
+// 0️⃣-B BADGES AND MILESTONES SCREEN
+// ==========================================
+@Composable
+fun BadgesAndMilestonesScreen(
+    viewModel: FinanceViewModel,
+    onBack: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(SleekBg)
+            .statusBarsPadding()
+            .navigationBarsPadding()
+    ) {
+        SettingsHeaderTitle("Badges and Milestone", onBack)
+
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(20.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            ComingSoonConstructionBanner()
+            Spacer(modifier = Modifier.height(100.dp))
+        }
+    }
+}
+
+// ==========================================
+// 🏗️ COMING SOON CONSTRUCTION BANNER
+// ==========================================
+@Composable
+fun ComingSoonConstructionBanner(
+    modifier: Modifier = Modifier
+) {
+    val infiniteTransition = rememberInfiniteTransition(label = "construction_crane")
+    val swingAngle by infiniteTransition.animateFloat(
+        initialValue = -12f,
+        targetValue = 12f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(2200, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "swing"
+    )
+    val craneHookOffsetY by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 14f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1800, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "craneY"
+    )
+
+    Card(
+        colors = CardDefaults.cardColors(containerColor = SleekSurface),
+        border = BorderStroke(1.5.dp, SleekBorder),
+        shape = RoundedCornerShape(24.dp),
+        modifier = modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(20.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            // Construction Graphic Canvas
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(180.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                Color(0xFF0F172A),
+                                Color(0xFF1E293B)
+                            )
+                        )
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Canvas(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(12.dp)
+                ) {
+                    val w = size.width
+                    val h = size.height
+
+                    // 1. Background City Outline
+                    val buildingColor = Color(0xFF334155)
+                    val windowColor = Color(0xFF94A3B8).copy(alpha = 0.4f)
+
+                    // Building 1
+                    drawRect(
+                        color = buildingColor,
+                        topLeft = androidx.compose.ui.geometry.Offset(w * 0.05f, h * 0.45f),
+                        size = androidx.compose.ui.geometry.Size(w * 0.18f, h * 0.55f)
+                    )
+                    for (r in 0..3) {
+                        for (c in 0..1) {
+                            drawRect(
+                                color = windowColor,
+                                topLeft = androidx.compose.ui.geometry.Offset(w * 0.08f + c * 20f, h * 0.5f + r * 22f),
+                                size = androidx.compose.ui.geometry.Size(12f, 14f)
+                            )
+                        }
+                    }
+
+                    // Building 2
+                    drawRect(
+                        color = buildingColor,
+                        topLeft = androidx.compose.ui.geometry.Offset(w * 0.25f, h * 0.35f),
+                        size = androidx.compose.ui.geometry.Size(w * 0.22f, h * 0.65f)
+                    )
+                    for (r in 0..4) {
+                        for (c in 0..1) {
+                            drawRect(
+                                color = windowColor,
+                                topLeft = androidx.compose.ui.geometry.Offset(w * 0.28f + c * 24f, h * 0.4f + r * 22f),
+                                size = androidx.compose.ui.geometry.Size(14f, 14f)
+                            )
+                        }
+                    }
+
+                    // Building 3 (Right building under construction)
+                    drawRect(
+                        color = buildingColor,
+                        topLeft = androidx.compose.ui.geometry.Offset(w * 0.72f, h * 0.5f),
+                        size = androidx.compose.ui.geometry.Size(w * 0.23f, h * 0.5f)
+                    )
+                    val scaffoldColor = Color(0xFFF59E0B).copy(alpha = 0.6f)
+                    drawLine(
+                        color = scaffoldColor,
+                        start = androidx.compose.ui.geometry.Offset(w * 0.72f, h * 0.4f),
+                        end = androidx.compose.ui.geometry.Offset(w * 0.72f, h * 0.95f),
+                        strokeWidth = 3f
+                    )
+                    drawLine(
+                        color = scaffoldColor,
+                        start = androidx.compose.ui.geometry.Offset(w * 0.95f, h * 0.4f),
+                        end = androidx.compose.ui.geometry.Offset(w * 0.95f, h * 0.95f),
+                        strokeWidth = 3f
+                    )
+                    for (yStep in 0..3) {
+                        val yPos = h * 0.4f + yStep * 20f
+                        drawLine(
+                            color = scaffoldColor,
+                            start = androidx.compose.ui.geometry.Offset(w * 0.72f, yPos),
+                            end = androidx.compose.ui.geometry.Offset(w * 0.95f, yPos),
+                            strokeWidth = 2f
+                        )
+                    }
+
+                    // 2. Construction Crane
+                    val craneColor = Color(0xFFF59E0B)
+                    val craneX = w * 0.55f
+                    val craneBaseY = h * 0.95f
+                    val craneTopY = h * 0.15f
+
+                    drawLine(
+                        color = craneColor,
+                        start = androidx.compose.ui.geometry.Offset(craneX - 6f, craneBaseY),
+                        end = androidx.compose.ui.geometry.Offset(craneX - 6f, craneTopY),
+                        strokeWidth = 4f
+                    )
+                    drawLine(
+                        color = craneColor,
+                        start = androidx.compose.ui.geometry.Offset(craneX + 6f, craneBaseY),
+                        end = androidx.compose.ui.geometry.Offset(craneX + 6f, craneTopY),
+                        strokeWidth = 4f
+                    )
+                    for (step in 0..6) {
+                        val y1 = craneTopY + step * 20f
+                        val y2 = y1 + 20f
+                        drawLine(craneColor, androidx.compose.ui.geometry.Offset(craneX - 6f, y1), androidx.compose.ui.geometry.Offset(craneX + 6f, y2), 2f)
+                    }
+
+                    // Horizontal Jib
+                    val jibLeft = craneX - w * 0.2f
+                    val jibRight = craneX + w * 0.35f
+                    drawLine(
+                        color = craneColor,
+                        start = androidx.compose.ui.geometry.Offset(jibLeft, craneTopY),
+                        end = androidx.compose.ui.geometry.Offset(jibRight, craneTopY),
+                        strokeWidth = 5f
+                    )
+                    drawRect(
+                        color = Color(0xFF64748B),
+                        topLeft = androidx.compose.ui.geometry.Offset(jibLeft, craneTopY - 6f),
+                        size = androidx.compose.ui.geometry.Size(24f, 16f)
+                    )
+
+                    // Cable & Swinging Hook
+                    val cableHookX = craneX + w * 0.2f
+                    val cableStartY = craneTopY
+                    val cableLength = h * 0.35f + craneHookOffsetY
+
+                    val swingRad = Math.toRadians(swingAngle.toDouble())
+                    val endHookX = (cableHookX + Math.sin(swingRad) * cableLength).toFloat()
+                    val endHookY = (cableStartY + Math.cos(swingRad) * cableLength).toFloat()
+
+                    drawLine(
+                        color = Color.White.copy(alpha = 0.8f),
+                        start = androidx.compose.ui.geometry.Offset(cableHookX, cableStartY),
+                        end = androidx.compose.ui.geometry.Offset(endHookX, endHookY),
+                        strokeWidth = 2f
+                    )
+
+                    // Hook Badge
+                    drawCircle(
+                        color = Color(0xFFF59E0B),
+                        radius = 12f,
+                        center = androidx.compose.ui.geometry.Offset(endHookX, endHookY + 12f)
+                    )
+                    drawCircle(
+                        color = Color.White,
+                        radius = 6f,
+                        center = androidx.compose.ui.geometry.Offset(endHookX, endHookY + 12f)
+                    )
+                }
+
+                // Overlay Text
+                Row(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = 12.dp)
+                        .background(Color.Black.copy(alpha = 0.65f), RoundedCornerShape(12.dp))
+                        .padding(horizontal = 16.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Construction,
+                        contentDescription = null,
+                        tint = Color(0xFFF59E0B),
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Coming soon",
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = Color.White,
+                        letterSpacing = 1.sp
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Surface(
+                    shape = CircleShape,
+                    color = Color(0xFFFFF7ED),
+                    border = BorderStroke(1.dp, Color(0xFFFFEDD5)),
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Star,
+                        contentDescription = null,
+                        tint = Color(0xFFEA580C),
+                        modifier = Modifier.padding(8.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.width(10.dp))
+                Text(
+                    text = "Badges and Milestone",
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = SleekTextPrimary
+                )
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text(
+                text = "We are currently constructing your Badges and Milestones hub! Soon you will earn unlockable badges for daily savings streaks, financial milestones, and smart budgeting achievements.",
+                fontSize = 13.sp,
+                color = SleekTextSecondary,
+                lineHeight = 18.sp,
+                modifier = Modifier.padding(horizontal = 8.dp)
+            )
+        }
     }
 }
 
@@ -3387,11 +3711,24 @@ private fun CategoryPillCard(
 @Composable
 fun BudgetSettingsScreen(
     viewModel: FinanceViewModel,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onOpenCurrencySettings: (() -> Unit)? = null
 ) {
+    val monthlyBudget by viewModel.monthlyBudget.collectAsStateWithLifecycle()
+    val currencyCode by viewModel.selectedCurrencyCode.collectAsStateWithLifecycle()
+    val currencySymbol by viewModel.selectedCurrencySymbol.collectAsStateWithLifecycle()
+    val includeRecurringBills by viewModel.budgetIncludeRecurringBills.collectAsStateWithLifecycle()
+
     val warn80 by viewModel.budgetWarning80.collectAsStateWithLifecycle()
     val warn90 by viewModel.budgetWarning90.collectAsStateWithLifecycle()
     val warn100 by viewModel.budgetWarning100.collectAsStateWithLifecycle()
+
+    var showEditBudgetDialog by remember { mutableStateOf(false) }
+    var editBudgetInput by remember { mutableStateOf("") }
+    var showInfoDialog by remember { mutableStateOf(false) }
+    var showColorPaletteDialog by remember { mutableStateOf(false) }
+
+    val masterWarnings = warn80 || warn90 || warn100
 
     Column(
         modifier = Modifier
@@ -3400,68 +3737,889 @@ fun BudgetSettingsScreen(
             .statusBarsPadding()
             .navigationBarsPadding()
     ) {
-        SettingsHeaderTitle("Budget Settings", onBack)
+        // Top Header matching reference layout
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(
+                onClick = onBack,
+                modifier = Modifier
+                    .size(40.dp)
+                    .background(SleekSurface, CircleShape)
+                    .border(1.dp, SleekBorder, CircleShape)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.ArrowBack,
+                    contentDescription = "Back",
+                    tint = SleekTextPrimary
+                )
+            }
+
+            IconButton(
+                onClick = { showInfoDialog = true },
+                modifier = Modifier
+                    .size(40.dp)
+                    .background(SleekSurface, CircleShape)
+                    .border(1.dp, SleekBorder, CircleShape)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Info,
+                    contentDescription = "Info",
+                    tint = SleekTextPrimary
+                )
+            }
+        }
 
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(20.dp)
+                .padding(horizontal = 20.dp, vertical = 8.dp)
         ) {
-            Text("BUDGET WARNING INDICATORS & ALERTS", style = MaterialTheme.typography.labelMedium, color = SleekTextSecondary, fontWeight = FontWeight.Bold)
-            Spacer(modifier = Modifier.height(8.dp))
+            // Screen Header Title & Subtitle
+            Text(
+                text = "Budgets",
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Bold,
+                color = SleekTextPrimary,
+                fontSize = 28.sp
+            )
+            Text(
+                text = "Manage your monthly spending limits & warnings.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = SleekTextSecondary,
+                fontSize = 14.sp
+            )
 
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // 1. GENERAL SETTINGS CARD
             Card(
                 colors = CardDefaults.cardColors(containerColor = SleekSurface),
                 border = BorderStroke(1.dp, SleekBorder),
-                shape = RoundedCornerShape(16.dp),
+                shape = RoundedCornerShape(20.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Column(modifier = Modifier.padding(16.dp)) {
+                Column(modifier = Modifier.padding(18.dp)) {
+                    // General Settings Header
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        modifier = Modifier.padding(bottom = 14.dp)
                     ) {
-                        Column {
-                            Text("80% Budget Threshold Indicator (Yellow)", fontWeight = FontWeight.Bold, color = SleekTextPrimary)
-                            Text("Show caution warning when spending hits 80%", style = MaterialTheme.typography.bodySmall, color = SleekTextSecondary)
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = SleekPrimary.copy(alpha = 0.12f),
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Default.AccountBalanceWallet,
+                                    contentDescription = null,
+                                    tint = SleekPrimary,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
                         }
-                        Switch(checked = warn80, onCheckedChange = { viewModel.toggleBudgetWarning(80, it) })
+                        Text(
+                            text = "General Settings",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = SleekTextPrimary,
+                            fontSize = 16.sp
+                        )
                     }
 
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = SleekBorder)
-
+                    // Monthly Budget Limit Item
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                editBudgetInput = if (monthlyBudget % 1.0 == 0.0) {
+                                    monthlyBudget.toLong().toString()
+                                } else {
+                                    monthlyBudget.toString()
+                                }
+                                showEditBudgetDialog = true
+                            }
+                            .padding(vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Column {
-                            Text("90% Critical Threshold Indicator (Orange)", fontWeight = FontWeight.Bold, color = SleekTextPrimary)
-                            Text("Show critical warning when spending hits 90%", style = MaterialTheme.typography.bodySmall, color = SleekTextSecondary)
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = Color(0xFF6366F1).copy(alpha = 0.12f),
+                                modifier = Modifier.size(36.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = Icons.Default.PieChart,
+                                        contentDescription = null,
+                                        tint = Color(0xFF6366F1),
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            }
+                            Column {
+                                Text(
+                                    text = "Monthly Budget Limit",
+                                    fontWeight = FontWeight.Bold,
+                                    color = SleekTextPrimary,
+                                    fontSize = 13.sp
+                                )
+                                Text(
+                                    text = "Configure your total monthly spending ceiling",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = SleekTextSecondary,
+                                    fontSize = 11.sp
+                                )
+                            }
                         }
-                        Switch(checked = warn90, onCheckedChange = { viewModel.toggleBudgetWarning(90, it) })
+
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Text(
+                                text = "$currencySymbol${String.format(java.util.Locale.US, "%,.2f", monthlyBudget)}",
+                                fontWeight = FontWeight.Bold,
+                                color = SleekTextPrimary,
+                                fontSize = 13.sp
+                            )
+                            Icon(
+                                imageVector = Icons.Default.ChevronRight,
+                                contentDescription = null,
+                                tint = SleekTextSecondary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
                     }
 
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = SleekBorder)
+                    HorizontalDivider(color = SleekBorder.copy(alpha = 0.6f), modifier = Modifier.padding(vertical = 4.dp))
 
+                    // Currency Item
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onOpenCurrencySettings?.invoke() }
+                            .padding(vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Column {
-                            Text("100% Exceeded Alert (Red)", fontWeight = FontWeight.Bold, color = SleekTextPrimary)
-                            Text("Show high-priority red alert when budget is exceeded", style = MaterialTheme.typography.bodySmall, color = SleekTextSecondary)
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = Color(0xFF10B981).copy(alpha = 0.12f),
+                                modifier = Modifier.size(36.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = Icons.Default.CurrencyExchange,
+                                        contentDescription = null,
+                                        tint = Color(0xFF10B981),
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            }
+                            Column {
+                                Text(
+                                    text = "Currency",
+                                    fontWeight = FontWeight.Bold,
+                                    color = SleekTextPrimary,
+                                    fontSize = 13.sp
+                                )
+                                Text(
+                                    text = "Set budget currency",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = SleekTextSecondary,
+                                    fontSize = 11.sp
+                                )
+                            }
                         }
-                        Switch(checked = warn100, onCheckedChange = { viewModel.toggleBudgetWarning(100, it) })
+
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Text(
+                                text = "$currencyCode ($currencySymbol)",
+                                fontWeight = FontWeight.Bold,
+                                color = SleekTextPrimary,
+                                fontSize = 13.sp
+                            )
+                            Icon(
+                                imageVector = Icons.Default.ChevronRight,
+                                contentDescription = null,
+                                tint = SleekTextSecondary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+
+                    HorizontalDivider(color = SleekBorder.copy(alpha = 0.6f), modifier = Modifier.padding(vertical = 4.dp))
+
+                    // Recurring Bills Item
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = Color(0xFFF59E0B).copy(alpha = 0.12f),
+                                modifier = Modifier.size(36.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = Icons.Default.Autorenew,
+                                        contentDescription = null,
+                                        tint = Color(0xFFF59E0B),
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            }
+                            Column {
+                                Text(
+                                    text = "Recurring Bills",
+                                    fontWeight = FontWeight.Bold,
+                                    color = SleekTextPrimary,
+                                    fontSize = 13.sp
+                                )
+                                Text(
+                                    text = "Include recurring bills in budget tracking",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = SleekTextSecondary,
+                                    fontSize = 11.sp
+                                )
+                            }
+                        }
+
+                        Switch(
+                            checked = includeRecurringBills,
+                            onCheckedChange = { viewModel.toggleBudgetIncludeRecurringBills(it) },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = Color.White,
+                                checkedTrackColor = SleekPrimary,
+                                uncheckedThumbColor = SleekTextSecondary,
+                                uncheckedTrackColor = SleekBorder
+                            )
+                        )
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(200.dp))
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // 2. BUDGET WARNINGS CARD
+            Card(
+                colors = CardDefaults.cardColors(containerColor = SleekSurface),
+                border = BorderStroke(1.dp, SleekBorder),
+                shape = RoundedCornerShape(20.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(18.dp)) {
+                    // Budget Warnings Header
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        modifier = Modifier.padding(bottom = 14.dp)
+                    ) {
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = Color(0xFFF59E0B).copy(alpha = 0.12f),
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Default.Warning,
+                                    contentDescription = null,
+                                    tint = Color(0xFFF59E0B),
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
+                        Text(
+                            text = "Budget Warnings",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = SleekTextPrimary,
+                            fontSize = 16.sp
+                        )
+                    }
+
+                    // Warning Thresholds Item
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = Color(0xFFEF4444).copy(alpha = 0.12f),
+                                modifier = Modifier.size(36.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = Icons.Default.ReportProblem,
+                                        contentDescription = null,
+                                        tint = Color(0xFFEF4444),
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            }
+                            Column {
+                                Text(
+                                    text = "Warning Thresholds",
+                                    fontWeight = FontWeight.Bold,
+                                    color = SleekTextPrimary,
+                                    fontSize = 13.sp
+                                )
+                                Text(
+                                    text = "Manage cautionary spend notifications",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = SleekTextSecondary,
+                                    fontSize = 11.sp
+                                )
+                            }
+                        }
+
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Switch(
+                                checked = masterWarnings,
+                                onCheckedChange = { enable ->
+                                    viewModel.toggleBudgetWarning(80, enable)
+                                    viewModel.toggleBudgetWarning(90, enable)
+                                    viewModel.toggleBudgetWarning(100, enable)
+                                }
+                            )
+                            Icon(
+                                imageVector = Icons.Default.ChevronRight,
+                                contentDescription = null,
+                                tint = SleekTextSecondary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+
+                    HorizontalDivider(color = SleekBorder.copy(alpha = 0.6f), modifier = Modifier.padding(vertical = 4.dp))
+
+                    // 80% Caution Indicator Item
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = Color(0xFFF59E0B).copy(alpha = 0.12f),
+                                modifier = Modifier.size(36.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = Icons.Default.Notifications,
+                                        contentDescription = null,
+                                        tint = Color(0xFFF59E0B),
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            }
+                            Column {
+                                Text(
+                                    text = "80% Caution Indicator",
+                                    fontWeight = FontWeight.Bold,
+                                    color = SleekTextPrimary,
+                                    fontSize = 13.sp
+                                )
+                                Text(
+                                    text = "Warn when spending reaches 80%",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = SleekTextSecondary,
+                                    fontSize = 11.sp
+                                )
+                            }
+                        }
+
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Switch(
+                                checked = warn80,
+                                onCheckedChange = { viewModel.toggleBudgetWarning(80, it) }
+                            )
+                            Icon(
+                                imageVector = Icons.Default.ChevronRight,
+                                contentDescription = null,
+                                tint = SleekTextSecondary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+
+                    HorizontalDivider(color = SleekBorder.copy(alpha = 0.6f), modifier = Modifier.padding(vertical = 4.dp))
+
+                    // 90% High Alert Indicator Item
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = Color(0xFFF97316).copy(alpha = 0.12f),
+                                modifier = Modifier.size(36.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = Icons.Default.Lightbulb,
+                                        contentDescription = null,
+                                        tint = Color(0xFFF97316),
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            }
+                            Column {
+                                Text(
+                                    text = "90% High Alert Indicator",
+                                    fontWeight = FontWeight.Bold,
+                                    color = SleekTextPrimary,
+                                    fontSize = 13.sp
+                                )
+                                Text(
+                                    text = "Warn when spending reaches 90%",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = SleekTextSecondary,
+                                    fontSize = 11.sp
+                                )
+                            }
+                        }
+
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Switch(
+                                checked = warn90,
+                                onCheckedChange = { viewModel.toggleBudgetWarning(90, it) }
+                            )
+                            Icon(
+                                imageVector = Icons.Default.ChevronRight,
+                                contentDescription = null,
+                                tint = SleekTextSecondary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+
+                    HorizontalDivider(color = SleekBorder.copy(alpha = 0.6f), modifier = Modifier.padding(vertical = 4.dp))
+
+                    // Exceeded Indicator Item
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = Color(0xFFDC2626).copy(alpha = 0.12f),
+                                modifier = Modifier.size(36.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = Icons.Default.RemoveCircleOutline,
+                                        contentDescription = null,
+                                        tint = Color(0xFFDC2626),
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            }
+                            Column {
+                                Text(
+                                    text = "Exceeded Indicator",
+                                    fontWeight = FontWeight.Bold,
+                                    color = SleekTextPrimary,
+                                    fontSize = 13.sp
+                                )
+                                Text(
+                                    text = "Alert when over budget",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = SleekTextSecondary,
+                                    fontSize = 11.sp
+                                )
+                            }
+                        }
+
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Switch(
+                                checked = warn100,
+                                onCheckedChange = { viewModel.toggleBudgetWarning(100, it) }
+                            )
+                            Icon(
+                                imageVector = Icons.Default.ChevronRight,
+                                contentDescription = null,
+                                tint = SleekTextSecondary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // 3. APPEARANCE CARD
+            Card(
+                colors = CardDefaults.cardColors(containerColor = SleekSurface),
+                border = BorderStroke(1.dp, SleekBorder),
+                shape = RoundedCornerShape(20.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(18.dp)) {
+                    // Appearance Header
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        modifier = Modifier.padding(bottom = 14.dp)
+                    ) {
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = Color(0xFF06B6D4).copy(alpha = 0.12f),
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Default.Palette,
+                                    contentDescription = null,
+                                    tint = Color(0xFF06B6D4),
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
+                        Text(
+                            text = "Appearance",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = SleekTextPrimary,
+                            fontSize = 16.sp
+                        )
+                    }
+
+                    // Indicator Colors Item
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { showColorPaletteDialog = true }
+                            .padding(vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = Color(0xFF14B8A6).copy(alpha = 0.12f),
+                                modifier = Modifier.size(36.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = Icons.Default.ColorLens,
+                                        contentDescription = null,
+                                        tint = Color(0xFF14B8A6),
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            }
+                            Column {
+                                Text(
+                                    text = "Indicator Colors",
+                                    fontWeight = FontWeight.Bold,
+                                    color = SleekTextPrimary,
+                                    fontSize = 13.sp
+                                )
+                                Text(
+                                    text = "Customize warning colors",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = SleekTextSecondary,
+                                    fontSize = 11.sp
+                                )
+                            }
+                        }
+
+                        Icon(
+                            imageVector = Icons.Default.ChevronRight,
+                            contentDescription = null,
+                            tint = SleekTextSecondary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // Color Spectrum Bar Matching Reference
+                    val rainbowBrush = Brush.horizontalGradient(
+                        listOf(
+                            Color(0xFFEF4444),
+                            Color(0xFFF97316),
+                            Color(0xFFF59E0B),
+                            Color(0xFFEAB308),
+                            Color(0xFF84CC16),
+                            Color(0xFF10B981),
+                            Color(0xFF06B6D4),
+                            Color(0xFF3B82F6),
+                            Color(0xFF6366F1),
+                            Color(0xFF8B5CF6),
+                            Color(0xFFEC4899),
+                            Color(0xFFEF4444)
+                        )
+                    )
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(18.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(rainbowBrush)
+                    ) {
+                        // Pointer diamond accent matching image
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.CenterEnd)
+                                .padding(end = 16.dp)
+                                .size(10.dp)
+                                .background(Color.White, CircleShape)
+                                .border(1.dp, Color.Black.copy(alpha = 0.3f), CircleShape)
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // 4. NOTE / INFO BANNER CARD
+            Card(
+                colors = CardDefaults.cardColors(containerColor = SleekPrimary.copy(alpha = 0.08f)),
+                border = BorderStroke(1.dp, SleekPrimary.copy(alpha = 0.25f)),
+                shape = RoundedCornerShape(18.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Surface(
+                            shape = CircleShape,
+                            color = SleekPrimary.copy(alpha = 0.15f),
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Default.Info,
+                                    contentDescription = null,
+                                    tint = SleekPrimary,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
+                        Column {
+                            Text(
+                                text = "Note:",
+                                fontWeight = FontWeight.Bold,
+                                color = SleekPrimary,
+                                fontSize = 12.sp
+                            )
+                            Text(
+                                text = "Use existing budget logic. Warning thresholds are based on your transactions and budget limits.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = SleekTextSecondary,
+                                fontSize = 11.sp,
+                                lineHeight = 14.sp
+                            )
+                        }
+                    }
+
+                    Icon(
+                        imageVector = Icons.Default.ChevronRight,
+                        contentDescription = null,
+                        tint = SleekPrimary,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(120.dp))
         }
+    }
+
+    // EDIT BUDGET DIALOG
+    if (showEditBudgetDialog) {
+        AlertDialog(
+            onDismissRequest = { showEditBudgetDialog = false },
+            title = {
+                Text(
+                    text = "Monthly Budget Limit",
+                    fontWeight = FontWeight.Bold,
+                    color = SleekTextPrimary
+                )
+            },
+            text = {
+                Column {
+                    Text(
+                        text = "Set your total monthly spending ceiling ($currencyCode):",
+                        fontSize = 12.sp,
+                        color = SleekTextSecondary
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = editBudgetInput,
+                        onValueChange = { editBudgetInput = it },
+                        prefix = { Text("$currencySymbol ") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val num = editBudgetInput.toDoubleOrNull()
+                        if (num != null && num > 0) {
+                            viewModel.updateMonthlyBudget(num)
+                        }
+                        showEditBudgetDialog = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = SleekPrimary)
+                ) {
+                    Text("Save", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showEditBudgetDialog = false }) {
+                    Text("Cancel", color = SleekTextSecondary)
+                }
+            },
+            containerColor = SleekSurface,
+            shape = RoundedCornerShape(20.dp)
+        )
+    }
+
+    // INFO DIALOG
+    if (showInfoDialog) {
+        AlertDialog(
+            onDismissRequest = { showInfoDialog = false },
+            title = {
+                Text("About Budgets & Warnings", fontWeight = FontWeight.Bold, color = SleekTextPrimary)
+            },
+            text = {
+                Text(
+                    "Budgets help you keep track of your overall monthly spending. Your spending progress is updated in real-time as transactions are recorded. Warning thresholds automatically alert you when you reach 80%, 90%, or exceed 100% of your ceiling.",
+                    fontSize = 13.sp,
+                    color = SleekTextSecondary
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = { showInfoDialog = false },
+                    colors = ButtonDefaults.buttonColors(containerColor = SleekPrimary)
+                ) {
+                    Text("Got It")
+                }
+            },
+            containerColor = SleekSurface,
+            shape = RoundedCornerShape(20.dp)
+        )
+    }
+
+    // INDICATOR COLOR CUSTOMIZER DIALOG
+    if (showColorPaletteDialog) {
+        AlertDialog(
+            onDismissRequest = { showColorPaletteDialog = false },
+            title = {
+                Text("Indicator Colors", fontWeight = FontWeight.Bold, color = SleekTextPrimary)
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text("Warning indicator color palette is synced with your active theme system accent palette.", fontSize = 12.sp, color = SleekTextSecondary)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceEvenly
+                    ) {
+                        listOf(Color(0xFFF59E0B), Color(0xFFF97316), Color(0xFFEF4444), Color(0xFF10B981), Color(0xFF6366F1)).forEach { color ->
+                            Box(
+                                modifier = Modifier
+                                    .size(32.dp)
+                                    .background(color, CircleShape)
+                                    .border(1.5.dp, SleekBorder, CircleShape)
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = { showColorPaletteDialog = false },
+                    colors = ButtonDefaults.buttonColors(containerColor = SleekPrimary)
+                ) {
+                    Text("Done")
+                }
+            },
+            containerColor = SleekSurface,
+            shape = RoundedCornerShape(20.dp)
+        )
     }
 }
 
@@ -4293,8 +5451,473 @@ fun HelpSupportScreen(
     }
 }
 
+// Dedicated Export Statements & Reports Screen
+@Composable
+fun ExportDataScreen(
+    viewModel: FinanceViewModel,
+    onBack: () -> Unit
+) {
+    val context = LocalContext.current
+    val expenses by viewModel.expenses.collectAsStateWithLifecycle()
+    val selectedLanguage by viewModel.selectedLanguage.collectAsStateWithLifecycle()
+
+    var dateRangeFilter by remember { mutableStateOf("All Time") }
+    var typeFilter by remember { mutableStateOf("ALL") }
+    var categoryFilter by remember { mutableStateOf("ALL") }
+    var includeDetailedTxns by remember { mutableStateOf(true) }
+
+    var showCategoryDropdown by remember { mutableStateOf(false) }
+
+    val allCategories = remember(expenses) {
+        listOf("ALL") + expenses.map { it.category }.distinct().sorted()
+    }
+
+    val filteredExpenses = remember(expenses, dateRangeFilter, typeFilter, categoryFilter) {
+        val now = Calendar.getInstance()
+        val currentMonth = now.get(Calendar.MONTH)
+        val currentYear = now.get(Calendar.YEAR)
+
+        expenses.filter { exp ->
+            val expCal = Calendar.getInstance().apply { timeInMillis = exp.date }
+            val matchesDate = when (dateRangeFilter) {
+                "This Month" -> expCal.get(Calendar.MONTH) == currentMonth && expCal.get(Calendar.YEAR) == currentYear
+                "Last Month" -> {
+                    val lastMonthCal = Calendar.getInstance().apply {
+                        add(Calendar.MONTH, -1)
+                    }
+                    expCal.get(Calendar.MONTH) == lastMonthCal.get(Calendar.MONTH) && expCal.get(Calendar.YEAR) == lastMonthCal.get(Calendar.YEAR)
+                }
+                "This Year" -> expCal.get(Calendar.YEAR) == currentYear
+                else -> true
+            }
+
+            val matchesType = when (typeFilter) {
+                "EXPENSE" -> exp.type != "INCOME"
+                "INCOME" -> exp.type == "INCOME"
+                else -> true
+            }
+
+            val matchesCategory = if (categoryFilter == "ALL") true else exp.category == categoryFilter
+
+            matchesDate && matchesType && matchesCategory
+        }
+    }
+
+    val totalIncome = remember(filteredExpenses) { filteredExpenses.filter { it.type == "INCOME" }.sumOf { it.amount } }
+    val totalExpense = remember(filteredExpenses) { filteredExpenses.filter { it.type != "INCOME" }.sumOf { it.amount } }
+    val netBalance = totalIncome - totalExpense
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(SleekBg)
+            .statusBarsPadding()
+            .navigationBarsPadding()
+    ) {
+        SettingsHeaderTitle("Export Statements & Reports", onBack)
+
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            // STATEMENT FILTERS CARD
+            Card(
+                colors = CardDefaults.cardColors(containerColor = SleekSurface),
+                border = BorderStroke(1.dp, SleekBorder),
+                shape = RoundedCornerShape(20.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(Icons.Default.FilterList, contentDescription = null, tint = SleekPrimary)
+                        Text(
+                            text = "Statement Configuration",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 15.sp,
+                            color = SleekTextPrimary
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    Text("Date Range Filter:", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = SleekTextSecondary)
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        listOf("All Time", "This Month", "Last Month", "This Year").forEach { option ->
+                            val isSelected = dateRangeFilter == option
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(if (isSelected) SleekPrimary else SleekNeutralLight)
+                                    .border(1.dp, if (isSelected) SleekPrimary else SleekBorder, RoundedCornerShape(12.dp))
+                                    .clickable { dateRangeFilter = option }
+                                    .padding(vertical = 8.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = option,
+                                    fontSize = 11.sp,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                    color = if (isSelected) Color.White else SleekTextPrimary
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    Text("Transaction Type:", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = SleekTextSecondary)
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        listOf("ALL" to "All Types", "EXPENSE" to "Expenses", "INCOME" to "Income").forEach { (typeKey, label) ->
+                            val isSelected = typeFilter == typeKey
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(if (isSelected) SleekPrimaryContainer else SleekNeutralLight)
+                                    .border(1.dp, if (isSelected) SleekPrimary else SleekBorder, RoundedCornerShape(12.dp))
+                                    .clickable { typeFilter = typeKey }
+                                    .padding(vertical = 8.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = label,
+                                    fontSize = 11.sp,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                    color = if (isSelected) SleekPrimary else SleekTextPrimary
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Category:", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = SleekTextSecondary)
+
+                        Box {
+                            Surface(
+                                shape = RoundedCornerShape(12.dp),
+                                color = SleekNeutralLight,
+                                border = BorderStroke(1.dp, SleekBorder),
+                                modifier = Modifier.clickable { showCategoryDropdown = true }
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Text(
+                                        text = if (categoryFilter == "ALL") "All Categories" else categoryFilter,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = SleekTextPrimary
+                                    )
+                                    Icon(Icons.Default.ArrowDropDown, contentDescription = null, tint = SleekTextSecondary)
+                                }
+                            }
+
+                            DropdownMenu(
+                                expanded = showCategoryDropdown,
+                                onDismissRequest = { showCategoryDropdown = false }
+                            ) {
+                                allCategories.forEach { cat ->
+                                    DropdownMenuItem(
+                                        text = { Text(if (cat == "ALL") "All Categories" else cat) },
+                                        onClick = {
+                                            categoryFilter = cat
+                                            showCategoryDropdown = false
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+                    HorizontalDivider(color = SleekBorder.copy(alpha = 0.5f))
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Include Itemized Transaction Ledger", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = SleekTextPrimary)
+                            Text("Include full line-item transaction table in PDF/CSV exports", fontSize = 11.sp, color = SleekTextSecondary)
+                        }
+                        Switch(
+                            checked = includeDetailedTxns,
+                            onCheckedChange = { includeDetailedTxns = it },
+                            colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = SleekPrimary)
+                        )
+                    }
+                }
+            }
+
+            // SUMMARY PREVIEW BADGE
+            Card(
+                colors = CardDefaults.cardColors(containerColor = SleekPrimaryContainer.copy(alpha = 0.25f)),
+                border = BorderStroke(1.dp, SleekPrimary.copy(alpha = 0.3f)),
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(14.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "${filteredExpenses.size} Records Selected",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp,
+                            color = SleekPrimary
+                        )
+                        Text(
+                            text = "Filter: $dateRangeFilter",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = SleekTextSecondary
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .background(Color(0xFF10B981).copy(alpha = 0.12f), RoundedCornerShape(8.dp))
+                                .padding(8.dp)
+                        ) {
+                            Column {
+                                Text("Income", fontSize = 9.sp, color = Color(0xFF10B981), fontWeight = FontWeight.Bold)
+                                Text("₹%,.0f".format(totalIncome), fontSize = 12.sp, color = Color(0xFF10B981), fontWeight = FontWeight.Bold)
+                            }
+                        }
+
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .background(ExpenseRed.copy(alpha = 0.12f), RoundedCornerShape(8.dp))
+                                .padding(8.dp)
+                        ) {
+                            Column {
+                                Text("Expense", fontSize = 9.sp, color = ExpenseRed, fontWeight = FontWeight.Bold)
+                                Text("₹%,.0f".format(totalExpense), fontSize = 12.sp, color = ExpenseRed, fontWeight = FontWeight.Bold)
+                            }
+                        }
+
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .background(SleekNeutralLight, RoundedCornerShape(8.dp))
+                                .padding(8.dp)
+                        ) {
+                            Column {
+                                Text("Net Flow", fontSize = 9.sp, color = SleekTextSecondary, fontWeight = FontWeight.Bold)
+                                Text("₹%,.0f".format(netBalance), fontSize = 12.sp, color = SleekTextPrimary, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                }
+            }
+
+            // EXPORT FORMAT 1: PDF REPORT
+            Card(
+                colors = CardDefaults.cardColors(containerColor = SleekSurface),
+                border = BorderStroke(1.dp, SleekBorder),
+                shape = RoundedCornerShape(20.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(44.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFFDC2626).copy(alpha = 0.15f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Icons.Default.PictureAsPdf, contentDescription = null, tint = Color(0xFFDC2626), modifier = Modifier.size(24.dp))
+                        }
+
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("PDF Financial Ledger Statement", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = SleekTextPrimary)
+                            Text("Formatted document with executive KPI summary and transaction ledger table.", fontSize = 11.sp, color = SleekTextSecondary)
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    Button(
+                        onClick = {
+                            if (filteredExpenses.isEmpty()) {
+                                Toast.makeText(context, "No transactions found matching the selected filters.", Toast.LENGTH_SHORT).show()
+                            } else {
+                                DataExporter.sharePdfReport(
+                                    context = context,
+                                    expenses = filteredExpenses,
+                                    dateRangeStr = dateRangeFilter,
+                                    typeFilterStr = typeFilter,
+                                    categoryFilterStr = categoryFilter,
+                                    includeDetailedTxns = includeDetailedTxns
+                                )
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626)),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Default.PictureAsPdf, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Export PDF Document", color = Color.White, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+
+            // EXPORT FORMAT 2: CSV SPREADSHEET
+            Card(
+                colors = CardDefaults.cardColors(containerColor = SleekSurface),
+                border = BorderStroke(1.dp, SleekBorder),
+                shape = RoundedCornerShape(20.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(44.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFF16A34A).copy(alpha = 0.15f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Icons.Default.Description, contentDescription = null, tint = Color(0xFF16A34A), modifier = Modifier.size(24.dp))
+                        }
+
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("CSV Spreadsheet File", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = SleekTextPrimary)
+                            Text("Raw structured table data ready for Microsoft Excel, Google Sheets, or accounting tools.", fontSize = 11.sp, color = SleekTextSecondary)
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    OutlinedButton(
+                        onClick = {
+                            if (filteredExpenses.isEmpty()) {
+                                Toast.makeText(context, "No transactions found matching the selected filters.", Toast.LENGTH_SHORT).show()
+                            } else {
+                                DataExporter.exportToCSV(
+                                    context = context,
+                                    expenses = filteredExpenses,
+                                    dateRangeStr = dateRangeFilter,
+                                    typeFilterStr = typeFilter,
+                                    categoryFilterStr = categoryFilter
+                                )
+                            }
+                        },
+                        shape = RoundedCornerShape(12.dp),
+                        border = BorderStroke(1.5.dp, Color(0xFF16A34A)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Default.FileDownload, contentDescription = null, tint = Color(0xFF16A34A), modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Export CSV Spreadsheet", color = Color(0xFF16A34A), fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+
+            // EXPORT FORMAT 3: GRAPHIC SUMMARY REPORT
+            Card(
+                colors = CardDefaults.cardColors(containerColor = SleekSurface),
+                border = BorderStroke(1.dp, SleekBorder),
+                shape = RoundedCornerShape(20.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(44.dp)
+                                .clip(CircleShape)
+                                .background(SleekPrimary.copy(alpha = 0.15f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Icons.Default.BarChart, contentDescription = null, tint = SleekPrimary, modifier = Modifier.size(24.dp))
+                        }
+
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Graphic Summary Report", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = SleekTextPrimary)
+                            Text("High-resolution graphic image visual summarizing key financial metrics.", fontSize = 11.sp, color = SleekTextSecondary)
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    OutlinedButton(
+                        onClick = {
+                            if (filteredExpenses.isEmpty()) {
+                                Toast.makeText(context, "No transactions found matching the selected filters.", Toast.LENGTH_SHORT).show()
+                            } else {
+                                DataExporter.shareImageReport(
+                                    context = context,
+                                    expenses = filteredExpenses,
+                                    dateRangeStr = dateRangeFilter,
+                                    typeFilterStr = typeFilter,
+                                    categoryFilterStr = categoryFilter
+                                )
+                            }
+                        },
+                        shape = RoundedCornerShape(12.dp),
+                        border = BorderStroke(1.5.dp, SleekPrimary),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Default.Share, contentDescription = null, tint = SleekPrimary, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Export Graphic Summary", color = SleekPrimary, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(120.dp))
+        }
+    }
+}
+
 // Keep legacy screen aliases for backwards compatibility
 @Composable fun DataAndStorageScreen(viewModel: FinanceViewModel, onBack: () -> Unit) { DataManagementScreen(viewModel, onBack) }
 @Composable fun ThemeAndLanguageScreen(viewModel: FinanceViewModel, onBack: () -> Unit) { AppearanceScreen(viewModel, onBack) }
-@Composable fun ExportDataScreen(viewModel: FinanceViewModel, onBack: () -> Unit) { DataManagementScreen(viewModel, onBack) }
 @Composable fun FaqAndHelpScreen(viewModel: FinanceViewModel, onBack: () -> Unit) { HelpSupportScreen(viewModel, onBack) }
