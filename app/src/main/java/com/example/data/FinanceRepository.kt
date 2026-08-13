@@ -6,9 +6,11 @@ class FinanceRepository(private val dao: FinanceDao) {
 
     // --- Expenses ---
     val allExpenses: Flow<List<Expense>> = dao.getAllExpenses()
+    suspend fun getExpenseById(id: Int): Expense? = dao.getExpenseById(id)
     suspend fun insertExpense(expense: Expense): Long = dao.insertExpense(expense)
     suspend fun updateExpense(expense: Expense) = dao.updateExpense(expense)
     suspend fun deleteExpense(expense: Expense) = dao.deleteExpense(expense)
+    suspend fun deleteExpenseById(id: Int) = dao.deleteExpenseById(id)
 
     // --- Accounts ---
     val allAccounts: Flow<List<Account>> = dao.getAllAccounts()

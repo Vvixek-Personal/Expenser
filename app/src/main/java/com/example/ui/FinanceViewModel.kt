@@ -1375,6 +1375,12 @@ class FinanceViewModel(
         }
     }
 
+    fun deleteExpenseById(id: Int) {
+        viewModelScope.launch {
+            repository.deleteExpenseById(id)
+        }
+    }
+
     fun deleteExpenses(expensesList: List<Expense>) {
         viewModelScope.launch {
             expensesList.forEach { repository.deleteExpense(it) }
