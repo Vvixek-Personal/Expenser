@@ -68,6 +68,12 @@ fun AddExpenseDialog(
     categoryIcons: Map<String, String> = emptyMap(),
     expenses: List<Expense> = emptyList(),
     savingsGoals: List<com.example.data.SavingsGoal> = emptyList(),
+    defaultTxType: String = "EXPENSE",
+    rememberLastCategory: Boolean = true,
+    lastUsedExpenseCategory: String? = null,
+    lastUsedIncomeCategory: String? = null,
+    gstReserveAmount: Double = 0.0,
+    monthlySafeAmount: Double = 0.0,
     onAddCategory: (name: String, categoryType: String) -> Unit = { name, _ -> },
     onDeleteCategory: (String) -> Unit = {},
     onEditCategory: (String, String) -> Unit = { _, _ -> },
@@ -77,9 +83,18 @@ fun AddExpenseDialog(
     var step by remember { mutableIntStateOf(1) } // 1: Main Add Screen, 2: Add Description Screen
     var showCategorySheet by remember { mutableStateOf(false) }
 
-    var type by remember { mutableStateOf("EXPENSE") } // "EXPENSE" or "INCOME"
+    var type by remember { mutableStateOf(defaultTxType) } // "EXPENSE" or "INCOME"
     var amountStr by remember { mutableStateOf("") }
-    var category by remember { mutableStateOf(if (type == "INCOME") (incomeCategories.firstOrNull() ?: "Salary") else (expenseCategories.firstOrNull() ?: categories.firstOrNull() ?: "Food")) }
+    var category by remember {
+        val initialCategory = if (type == "INCOME") {
+            (if (rememberLastCategory) lastUsedIncomeCategory else null)
+                ?: incomeCategories.firstOrNull() ?: "Salary"
+        } else {
+            (if (rememberLastCategory) lastUsedExpenseCategory else null)
+                ?: expenseCategories.firstOrNull() ?: categories.firstOrNull() ?: "Food"
+        }
+        mutableStateOf(initialCategory)
+    }
     var note by remember { mutableStateOf("") }
 
     var isAmountEditing by remember { mutableStateOf(false) }
@@ -129,7 +144,7 @@ fun AddExpenseDialog(
     }
     val unrecordedLockedSavings = (totalLockedInGoals - recordedLockedInExpenses).coerceAtLeast(0.0)
 
-    val availableBalance = (totalIncome - totalExpenses - unrecordedLockedSavings).coerceAtLeast(0.0)
+    val availableBalance = (totalIncome - totalExpenses - unrecordedLockedSavings - gstReserveAmount - monthlySafeAmount).coerceAtLeast(0.0)
 
     val enteredAmount = amountStr.toDoubleOrNull() ?: 0.0
     val isExceedingIncome = type == "EXPENSE" && (enteredAmount > availableBalance || totalExpenses + enteredAmount > totalIncome)
@@ -241,7 +256,11 @@ fun AddExpenseDialog(
                             horizontalAlignment = Alignment.CenterHorizontally,
                             modifier = Modifier
                                 .clip(RoundedCornerShape(20.dp))
-                                .clickable { type = "EXPENSE" }
+                                .clickable {
+                                    type = "EXPENSE"
+                                    category = (if (rememberLastCategory) lastUsedExpenseCategory else null)
+                                        ?: expenseCategories.firstOrNull() ?: categories.firstOrNull() ?: "Food"
+                                }
                                 .padding(8.dp)
                         ) {
                             Box(
@@ -278,7 +297,11 @@ fun AddExpenseDialog(
                             horizontalAlignment = Alignment.CenterHorizontally,
                             modifier = Modifier
                                 .clip(RoundedCornerShape(20.dp))
-                                .clickable { type = "INCOME" }
+                                .clickable {
+                                    type = "INCOME"
+                                    category = (if (rememberLastCategory) lastUsedIncomeCategory else null)
+                                        ?: incomeCategories.firstOrNull() ?: "Salary"
+                                }
                                 .padding(8.dp)
                         ) {
                             Box(

@@ -214,14 +214,28 @@ fun FinanceAppScreen(viewModel: FinanceViewModel) {
         }
     }
 
+    // Close drawer automatically if app gets locked
+    LaunchedEffect(isAppLocked, appPin) {
+        if (isAppLocked && !appPin.isNullOrBlank()) {
+            drawerState.close()
+        }
+    }
+
+    // Intercept back button when locked
+    BackHandler(enabled = isAppLocked && !appPin.isNullOrBlank()) {
+        // Do nothing on back button during lock screen
+    }
+
     // SYSTEM BACK BUTTON HANDLER (Pops navigation stack, closes drawer/settings/dialogs)
-    val canHandleBack = drawerState.isOpen ||
+    val canHandleBack = (!isAppLocked || appPin.isNullOrBlank()) && (
+            drawerState.isOpen ||
             activeSettingsSubScreen != null ||
             viewingDetailExpense != null ||
             editingExpense != null ||
             showAddExpenseDialog ||
             backStack.size > 1 ||
             currentScreen != Screen.Dashboard
+    )
 
     BackHandler(enabled = canHandleBack) {
         when {
@@ -245,7 +259,7 @@ fun FinanceAppScreen(viewModel: FinanceViewModel) {
     Box(modifier = Modifier.fillMaxSize()) {
         ModalNavigationDrawer(
             drawerState = drawerState,
-            gesturesEnabled = activeSettingsSubScreen == null,
+            gesturesEnabled = (!isAppLocked || appPin.isNullOrBlank()) && activeSettingsSubScreen == null,
             drawerContent = {
                 ModalDrawerSheet(
                     drawerContainerColor = Color.Transparent,
@@ -279,11 +293,13 @@ fun FinanceAppScreen(viewModel: FinanceViewModel) {
         ) {
         Scaffold(
         bottomBar = {
-            FloatingDockBar(
-                currentScreen = currentScreen,
-                onScreenSelected = { selected -> navigateToScreen(selected) },
-                selectedLanguage = viewModel.selectedLanguage.collectAsStateWithLifecycle().value
-            )
+            if (!isAppLocked || appPin.isNullOrBlank()) {
+                FloatingDockBar(
+                    currentScreen = currentScreen,
+                    onScreenSelected = { selected -> navigateToScreen(selected) },
+                    selectedLanguage = viewModel.selectedLanguage.collectAsStateWithLifecycle().value
+                )
+            }
         },
         containerColor = SleekBg
     ) { innerPadding ->
@@ -352,6 +368,14 @@ fun FinanceAppScreen(viewModel: FinanceViewModel) {
             }
 
             if (showAddExpenseDialog) {
+                val defaultTxType by viewModel.defaultTxType.collectAsStateWithLifecycle()
+                val rememberLastCategory by viewModel.rememberLastCategory.collectAsStateWithLifecycle()
+                val lastUsedExpenseCategory by viewModel.lastUsedExpenseCategory.collectAsStateWithLifecycle()
+                val lastUsedIncomeCategory by viewModel.lastUsedIncomeCategory.collectAsStateWithLifecycle()
+                val isGstEnabledForDialog by viewModel.isGstEnabled.collectAsStateWithLifecycle()
+                val gstRateForDialog by viewModel.gstRatePercent.collectAsStateWithLifecycle()
+                val isMonthlySafeEnabledForDialog by viewModel.isMonthlySafeEnabled.collectAsStateWithLifecycle()
+                val monthlySafeAmountForDialog by viewModel.monthlySafeAmount.collectAsStateWithLifecycle()
                 AddExpenseDialog(
                     prefilledDate = prefilledDateForAddDialog,
                     categories = allCategories,
@@ -359,6 +383,12 @@ fun FinanceAppScreen(viewModel: FinanceViewModel) {
                     incomeCategories = incomeCategories,
                     categoryIcons = categoryIcons,
                     expenses = expenses,
+                    defaultTxType = defaultTxType,
+                    rememberLastCategory = rememberLastCategory,
+                    lastUsedExpenseCategory = lastUsedExpenseCategory,
+                    lastUsedIncomeCategory = lastUsedIncomeCategory,
+                    gstReserveAmount = if (isGstEnabledForDialog) viewModel.getGstReserveAmount() else 0.0,
+                    monthlySafeAmount = if (isMonthlySafeEnabledForDialog) monthlySafeAmountForDialog else 0.0,
                     onAddCategory = { name, catType -> viewModel.addCustomCategory(name, catType) },
                     onDeleteCategory = { viewModel.deleteCustomCategory(it) },
                     onEditCategory = { old, new -> viewModel.renameCustomCategory(old, new) },

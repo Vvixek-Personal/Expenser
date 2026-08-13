@@ -56,10 +56,7 @@ fun loadFullResolutionBitmap(context: Context, uri: Uri): Bitmap? {
     return try {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             val source = ImageDecoder.createSource(context.contentResolver, uri)
-            ImageDecoder.decodeBitmap(source) { decoder, _, _ ->
-                decoder.isMutableRequired = true
-                decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
-            }
+            ImageDecoder.decodeBitmap(source)
         } else {
             context.contentResolver.openInputStream(uri)?.use { inputStream ->
                 BitmapFactory.decodeStream(inputStream, null, BitmapFactory.Options().apply {

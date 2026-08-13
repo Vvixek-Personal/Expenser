@@ -522,6 +522,25 @@ class FinanceViewModel(
     private val _privacyModeEnabled = MutableStateFlow(false)
     val privacyModeEnabled: StateFlow<Boolean> = _privacyModeEnabled.asStateFlow()
 
+    // Session-only reveal override for Privacy Blur Mode — resets to false
+    // (masked) every time the ViewModel is recreated, i.e. every app launch.
+    // Tapping a masked amount or the eye icon flips this; it's intentionally
+    // NOT persisted, so the app is always masked-by-default on open.
+    private val _privacyRevealOverride = MutableStateFlow(false)
+    val privacyRevealOverride: StateFlow<Boolean> = _privacyRevealOverride.asStateFlow()
+
+    fun togglePrivacyReveal() {
+        _privacyRevealOverride.value = !_privacyRevealOverride.value
+    }
+
+    // Last-used category per transaction type, for "Remember Last Category".
+    // Persisted so it survives app restarts, not just the current session.
+    private val _lastUsedExpenseCategory = MutableStateFlow<String?>(null)
+    val lastUsedExpenseCategory: StateFlow<String?> = _lastUsedExpenseCategory.asStateFlow()
+
+    private val _lastUsedIncomeCategory = MutableStateFlow<String?>(null)
+    val lastUsedIncomeCategory: StateFlow<String?> = _lastUsedIncomeCategory.asStateFlow()
+
     // Backup & Restore Preferences
     private val _autoBackupEnabled = MutableStateFlow(true)
     val autoBackupEnabled: StateFlow<Boolean> = _autoBackupEnabled.asStateFlow()
@@ -701,6 +720,10 @@ class FinanceViewModel(
         _gstRatePercent.value = sharedPrefs.getFloat("gst_rate_percent", 18.0f).toDouble()
         _isMonthlySafeEnabled.value = sharedPrefs.getBoolean("is_monthly_safe_enabled", true)
         _monthlySafeAmount.value = sharedPrefs.getFloat("monthly_safe_amount", 50.0f).toDouble()
+
+        // Load last-used category memory (for "Remember Last Category")
+        _lastUsedExpenseCategory.value = sharedPrefs.getString("last_used_expense_category", null)
+        _lastUsedIncomeCategory.value = sharedPrefs.getString("last_used_income_category", null)
 
         // Load Currency Settings
         _selectedCurrencyCode.value = sharedPrefs.getString("selected_currency_code", "INR") ?: "INR"
@@ -1226,6 +1249,9 @@ class FinanceViewModel(
     fun togglePrivacyModeEnabled(enabled: Boolean) {
         _privacyModeEnabled.value = enabled
         sharedPrefs.edit().putBoolean("privacy_mode_enabled", enabled).apply()
+        // Reset session reveal whenever the feature itself is toggled, so
+        // turning it off-then-on again doesn't leave amounts pre-revealed.
+        _privacyRevealOverride.value = false
     }
 
     fun addCustomCategory(category: String, type: String = "EXPENSE") {
@@ -1265,9 +1291,9 @@ class FinanceViewModel(
         val trimmed = category.trim()
         if (trimmed.isBlank()) return
         val current = sharedPrefs.getStringSet("custom_goal_categories", emptySet()) ?: emptySet()
-        val updated = (current - trimmed).sorted()
-        sharedPrefs.edit().putStringSet("custom_goal_categories", updated.toSet()).apply()
-        _customGoalCategories.value = updated
+        val updated = (current - trimmed).toSet()
+        sharedPrefs.edit().putStringSet("custom_goal_categories", updated).apply()
+        _customGoalCategories.value = updated.toList().sorted()
 
         viewModelScope.launch {
             val allGoals = repository.allSavingsGoals.first()
@@ -1337,7 +1363,34 @@ class FinanceViewModel(
         val totalInc = allExp.filter { it.type == "INCOME" }.sumOf { it.amount }
         val totalExp = allExp.filter { it.type != "INCOME" }.sumOf { it.amount }
         val goalsMoney = savingsGoals.value.sumOf { it.currentAmount }
+        val rawBalance = (totalInc - totalExp) + goalsMoney
+
+        // GST Auto-Tax Reserve: set aside a % of all-time income for tax,
+        // so it never shows as "available" to spend.
+        val gstReserve = if (_isGstEnabled.value) totalInc * (_gstRatePercent.value / 100.0) else 0.0
+
+        // Monthly Safe Amount: a fixed emergency buffer that's never counted
+        // as available, regardless of income/expense flow.
+        val safeBuffer = if (_isMonthlySafeEnabled.value) _monthlySafeAmount.value else 0.0
+
+        return rawBalance - gstReserve - safeBuffer
+    }
+
+    // Raw balance before GST reserve / Safe Amount are subtracted — useful
+    // for showing "Total Net Balance" on the dashboard as-is, separate from
+    // what's actually safe/available to spend.
+    fun getRawNetBalance(): Double {
+        val allExp = expenses.value
+        val totalInc = allExp.filter { it.type == "INCOME" }.sumOf { it.amount }
+        val totalExp = allExp.filter { it.type != "INCOME" }.sumOf { it.amount }
+        val goalsMoney = savingsGoals.value.sumOf { it.currentAmount }
         return (totalInc - totalExp) + goalsMoney
+    }
+
+    fun getGstReserveAmount(): Double {
+        if (!_isGstEnabled.value) return 0.0
+        val totalInc = expenses.value.filter { it.type == "INCOME" }.sumOf { it.amount }
+        return totalInc * (_gstRatePercent.value / 100.0)
     }
 
     fun addExpense(
@@ -1366,6 +1419,17 @@ class FinanceViewModel(
                     type = type
                 )
             )
+        }
+
+        // Remember this category as the last-used one for its type, so the
+        // next Add Transaction dialog can pre-select it (if the "Remember
+        // Last Selected Category" setting is on).
+        if (type == "INCOME") {
+            _lastUsedIncomeCategory.value = category
+            sharedPrefs.edit().putString("last_used_income_category", category).apply()
+        } else {
+            _lastUsedExpenseCategory.value = category
+            sharedPrefs.edit().putString("last_used_expense_category", category).apply()
         }
     }
 
