@@ -1427,8 +1427,25 @@ class FinanceViewModel(
     }
 
     fun addBudget(category: String, amountLimit: Double) {
+        setCategoryBudget(category, amountLimit)
+    }
+
+    fun setCategoryBudget(category: String, amountLimit: Double) {
         viewModelScope.launch {
-            repository.insertBudget(Budget(category = category, amountLimit = amountLimit, monthYear = "07-2026"))
+            val mYear = SimpleDateFormat("MM-yyyy", Locale.getDefault()).format(Date())
+            val existing = budgets.value.find { it.category.equals(category, ignoreCase = true) }
+            if (existing != null) {
+                repository.insertBudget(existing.copy(amountLimit = amountLimit, monthYear = mYear))
+            } else {
+                repository.insertBudget(Budget(category = category, amountLimit = amountLimit, monthYear = mYear))
+            }
+        }
+    }
+
+    fun deleteCategoryBudget(category: String) {
+        viewModelScope.launch {
+            val existing = budgets.value.filter { it.category.equals(category, ignoreCase = true) }
+            existing.forEach { repository.deleteBudget(it) }
         }
     }
 

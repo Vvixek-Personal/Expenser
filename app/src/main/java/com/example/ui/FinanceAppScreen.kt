@@ -1,5 +1,10 @@
 package com.example.ui
 
+import com.example.data.*
+import java.util.*
+import java.text.*
+import kotlin.math.roundToInt
+
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
@@ -2509,6 +2514,10 @@ fun AnalyticsTab(
 
         Spacer(modifier = Modifier.height(16.dp))
 
+        val currencySymbol by viewModel.selectedCurrencySymbol.collectAsStateWithLifecycle()
+        val accounts by viewModel.accounts.collectAsStateWithLifecycle()
+        val budgets by viewModel.budgets.collectAsStateWithLifecycle()
+
         // 📈 1. ANIMATED GRAPH FOR INCOME AND EXPENSE
         IncomeExpenseLineGraphCard(
             expenses = filteredPeriodExpenses,
@@ -2517,8 +2526,17 @@ fun AnalyticsTab(
 
         Spacer(modifier = Modifier.height(16.dp))
 
+        // 💎 1.5 NET WORTH OVER TIME CHART CARD
+        NetWorthOverTimeChartCard(
+            allExpenses = allExpenses,
+            accounts = accounts,
+            selectedTimeFilter = selectedTimeFilter,
+            currencySymbol = currencySymbol
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
         // 💵 CASH AT END OF THE MONTH CHART CARD
-        val currencySymbol by viewModel.selectedCurrencySymbol.collectAsStateWithLifecycle()
         CashAtEndOfMonthChartCard(
             allExpenses = allExpenses,
             currencySymbol = currencySymbol
@@ -2538,7 +2556,565 @@ fun AnalyticsTab(
             expenses = filteredPeriodExpenses
         )
 
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // 🎯 4. CATEGORY BUDGET PROGRESS & TRACKING CARD
+        CategoryBudgetProgressCard(
+            viewModel = viewModel,
+            budgets = budgets,
+            allExpenses = allExpenses,
+            currencySymbol = currencySymbol
+        )
+
         Spacer(modifier = Modifier.height(110.dp))
+    }
+}
+
+// ==========================================
+// 💎 NET WORTH OVER TIME CHART CARD
+// ==========================================
+@Composable
+fun NetWorthOverTimeChartCard(
+    allExpenses: List<Expense>,
+    accounts: List<Account>,
+    selectedTimeFilter: String,
+    currencySymbol: String
+) {
+    val totalAccountAssets = remember(accounts) {
+        if (accounts.isEmpty()) 50000.0 else accounts.sumOf { if (it.type == "CREDIT") -it.balance else it.balance }
+    }
+
+    val sortedExpenses = remember(allExpenses) { allExpenses.sortedBy { it.date } }
+
+    val dataPoints = remember(sortedExpenses, totalAccountAssets, selectedTimeFilter) {
+        if (sortedExpenses.isEmpty()) {
+            val now = System.currentTimeMillis()
+            val dayMs = 86400000L
+            listOf(
+                Pair(now - 6 * dayMs, totalAccountAssets * 0.92),
+                Pair(now - 5 * dayMs, totalAccountAssets * 0.94),
+                Pair(now - 4 * dayMs, totalAccountAssets * 0.95),
+                Pair(now - 3 * dayMs, totalAccountAssets * 0.97),
+                Pair(now - 2 * dayMs, totalAccountAssets * 0.98),
+                Pair(now - dayMs, totalAccountAssets * 0.99),
+                Pair(now, totalAccountAssets)
+            )
+        } else {
+            val points = mutableListOf<Pair<Long, Double>>()
+            val totalIncome = sortedExpenses.filter { it.type == "INCOME" }.sumOf { it.amount }
+            val totalExpense = sortedExpenses.filter { it.type != "INCOME" }.sumOf { it.amount }
+            val baseNetWorth = (totalAccountAssets - (totalIncome - totalExpense)).coerceAtLeast(1000.0)
+
+            var runningFlow = baseNetWorth
+            val step = (sortedExpenses.size / 7).coerceAtLeast(1)
+            sortedExpenses.chunked(step).take(7).forEach { chunk ->
+                val date = chunk.last().date
+                chunk.forEach { e ->
+                    if (e.type == "INCOME") runningFlow += e.amount else runningFlow -= e.amount
+                }
+                points.add(Pair(date, runningFlow))
+            }
+            if (points.size < 2) {
+                points.add(0, Pair(System.currentTimeMillis() - 86400000L, baseNetWorth))
+            }
+            points
+        }
+    }
+
+    val currentNetWorth = dataPoints.lastOrNull()?.second ?: totalAccountAssets
+    val startingNetWorth = dataPoints.firstOrNull()?.second ?: (currentNetWorth * 0.9)
+    val changeAmount = currentNetWorth - startingNetWorth
+    val changePct = if (startingNetWorth != 0.0) (changeAmount / startingNetWorth) * 100 else 0.0
+
+    var selectedPointIndex by remember { mutableStateOf<Int?>(null) }
+    val activePoint = selectedPointIndex?.let { dataPoints.getOrNull(it) } ?: dataPoints.lastOrNull()
+
+    Card(
+        colors = CardDefaults.cardColors(containerColor = SleekSurface),
+        shape = RoundedCornerShape(22.dp),
+        border = BorderStroke(1.dp, SleekBorder),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.padding(18.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(38.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Color(0xFF10B981).copy(alpha = 0.12f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.TrendingUp,
+                            contentDescription = null,
+                            tint = Color(0xFF10B981),
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    Column {
+                        Text(
+                            text = "Net Worth Over Time",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = SleekTextPrimary,
+                            fontSize = 15.sp
+                        )
+                        Text(
+                            text = "Accumulated assets minus liabilities",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = SleekTextSecondary,
+                            fontSize = 11.sp
+                        )
+                    }
+                }
+
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = if (changeAmount >= 0) Color(0xFF10B981).copy(alpha = 0.12f) else Color(0xFFEF4444).copy(alpha = 0.12f)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (changeAmount >= 0) Icons.Default.ArrowUpward else Icons.Default.ArrowDownward,
+                            contentDescription = null,
+                            tint = if (changeAmount >= 0) Color(0xFF10B981) else Color(0xFFEF4444),
+                            modifier = Modifier.size(12.dp)
+                        )
+                        Text(
+                            text = "${if (changeAmount >= 0) "+" else ""}${String.format(Locale.US, "%.1f", changePct)}%",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (changeAmount >= 0) Color(0xFF10B981) else Color(0xFFEF4444)
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Bottom
+            ) {
+                Column {
+                    Text(
+                        text = activePoint?.let {
+                            val sdf = SimpleDateFormat("MMM dd, yyyy", Locale.getDefault())
+                            sdf.format(Date(it.first))
+                        } ?: "Current Value",
+                        fontSize = 11.sp,
+                        color = SleekTextSecondary,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Text(
+                        text = "$currencySymbol${String.format(Locale.US, "%,.2f", activePoint?.second ?: currentNetWorth)}",
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.Black,
+                        color = SleekTextPrimary
+                    )
+                }
+
+                if (selectedPointIndex != null) {
+                    TextButton(
+                        onClick = { selectedPointIndex = null },
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                    ) {
+                        Text("Reset view", fontSize = 11.sp, color = SleekPrimary)
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            val lineGraphColor = Color(0xFF10B981)
+            val values = dataPoints.map { it.second }
+            val minVal = (values.minOrNull() ?: 0.0) * 0.95
+            val maxVal = ((values.maxOrNull() ?: 1000.0) * 1.05).coerceAtLeast(minVal + 100.0)
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(160.dp)
+            ) {
+                Canvas(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .pointerInput(dataPoints) {
+                            detectTapGestures { offset ->
+                                val width = size.width
+                                val stepX = width / (dataPoints.size - 1).coerceAtLeast(1)
+                                val index = (offset.x / stepX).roundToInt().coerceIn(0, dataPoints.size - 1)
+                                selectedPointIndex = index
+                            }
+                        }
+                ) {
+                    val w = size.width
+                    val h = size.height
+                    val pointsCount = dataPoints.size
+
+                    if (pointsCount < 2) return@Canvas
+
+                    val stepX = w / (pointsCount - 1)
+                    val coords = dataPoints.mapIndexed { idx, pt ->
+                        val x = idx * stepX
+                        val normalizedY = ((pt.second - minVal) / (maxVal - minVal)).toFloat().coerceIn(0f, 1f)
+                        val y = h - (normalizedY * (h - 20.dp.toPx())) - 10.dp.toPx()
+                        Offset(x, y)
+                    }
+
+                    val path = Path().apply {
+                        moveTo(coords.first().x, coords.first().y)
+                        for (i in 0 until coords.size - 1) {
+                            val p1 = coords[i]
+                            val p2 = coords[i + 1]
+                            val cx = (p1.x + p2.x) / 2f
+                            cubicTo(cx, p1.y, cx, p2.y, p2.x, p2.y)
+                        }
+                    }
+
+                    val fillPath = Path().apply {
+                        addPath(path)
+                        lineTo(coords.last().x, h)
+                        lineTo(coords.first().x, h)
+                        close()
+                    }
+
+                    drawPath(
+                        path = fillPath,
+                        brush = Brush.verticalGradient(
+                            colors = listOf(
+                                lineGraphColor.copy(alpha = 0.35f),
+                                lineGraphColor.copy(alpha = 0.02f)
+                            )
+                        )
+                    )
+
+                    drawPath(
+                        path = path,
+                        color = lineGraphColor,
+                        style = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
+                    )
+
+                    coords.forEachIndexed { idx, point ->
+                        val isSelected = selectedPointIndex == idx || (selectedPointIndex == null && idx == coords.size - 1)
+                        if (isSelected) {
+                            drawCircle(
+                                color = lineGraphColor.copy(alpha = 0.25f),
+                                radius = 10.dp.toPx(),
+                                center = point
+                            )
+                            drawCircle(
+                                color = lineGraphColor,
+                                radius = 6.dp.toPx(),
+                                center = point
+                            )
+                            drawCircle(
+                                color = Color.White,
+                                radius = 3.dp.toPx(),
+                                center = point
+                            )
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(SleekPrimaryContainer.copy(alpha = 0.08f), RoundedCornerShape(12.dp))
+                    .padding(10.dp),
+                horizontalArrangement = Arrangement.SpaceAround
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("Peak Net Worth", fontSize = 10.sp, color = SleekTextSecondary)
+                    Text("$currencySymbol${String.format(Locale.US, "%,.0f", maxVal)}", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = SleekTextPrimary)
+                }
+                Box(modifier = Modifier.width(1.dp).height(24.dp).background(SleekBorder))
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("Total Assets", fontSize = 10.sp, color = SleekTextSecondary)
+                    Text("$currencySymbol${String.format(Locale.US, "%,.0f", totalAccountAssets)}", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFF10B981))
+                }
+            }
+        }
+    }
+}
+
+// ==========================================
+// 🎯 CATEGORY BUDGET PROGRESS CARD
+// ==========================================
+@Composable
+fun CategoryBudgetProgressCard(
+    viewModel: FinanceViewModel,
+    budgets: List<Budget>,
+    allExpenses: List<Expense>,
+    currencySymbol: String
+) {
+    var showAddCategoryBudgetDialog by remember { mutableStateOf(false) }
+    var selectedCategoryForBudget by remember { mutableStateOf("Food") }
+    var categoryBudgetInput by remember { mutableStateOf("") }
+
+    val currentMonthCategorySpent = remember(allExpenses) {
+        val cal = Calendar.getInstance()
+        val m = cal.get(Calendar.MONTH)
+        val y = cal.get(Calendar.YEAR)
+        allExpenses.filter {
+            it.type != "INCOME" &&
+            Calendar.getInstance().apply { timeInMillis = it.date }.run {
+                get(Calendar.MONTH) == m && get(Calendar.YEAR) == y
+            }
+        }.groupBy { it.category }
+            .mapValues { entry -> entry.value.sumOf { it.amount } }
+    }
+
+    Card(
+        colors = CardDefaults.cardColors(containerColor = SleekSurface),
+        shape = RoundedCornerShape(22.dp),
+        border = BorderStroke(1.dp, SleekBorder),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.padding(18.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(38.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Color(0xFF8B5CF6).copy(alpha = 0.12f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Category,
+                            contentDescription = null,
+                            tint = Color(0xFF8B5CF6),
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    Column {
+                        Text(
+                            text = "Category Budget Progress",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = SleekTextPrimary,
+                            fontSize = 15.sp
+                        )
+                        Text(
+                            text = "Real-time spending vs monthly budget limits",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = SleekTextSecondary,
+                            fontSize = 11.sp
+                        )
+                    }
+                }
+
+                IconButton(
+                    onClick = {
+                        selectedCategoryForBudget = "Food"
+                        categoryBudgetInput = ""
+                        showAddCategoryBudgetDialog = true
+                    },
+                    modifier = Modifier
+                        .size(34.dp)
+                        .clip(CircleShape)
+                        .background(SleekPrimary.copy(alpha = 0.12f))
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Add,
+                        contentDescription = "Set Budget",
+                        tint = SleekPrimary,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            if (budgets.isEmpty()) {
+                Surface(
+                    shape = RoundedCornerShape(14.dp),
+                    color = SleekPrimaryContainer.copy(alpha = 0.08f),
+                    border = BorderStroke(1.dp, SleekBorder),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.AccountBalanceWallet,
+                            contentDescription = null,
+                            tint = SleekPrimary,
+                            modifier = Modifier.size(28.dp)
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text("No Category Budgets Configured", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = SleekTextPrimary)
+                        Text("Tap '+' to set category limits and track actual spending against budgets.", fontSize = 11.sp, color = SleekTextSecondary, textAlign = TextAlign.Center)
+                    }
+                }
+            } else {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    for (b in budgets) {
+                        val spent = currentMonthCategorySpent[b.category] ?: 0.0
+                        val limit = b.amountLimit.coerceAtLeast(1.0)
+                        val progress = (spent / limit).coerceIn(0.0, 1.2).toFloat()
+                        val isOver = spent > limit
+                        val isNear = progress >= 0.8f && !isOver
+
+                        val barColor = when {
+                            isOver -> Color(0xFFEF4444)
+                            isNear -> Color(0xFFF59E0B)
+                            else -> Color(0xFF10B981)
+                        }
+
+                        Surface(
+                            shape = RoundedCornerShape(14.dp),
+                            color = SleekPrimaryContainer.copy(alpha = 0.06f),
+                            border = BorderStroke(1.dp, SleekBorder),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(12.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        Text(b.category, fontWeight = FontWeight.Bold, fontSize = 13.sp, color = SleekTextPrimary)
+                                        Surface(
+                                            shape = RoundedCornerShape(6.dp),
+                                            color = barColor.copy(alpha = 0.15f)
+                                        ) {
+                                            Text(
+                                                text = if (isOver) "Exceeded" else if (isNear) "Near Limit" else "On Track",
+                                                fontSize = 9.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = barColor,
+                                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                                            )
+                                        }
+                                    }
+
+                                    Text(
+                                        text = "$currencySymbol${String.format(Locale.US, "%,.0f", spent)} / $currencySymbol${String.format(Locale.US, "%,.0f", b.amountLimit)}",
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = SleekTextPrimary
+                                    )
+                                }
+
+                                Spacer(modifier = Modifier.height(6.dp))
+
+                                LinearProgressIndicator(
+                                    progress = { (progress / 1.0f).coerceIn(0f, 1f) },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(7.dp)
+                                        .clip(RoundedCornerShape(4.dp)),
+                                    color = barColor,
+                                    trackColor = SleekBorder.copy(alpha = 0.5f)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if (showAddCategoryBudgetDialog) {
+        val catList = listOf("Food", "Shopping", "Entertainment", "Transport", "Bills", "Utilities", "Housing", "Health", "Education", "Other")
+
+        AlertDialog(
+            onDismissRequest = { showAddCategoryBudgetDialog = false },
+            title = {
+                Text("Set Category Spending Limit", fontWeight = FontWeight.Bold, color = SleekTextPrimary)
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("Select a category and define a monthly spending limit:", fontSize = 12.sp, color = SleekTextSecondary)
+
+                    @OptIn(ExperimentalLayoutApi::class)
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        catList.forEach { cat ->
+                            val selected = selectedCategoryForBudget.equals(cat, ignoreCase = true)
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = if (selected) SleekPrimary else SleekSurface,
+                                border = BorderStroke(1.dp, if (selected) SleekPrimary else SleekBorder),
+                                modifier = Modifier.clickable { selectedCategoryForBudget = cat }
+                            ) {
+                                Text(
+                                    text = cat,
+                                    fontSize = 11.sp,
+                                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                                    color = if (selected) Color.White else SleekTextPrimary,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp)
+                                )
+                            }
+                        }
+                    }
+
+                    OutlinedTextField(
+                        value = categoryBudgetInput,
+                        onValueChange = { categoryBudgetInput = it },
+                        label = { Text("Monthly Limit ($currencySymbol)") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val limitVal = categoryBudgetInput.toDoubleOrNull()
+                        if (limitVal != null && limitVal > 0) {
+                            viewModel.setCategoryBudget(selectedCategoryForBudget, limitVal)
+                            showAddCategoryBudgetDialog = false
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = SleekPrimary),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text("Save Budget", color = Color.White, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showAddCategoryBudgetDialog = false }) {
+                    Text("Cancel", color = SleekTextSecondary)
+                }
+            },
+            containerColor = SleekSurface,
+            shape = RoundedCornerShape(20.dp)
+        )
     }
 }
 

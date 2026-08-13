@@ -2,6 +2,7 @@ package com.example.ui
 
 import java.util.Calendar
 import java.util.Date
+import java.util.Locale
 import android.graphics.Bitmap
 import android.net.Uri
 import android.widget.Toast
@@ -3734,6 +3735,9 @@ fun BudgetSettingsScreen(
     val currencySymbol by viewModel.selectedCurrencySymbol.collectAsStateWithLifecycle()
     val includeRecurringBills by viewModel.budgetIncludeRecurringBills.collectAsStateWithLifecycle()
 
+    val budgets by viewModel.budgets.collectAsStateWithLifecycle()
+    val allExpenses by viewModel.expenses.collectAsStateWithLifecycle()
+
     val warn80 by viewModel.budgetWarning80.collectAsStateWithLifecycle()
     val warn90 by viewModel.budgetWarning90.collectAsStateWithLifecycle()
     val warn100 by viewModel.budgetWarning100.collectAsStateWithLifecycle()
@@ -3743,7 +3747,24 @@ fun BudgetSettingsScreen(
     var showInfoDialog by remember { mutableStateOf(false) }
     var showColorPaletteDialog by remember { mutableStateOf(false) }
 
+    var showCategoryBudgetDialog by remember { mutableStateOf(false) }
+    var targetCategoryForBudget by remember { mutableStateOf("Food") }
+    var categoryLimitInput by remember { mutableStateOf("") }
+
     val masterWarnings = warn80 || warn90 || warn100
+
+    val currentMonthCategorySpent = remember(allExpenses) {
+        val cal = Calendar.getInstance()
+        val m = cal.get(Calendar.MONTH)
+        val y = cal.get(Calendar.YEAR)
+        allExpenses.filter {
+            it.type != "INCOME" &&
+            Calendar.getInstance().apply { timeInMillis = it.date }.run {
+                get(Calendar.MONTH) == m && get(Calendar.YEAR) == y
+            }
+        }.groupBy { it.category }
+            .mapValues { entry -> entry.value.sumOf { it.amount } }
+    }
 
     Column(
         modifier = Modifier
@@ -4324,6 +4345,198 @@ fun BudgetSettingsScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
+            // 2.5 CATEGORY SPENDING LIMITS CARD
+            Card(
+                colors = CardDefaults.cardColors(containerColor = SleekSurface),
+                border = BorderStroke(1.dp, SleekBorder),
+                shape = RoundedCornerShape(20.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(18.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Surface(
+                                shape = RoundedCornerShape(12.dp),
+                                color = Color(0xFF8B5CF6).copy(alpha = 0.12f),
+                                modifier = Modifier.size(36.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = Icons.Default.Category,
+                                        contentDescription = null,
+                                        tint = Color(0xFF8B5CF6),
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            }
+                            Column {
+                                Text(
+                                    text = "Category Spending Limits",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = SleekTextPrimary,
+                                    fontSize = 16.sp
+                                )
+                                Text(
+                                    text = "Set individual monthly limits per category",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = SleekTextSecondary,
+                                    fontSize = 11.sp
+                                )
+                            }
+                        }
+
+                        IconButton(
+                            onClick = {
+                                targetCategoryForBudget = "Food"
+                                categoryLimitInput = ""
+                                showCategoryBudgetDialog = true
+                            },
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(CircleShape)
+                                .background(SleekPrimary.copy(alpha = 0.12f))
+                        ) {
+                            Icon(Icons.Default.Add, contentDescription = "Add Category Budget", tint = SleekPrimary, modifier = Modifier.size(20.dp))
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    if (budgets.isEmpty()) {
+                        Surface(
+                            shape = RoundedCornerShape(14.dp),
+                            color = SleekPrimaryContainer.copy(alpha = 0.1f),
+                            border = BorderStroke(1.dp, SleekBorder),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(14.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Icon(Icons.Default.Tune, contentDescription = null, tint = SleekPrimary, modifier = Modifier.size(20.dp))
+                                Column {
+                                    Text("No category budgets set", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = SleekTextPrimary)
+                                    Text("Tap '+' above to set a spending limit for Food, Transport, Shopping, etc.", fontSize = 11.sp, color = SleekTextSecondary)
+                                }
+                            }
+                        }
+                    } else {
+                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            for (b in budgets) {
+                                val spent = currentMonthCategorySpent[b.category] ?: 0.0
+                                val limit = b.amountLimit.coerceAtLeast(1.0)
+                                val progress = (spent / limit).coerceIn(0.0, 1.2).toFloat()
+                                val isOver = spent > limit
+                                val isNear = progress >= 0.8f && !isOver
+
+                                val barColor = when {
+                                    isOver -> Color(0xFFEF4444)
+                                    isNear -> Color(0xFFF59E0B)
+                                    else -> Color(0xFF10B981)
+                                }
+
+                                Surface(
+                                    shape = RoundedCornerShape(14.dp),
+                                    color = SleekPrimaryContainer.copy(alpha = 0.08f),
+                                    border = BorderStroke(1.dp, SleekBorder),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Column(modifier = Modifier.padding(12.dp)) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                            ) {
+                                                Text(b.category, fontWeight = FontWeight.Bold, fontSize = 14.sp, color = SleekTextPrimary)
+                                                Surface(
+                                                    shape = RoundedCornerShape(8.dp),
+                                                    color = barColor.copy(alpha = 0.15f)
+                                                ) {
+                                                    Text(
+                                                        text = if (isOver) "Exceeded" else if (isNear) "Near Limit" else "On Track",
+                                                        fontSize = 10.sp,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = barColor,
+                                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                                    )
+                                                }
+                                            }
+
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                IconButton(
+                                                    onClick = {
+                                                        targetCategoryForBudget = b.category
+                                                        categoryLimitInput = if (b.amountLimit % 1.0 == 0.0) b.amountLimit.toLong().toString() else b.amountLimit.toString()
+                                                        showCategoryBudgetDialog = true
+                                                    },
+                                                    modifier = Modifier.size(28.dp)
+                                                ) {
+                                                    Icon(Icons.Default.Edit, contentDescription = "Edit", tint = SleekPrimary, modifier = Modifier.size(16.dp))
+                                                }
+                                                IconButton(
+                                                    onClick = { viewModel.deleteCategoryBudget(b.category) },
+                                                    modifier = Modifier.size(28.dp)
+                                                ) {
+                                                    Icon(Icons.Default.Delete, contentDescription = "Delete", tint = Color(0xFFEF4444), modifier = Modifier.size(16.dp))
+                                                }
+                                            }
+                                        }
+
+                                        Spacer(modifier = Modifier.height(6.dp))
+
+                                        // Progress Bar
+                                        LinearProgressIndicator(
+                                            progress = { (progress / 1.0f).coerceIn(0f, 1f) },
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .height(8.dp)
+                                                .clip(RoundedCornerShape(4.dp)),
+                                            color = barColor,
+                                            trackColor = SleekBorder.copy(alpha = 0.6f)
+                                        )
+
+                                        Spacer(modifier = Modifier.height(6.dp))
+
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        ) {
+                                            Text(
+                                                text = "Spent: $currencySymbol${String.format(Locale.US, "%,.2f", spent)}",
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Medium,
+                                                color = SleekTextSecondary
+                                            )
+                                            Text(
+                                                text = "Limit: $currencySymbol${String.format(Locale.US, "%,.2f", b.amountLimit)}",
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = SleekTextPrimary
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
             // 3. APPEARANCE CARD
             Card(
                 colors = CardDefaults.cardColors(containerColor = SleekSurface),
@@ -4630,6 +4843,90 @@ fun BudgetSettingsScreen(
                     colors = ButtonDefaults.buttonColors(containerColor = SleekPrimary)
                 ) {
                     Text("Done")
+                }
+            },
+            containerColor = SleekSurface,
+            shape = RoundedCornerShape(20.dp)
+        )
+    }
+
+    // CATEGORY BUDGET DIALOG
+    if (showCategoryBudgetDialog) {
+        val expenseCatList = listOf("Food", "Shopping", "Entertainment", "Transport", "Bills", "Utilities", "Housing", "Health", "Education", "Other")
+
+        AlertDialog(
+            onDismissRequest = { showCategoryBudgetDialog = false },
+            title = {
+                Text(
+                    text = "Set Category Spending Limit",
+                    fontWeight = FontWeight.Bold,
+                    color = SleekTextPrimary
+                )
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(
+                        text = "Choose a category and enter your monthly spending limit:",
+                        fontSize = 12.sp,
+                        color = SleekTextSecondary
+                    )
+
+                    @OptIn(ExperimentalLayoutApi::class)
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        expenseCatList.forEach { cat ->
+                            val selected = targetCategoryForBudget.equals(cat, ignoreCase = true)
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = if (selected) SleekPrimary else SleekSurface,
+                                border = BorderStroke(1.dp, if (selected) SleekPrimary else SleekBorder),
+                                modifier = Modifier.clickable {
+                                    targetCategoryForBudget = cat
+                                }
+                            ) {
+                                Text(
+                                    text = cat,
+                                    fontSize = 12.sp,
+                                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                                    color = if (selected) Color.White else SleekTextPrimary,
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                                )
+                            }
+                        }
+                    }
+
+                    OutlinedTextField(
+                        value = categoryLimitInput,
+                        onValueChange = { categoryLimitInput = it },
+                        label = { Text("Limit Amount ($currencySymbol)") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val limitVal = categoryLimitInput.toDoubleOrNull()
+                        if (limitVal != null && limitVal > 0 && targetCategoryForBudget.isNotBlank()) {
+                            viewModel.setCategoryBudget(targetCategoryForBudget, limitVal)
+                            showCategoryBudgetDialog = false
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = SleekPrimary),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text("Save Limit", color = Color.White, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showCategoryBudgetDialog = false }) {
+                    Text("Cancel", color = SleekTextSecondary)
                 }
             },
             containerColor = SleekSurface,
