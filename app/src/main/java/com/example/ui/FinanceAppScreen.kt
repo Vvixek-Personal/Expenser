@@ -2611,31 +2611,33 @@ fun NetWorthOverTimeChartCard(
     currencySymbol: String
 ) {
     val totalAccountAssets = remember(accounts) {
-        if (accounts.isEmpty()) 50000.0 else accounts.sumOf { if (it.type == "CREDIT") -it.balance else it.balance }
+        accounts.sumOf { if (it.type == "CREDIT") -it.balance else it.balance }
     }
 
     val sortedExpenses = remember(allExpenses) { allExpenses.sortedBy { it.date } }
 
     val dataPoints = remember(sortedExpenses, totalAccountAssets, selectedTimeFilter) {
+        val now = System.currentTimeMillis()
+        val dayMs = 86400000L
         if (sortedExpenses.isEmpty()) {
-            val now = System.currentTimeMillis()
-            val dayMs = 86400000L
             listOf(
-                Pair(now - 6 * dayMs, totalAccountAssets * 0.92),
-                Pair(now - 5 * dayMs, totalAccountAssets * 0.94),
-                Pair(now - 4 * dayMs, totalAccountAssets * 0.95),
-                Pair(now - 3 * dayMs, totalAccountAssets * 0.97),
-                Pair(now - 2 * dayMs, totalAccountAssets * 0.98),
-                Pair(now - dayMs, totalAccountAssets * 0.99),
+                Pair(now - 7 * dayMs, totalAccountAssets),
                 Pair(now, totalAccountAssets)
             )
         } else {
             val points = mutableListOf<Pair<Long, Double>>()
             val totalIncome = sortedExpenses.filter { it.type == "INCOME" }.sumOf { it.amount }
             val totalExpense = sortedExpenses.filter { it.type != "INCOME" }.sumOf { it.amount }
-            val baseNetWorth = (totalAccountAssets - (totalIncome - totalExpense)).coerceAtLeast(1000.0)
+            val initialNetWorth = if (accounts.isNotEmpty()) {
+                totalAccountAssets - (totalIncome - totalExpense)
+            } else {
+                0.0
+            }
 
-            var runningFlow = baseNetWorth
+            var runningFlow = initialNetWorth
+            val firstDate = (sortedExpenses.firstOrNull()?.date ?: now) - dayMs
+            points.add(Pair(firstDate, initialNetWorth))
+
             val step = (sortedExpenses.size / 7).coerceAtLeast(1)
             sortedExpenses.chunked(step).take(7).forEach { chunk ->
                 val date = chunk.last().date
@@ -2645,7 +2647,7 @@ fun NetWorthOverTimeChartCard(
                 points.add(Pair(date, runningFlow))
             }
             if (points.size < 2) {
-                points.add(0, Pair(System.currentTimeMillis() - 86400000L, baseNetWorth))
+                points.add(0, Pair(now - dayMs, initialNetWorth))
             }
             points
         }
