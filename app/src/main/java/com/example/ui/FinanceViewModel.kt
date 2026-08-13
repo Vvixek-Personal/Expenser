@@ -1,6 +1,8 @@
 package com.example.ui
 
 import android.app.Application
+import android.content.Context
+import android.net.Uri
 import androidx.compose.runtime.mutableStateListOf
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
@@ -9,8 +11,13 @@ import androidx.lifecycle.viewModelScope
 import com.example.api.GeminiClient
 import com.example.data.*
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import org.json.JSONArray
+import org.json.JSONObject
+import java.io.File
+import java.io.FileOutputStream
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -144,6 +151,7 @@ class FinanceViewModel(
     private val _isFollowDeviceColors = MutableStateFlow(false)
     val isFollowDeviceColors: StateFlow<Boolean> = _isFollowDeviceColors.asStateFlow()
 
+    val appSettingsManager = AppSettingsManager.getInstance(getApplication())
     private val sharedPrefs = getApplication<Application>().getSharedPreferences("finance_prefs", android.content.Context.MODE_PRIVATE)
 
     // Live Storage and Network/Data Usage states
@@ -163,9 +171,48 @@ class FinanceViewModel(
     private val _userProfileImageUri = MutableStateFlow<String?>(null)
     val userProfileImageUri: StateFlow<String?> = _userProfileImageUri.asStateFlow()
 
+    fun updateUserProfileImageFromUri(context: Context, uri: Uri) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val file = File(context.filesDir, "user_profile_avatar.jpg")
+                context.contentResolver.openInputStream(uri)?.use { inputStream ->
+                    FileOutputStream(file).use { outputStream ->
+                        inputStream.copyTo(outputStream)
+                    }
+                }
+                val localUri = Uri.fromFile(file).toString()
+                _userProfileImageUri.value = localUri
+                sharedPrefs.edit().putString("user_profile_image_uri", localUri).apply()
+            } catch (e: Exception) {
+                e.printStackTrace()
+                _userProfileImageUri.value = uri.toString()
+                sharedPrefs.edit().putString("user_profile_image_uri", uri.toString()).apply()
+            }
+        }
+    }
+
+    fun removeUserProfileImage(context: Context) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val file = File(context.filesDir, "user_profile_avatar.jpg")
+                if (file.exists()) {
+                    file.delete()
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+            _userProfileImageUri.value = null
+            sharedPrefs.edit().remove("user_profile_image_uri").apply()
+        }
+    }
+
     fun updateUserProfileImageUri(uriString: String?) {
         _userProfileImageUri.value = uriString
-        sharedPrefs.edit().putString("user_profile_image_uri", uriString).apply()
+        if (uriString.isNullOrBlank()) {
+            sharedPrefs.edit().remove("user_profile_image_uri").apply()
+        } else {
+            sharedPrefs.edit().putString("user_profile_image_uri", uriString).apply()
+        }
     }
 
     private val _userDob = MutableStateFlow("24 December 1999")
@@ -541,8 +588,70 @@ class FinanceViewModel(
 
     init {
         checkAndCalculateDailyStreak()
+
+        viewModelScope.launch {
+            appSettingsManager.state.collect { settings ->
+                _selectedLanguage.value = settings.language
+                _themeIndex.value = settings.themeIndex
+                _themeMode.value = settings.themeMode
+                _customThemeHue.value = settings.customThemeHue
+                _isFollowDeviceColors.value = settings.isFollowDeviceColors
+                _selectedCurrencyCode.value = settings.currencyCode
+                _selectedCurrencySymbol.value = settings.currencySymbol
+                _selectedCurrencyName.value = settings.currencyName
+                _statsCurrencyCode.value = settings.statsCurrencyCode
+                _statsCurrencySymbol.value = settings.statsCurrencySymbol
+                _statsCurrencyName.value = settings.statsCurrencyName
+                _monthlyBudget.value = settings.monthlyBudget
+                _appPin.value = settings.appPin
+                _isAppLocked.value = settings.isAppLocked
+                _privacyModeEnabled.value = settings.privacyModeEnabled
+                _hideSensitiveAmounts.value = settings.hideSensitiveAmounts
+                _autoBackupEnabled.value = settings.autoBackupEnabled
+                _lastBackupTimestamp.value = settings.lastBackupTimestamp
+            }
+        }
         _userName.value = sharedPrefs.getString("user_name", null)
-        _userProfileImageUri.value = sharedPrefs.getString("user_profile_image_uri", null)
+        val savedImageUri = sharedPrefs.getString("user_profile_image_uri", null)
+        if (!savedImageUri.isNullOrBlank()) {
+            val localFile = File(getApplication<Application>().filesDir, "user_profile_avatar.jpg")
+            if (savedImageUri.startsWith("content://")) {
+                try {
+                    val contentUri = Uri.parse(savedImageUri)
+                    getApplication<Application>().contentResolver.openInputStream(contentUri)?.use { inputStream ->
+                        FileOutputStream(localFile).use { outputStream ->
+                            inputStream.copyTo(outputStream)
+                        }
+                    }
+                    val localUri = Uri.fromFile(localFile).toString()
+                    _userProfileImageUri.value = localUri
+                    sharedPrefs.edit().putString("user_profile_image_uri", localUri).apply()
+                } catch (e: Exception) {
+                    if (localFile.exists() && localFile.length() > 0) {
+                        val localUri = Uri.fromFile(localFile).toString()
+                        _userProfileImageUri.value = localUri
+                        sharedPrefs.edit().putString("user_profile_image_uri", localUri).apply()
+                    } else {
+                        _userProfileImageUri.value = savedImageUri
+                    }
+                }
+            } else if (savedImageUri.startsWith("file://")) {
+                val filePath = Uri.parse(savedImageUri).path
+                val file = if (filePath != null) File(filePath) else localFile
+                if (file.exists() && file.length() > 0) {
+                    _userProfileImageUri.value = Uri.fromFile(file).toString()
+                } else if (localFile.exists() && localFile.length() > 0) {
+                    val localUri = Uri.fromFile(localFile).toString()
+                    _userProfileImageUri.value = localUri
+                    sharedPrefs.edit().putString("user_profile_image_uri", localUri).apply()
+                } else {
+                    _userProfileImageUri.value = null
+                    sharedPrefs.edit().remove("user_profile_image_uri").apply()
+                }
+            } else {
+                _userProfileImageUri.value = savedImageUri
+            }
+        }
         _userDob.value = sharedPrefs.getString("user_dob", "24 December 1999") ?: "24 December 1999"
         _userJob.value = sharedPrefs.getString("user_job", "Successor Designer") ?: "Successor Designer"
         _userMonthlyIncome.value = sharedPrefs.getString("user_monthly_income", "500 - 3000 / year") ?: "500 - 3000 / year"
@@ -642,6 +751,7 @@ class FinanceViewModel(
         _selectedLanguage.value = language
         sharedPrefs.edit().putString("selected_language", language).apply()
         LanguageManager.applyAppLocale(getApplication(), language)
+        appSettingsManager.dispatch(AppSettingsIntent.UpdateLanguage(language))
     }
 
     fun updateThemeMode(mode: String) {
@@ -650,6 +760,7 @@ class FinanceViewModel(
         com.example.ui.theme.themeModeState = mode
         com.example.ui.theme.isDarkModeActive = (mode == "dark")
         com.example.ui.theme.updateThemeColors(_themeIndex.value, _customThemeHue.value)
+        appSettingsManager.dispatch(AppSettingsIntent.UpdateTheme(_themeIndex.value, _customThemeHue.value, mode))
     }
 
     fun toggleFollowDeviceColors(enabled: Boolean) {
@@ -714,12 +825,14 @@ class FinanceViewModel(
         sharedPrefs.edit().putInt("theme_index", index).apply()
         _themeIndex.value = index
         com.example.ui.theme.updateThemeColors(index, _customThemeHue.value)
+        appSettingsManager.dispatch(AppSettingsIntent.UpdateTheme(index, _customThemeHue.value, _themeMode.value))
     }
 
     fun updateCustomThemeHue(hue: Float) {
         sharedPrefs.edit().putFloat("custom_theme_hue", hue).apply()
         _customThemeHue.value = hue
         com.example.ui.theme.updateThemeColors(_themeIndex.value, hue)
+        appSettingsManager.dispatch(AppSettingsIntent.UpdateTheme(_themeIndex.value, hue, _themeMode.value))
     }
 
     fun saveUserName(name: String) {
@@ -807,12 +920,7 @@ class FinanceViewModel(
         _selectedCurrencyCode.value = code
         _selectedCurrencySymbol.value = symbol
         _selectedCurrencyName.value = name
-        sharedPrefs.edit()
-            .putString("selected_currency_code", code)
-            .putString("selected_currency_symbol", symbol)
-            .putString("selected_currency_name", name)
-            .apply()
-
+        appSettingsManager.dispatch(AppSettingsIntent.UpdateCurrency(code, symbol, name, convertExisting))
         if (convertExisting && oldCode != code) {
             viewModelScope.launch {
                 val currentList = expenses.value
@@ -831,11 +939,7 @@ class FinanceViewModel(
         _statsCurrencyCode.value = code
         _statsCurrencySymbol.value = symbol
         _statsCurrencyName.value = name
-        sharedPrefs.edit()
-            .putString("stats_currency_code", code)
-            .putString("stats_currency_symbol", symbol)
-            .putString("stats_currency_name", name)
-            .apply()
+        appSettingsManager.dispatch(AppSettingsIntent.UpdateStatsCurrency(code, symbol, name))
         _toastMessage.value = "Statistics currency updated to $code ($symbol)"
     }
 
@@ -1532,6 +1636,377 @@ class FinanceViewModel(
             _dailySpendingInsight.value = insightText
             _insightLastUpdated.value = System.currentTimeMillis()
             _isInsightLoading.value = false
+        }
+    }
+
+    // ==========================================
+    // 📦 FULL APP DATA BACKUP & RESTORE ENGINE (PORTABLE CODE)
+    // ==========================================
+    suspend fun generateFullBackupCode(): String = withContext(Dispatchers.IO) {
+        val json = JSONObject()
+        json.put("app", "AIStudioFinance")
+        json.put("version", 1)
+        json.put("exportedAt", System.currentTimeMillis())
+
+        // Profile
+        val profileObj = JSONObject()
+        profileObj.put("userName", _userName.value ?: "")
+        profileObj.put("userProfileImageUri", _userProfileImageUri.value ?: "")
+        profileObj.put("userDob", _userDob.value)
+        profileObj.put("userJob", _userJob.value)
+        profileObj.put("userMonthlyIncome", _userMonthlyIncome.value)
+        profileObj.put("userGender", _userGender.value)
+        json.put("profile", profileObj)
+
+        // Accounts
+        val accountsArr = JSONArray()
+        val accountList = repository.allAccounts.firstOrNull() ?: emptyList()
+        accountList.forEach { acc ->
+            val accObj = JSONObject()
+            accObj.put("id", acc.id)
+            accObj.put("name", acc.name)
+            accObj.put("balance", acc.balance)
+            accObj.put("type", acc.type)
+            accountsArr.put(accObj)
+        }
+        json.put("accounts", accountsArr)
+
+        // Transactions
+        val transactionsArr = JSONArray()
+        val transactionList = repository.allTransactions.firstOrNull() ?: emptyList()
+        transactionList.forEach { tx ->
+            val txObj = JSONObject()
+            txObj.put("id", tx.id)
+            txObj.put("title", tx.title)
+            txObj.put("amount", tx.amount)
+            txObj.put("type", tx.type)
+            txObj.put("category", tx.category)
+            txObj.put("timestamp", tx.timestamp)
+            txObj.put("accountId", tx.accountId)
+            txObj.put("note", tx.note ?: "")
+            txObj.put("imagePath", tx.imagePath ?: "")
+            transactionsArr.put(txObj)
+        }
+        json.put("transactions", transactionsArr)
+
+        // Expenses
+        val expensesArr = JSONArray()
+        val expenseList = repository.allExpenses.firstOrNull() ?: emptyList()
+        expenseList.forEach { exp ->
+            val expObj = JSONObject()
+            expObj.put("id", exp.id)
+            expObj.put("amount", exp.amount)
+            expObj.put("category", exp.category)
+            expObj.put("date", exp.date)
+            expObj.put("note", exp.note ?: "")
+            expObj.put("imagePath", exp.imagePath ?: "")
+            expObj.put("type", exp.type)
+            expensesArr.put(expObj)
+        }
+        json.put("expenses", expensesArr)
+
+        // Budgets
+        val budgetsArr = JSONArray()
+        val budgetList = repository.allBudgets.firstOrNull() ?: emptyList()
+        budgetList.forEach { b ->
+            val bObj = JSONObject()
+            bObj.put("id", b.id)
+            bObj.put("category", b.category)
+            bObj.put("amountLimit", b.amountLimit)
+            bObj.put("monthYear", b.monthYear)
+            budgetsArr.put(bObj)
+        }
+        json.put("budgets", budgetsArr)
+
+        // Savings Goals
+        val goalsArr = JSONArray()
+        val goalList = repository.allSavingsGoals.firstOrNull() ?: emptyList()
+        goalList.forEach { g ->
+            val gObj = JSONObject()
+            gObj.put("id", g.id)
+            gObj.put("name", g.name)
+            gObj.put("targetAmount", g.targetAmount)
+            gObj.put("currentAmount", g.currentAmount)
+            gObj.put("targetDate", g.targetDate)
+            gObj.put("frequency", g.frequency)
+            gObj.put("contributionAmount", g.contributionAmount)
+            gObj.put("isAutoGap", g.isAutoGap)
+            gObj.put("iconTag", g.iconTag)
+            gObj.put("category", g.category)
+            gObj.put("imageUri", g.imageUri ?: "")
+            goalsArr.put(gObj)
+        }
+        json.put("savingsGoals", goalsArr)
+
+        // Bills
+        val billsArr = JSONArray()
+        billsList.forEach { bill ->
+            val bObj = JSONObject()
+            bObj.put("id", bill.id)
+            bObj.put("title", bill.title)
+            bObj.put("amount", bill.amount)
+            bObj.put("dueDate", bill.dueDate)
+            billsArr.put(bObj)
+        }
+        json.put("bills", billsArr)
+
+        // Reminders
+        val remindersArr = JSONArray()
+        remindersList.forEach { rem ->
+            val rObj = JSONObject()
+            rObj.put("id", rem.id)
+            rObj.put("text", rem.text)
+            rObj.put("dueDate", rem.dueDate)
+            rObj.put("isCompleted", rem.isCompleted)
+            rObj.put("isEnabled", rem.isEnabled)
+            remindersArr.put(rObj)
+        }
+        json.put("reminders", remindersArr)
+
+        // Settings
+        val settingsObj = JSONObject()
+        settingsObj.put("monthlyBudget", _monthlyBudget.value)
+        settingsObj.put("selectedCurrencyCode", _selectedCurrencyCode.value)
+        settingsObj.put("selectedCurrencySymbol", _selectedCurrencySymbol.value)
+        settingsObj.put("selectedCurrencyName", _selectedCurrencyName.value)
+        settingsObj.put("statsCurrencyCode", _statsCurrencyCode.value)
+        settingsObj.put("statsCurrencySymbol", _statsCurrencySymbol.value)
+        settingsObj.put("statsCurrencyName", _statsCurrencyName.value)
+        settingsObj.put("selectedLanguage", _selectedLanguage.value)
+        settingsObj.put("appPin", _appPin.value ?: "")
+        settingsObj.put("themeIndex", _themeIndex.value)
+        settingsObj.put("customThemeHue", _customThemeHue.value)
+        settingsObj.put("themeMode", _themeMode.value)
+
+        settingsObj.put("customCategories", JSONArray(_customCategories.value))
+        settingsObj.put("customExpenseCategories", JSONArray(_customExpenseCategories.value))
+        settingsObj.put("customIncomeCategories", JSONArray(_customIncomeCategories.value))
+        settingsObj.put("customGoalCategories", JSONArray(_customGoalCategories.value))
+        settingsObj.put("deletedCategories", JSONArray(_deletedCategories.value.toList()))
+        settingsObj.put("customTags", JSONArray(_customTags.value))
+        settingsObj.put("deletedTags", JSONArray(_deletedTags.value.toList()))
+        json.put("settings", settingsObj)
+
+        val jsonString = json.toString()
+        val base64 = android.util.Base64.encodeToString(jsonString.toByteArray(Charsets.UTF_8), android.util.Base64.NO_WRAP)
+        "AISTUDIO_BACKUP_V1:$base64"
+    }
+
+    suspend fun restoreFromBackupCode(codeString: String): Result<String> = withContext(Dispatchers.IO) {
+        try {
+            val trimmed = codeString.trim()
+            if (trimmed.isBlank()) return@withContext Result.failure(IllegalArgumentException("Backup code cannot be empty."))
+
+            val jsonString = if (trimmed.startsWith("AISTUDIO_BACKUP_V1:")) {
+                val rawB64 = trimmed.substring("AISTUDIO_BACKUP_V1:".length)
+                String(android.util.Base64.decode(rawB64, android.util.Base64.DEFAULT), Charsets.UTF_8)
+            } else if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
+                trimmed
+            } else {
+                String(android.util.Base64.decode(trimmed, android.util.Base64.DEFAULT), Charsets.UTF_8)
+            }
+
+            val json = JSONObject(jsonString)
+
+            // Parse Accounts
+            val newAccounts = mutableListOf<Account>()
+            val accountsArr = json.optJSONArray("accounts") ?: JSONArray()
+            for (i in 0 until accountsArr.length()) {
+                val o = accountsArr.getJSONObject(i)
+                newAccounts.add(
+                    Account(
+                        id = o.optLong("id", 0L),
+                        name = o.optString("name", "Account"),
+                        balance = o.optDouble("balance", 0.0),
+                        type = o.optString("type", "CASH")
+                    )
+                )
+            }
+
+            // Parse Transactions
+            val newTransactions = mutableListOf<Transaction>()
+            val txArr = json.optJSONArray("transactions") ?: JSONArray()
+            for (i in 0 until txArr.length()) {
+                val o = txArr.getJSONObject(i)
+                newTransactions.add(
+                    Transaction(
+                        id = o.optLong("id", 0L),
+                        title = o.optString("title", "Transaction"),
+                        amount = o.optDouble("amount", 0.0),
+                        type = o.optString("type", "EXPENSE"),
+                        category = o.optString("category", "General"),
+                        timestamp = o.optLong("timestamp", System.currentTimeMillis()),
+                        accountId = o.optLong("accountId", 1L),
+                        note = o.optString("note", null).ifBlank { null },
+                        imagePath = o.optString("imagePath", null).ifBlank { null }
+                    )
+                )
+            }
+
+            // Parse Expenses
+            val newExpenses = mutableListOf<Expense>()
+            val expArr = json.optJSONArray("expenses") ?: JSONArray()
+            for (i in 0 until expArr.length()) {
+                val o = expArr.getJSONObject(i)
+                newExpenses.add(
+                    Expense(
+                        id = o.optInt("id", 0),
+                        amount = o.optDouble("amount", 0.0),
+                        category = o.optString("category", "General"),
+                        date = o.optLong("date", System.currentTimeMillis()),
+                        note = o.optString("note", null).ifBlank { null },
+                        imagePath = o.optString("imagePath", null).ifBlank { null },
+                        type = o.optString("type", "EXPENSE")
+                    )
+                )
+            }
+
+            // Parse Budgets
+            val newBudgets = mutableListOf<Budget>()
+            val bArr = json.optJSONArray("budgets") ?: JSONArray()
+            for (i in 0 until bArr.length()) {
+                val o = bArr.getJSONObject(i)
+                newBudgets.add(
+                    Budget(
+                        id = o.optLong("id", 0L),
+                        category = o.optString("category", "General"),
+                        amountLimit = o.optDouble("amountLimit", 0.0),
+                        monthYear = o.optString("monthYear", "")
+                    )
+                )
+            }
+
+            // Parse Savings Goals
+            val newGoals = mutableListOf<SavingsGoal>()
+            val gArr = json.optJSONArray("savingsGoals") ?: JSONArray()
+            for (i in 0 until gArr.length()) {
+                val o = gArr.getJSONObject(i)
+                newGoals.add(
+                    SavingsGoal(
+                        id = o.optLong("id", 0L),
+                        name = o.optString("name", "Goal"),
+                        targetAmount = o.optDouble("targetAmount", 0.0),
+                        currentAmount = o.optDouble("currentAmount", 0.0),
+                        targetDate = o.optLong("targetDate", 0L),
+                        frequency = o.optString("frequency", "WEEKLY"),
+                        contributionAmount = o.optDouble("contributionAmount", 0.0),
+                        isAutoGap = o.optBoolean("isAutoGap", true),
+                        iconTag = o.optString("iconTag", "🎮"),
+                        category = o.optString("category", "Saving"),
+                        imageUri = o.optString("imageUri", null).ifBlank { null }
+                    )
+                )
+            }
+
+            // Execute DB restore
+            repository.restoreAllData(newExpenses, newAccounts, newTransactions, newBudgets, newGoals)
+
+            // Restore Profile
+            val prof = json.optJSONObject("profile")
+            if (prof != null) {
+                val name = prof.optString("userName", "")
+                val img = prof.optString("userProfileImageUri", "")
+                val dob = prof.optString("userDob", "24 December 1999")
+                val job = prof.optString("userJob", "Successor Designer")
+                val inc = prof.optString("userMonthlyIncome", "500 - 3000 / year")
+                val gen = prof.optString("userGender", "Male")
+
+                _userName.value = if (name.isNotBlank()) name else null
+                _userProfileImageUri.value = if (img.isNotBlank()) img else null
+                _userDob.value = dob
+                _userJob.value = job
+                _userMonthlyIncome.value = inc
+                _userGender.value = gen
+
+                sharedPrefs.edit().apply {
+                    putString("user_name", _userName.value)
+                    putString("user_profile_image_uri", _userProfileImageUri.value)
+                    putString("user_dob", dob)
+                    putString("user_job", job)
+                    putString("user_monthly_income", inc)
+                    putString("user_gender", gen)
+                    apply()
+                }
+            }
+
+            // Restore Bills & Reminders
+            val billsArr = json.optJSONArray("bills")
+            if (billsArr != null) {
+                withContext(Dispatchers.Main) {
+                    billsList.clear()
+                    for (i in 0 until billsArr.length()) {
+                        val o = billsArr.getJSONObject(i)
+                        billsList.add(
+                            BillEntry(
+                                id = o.optString("id", System.currentTimeMillis().toString()),
+                                title = o.optString("title", "Bill"),
+                                amount = o.optDouble("amount", 0.0),
+                                dueDate = o.optString("dueDate", "")
+                            )
+                        )
+                    }
+                }
+            }
+
+            val remArr = json.optJSONArray("reminders")
+            if (remArr != null) {
+                withContext(Dispatchers.Main) {
+                    remindersList.clear()
+                    for (i in 0 until remArr.length()) {
+                        val o = remArr.getJSONObject(i)
+                        remindersList.add(
+                            ReminderEntry(
+                                id = o.optString("id", System.currentTimeMillis().toString()),
+                                text = o.optString("text", "Reminder"),
+                                dueDate = o.optString("dueDate", ""),
+                                isCompleted = o.optBoolean("isCompleted", false),
+                                isEnabled = o.optBoolean("isEnabled", true)
+                            )
+                        )
+                    }
+                }
+            }
+
+            // Restore Settings
+            val set = json.optJSONObject("settings")
+            if (set != null) {
+                val mb = set.optDouble("monthlyBudget", 25000.0)
+                val cc = set.optString("selectedCurrencyCode", "INR")
+                val cs = set.optString("selectedCurrencySymbol", "₹")
+                val cn = set.optString("selectedCurrencyName", "Indian Rupee")
+                val scc = set.optString("statsCurrencyCode", "INR")
+                val scs = set.optString("statsCurrencySymbol", "₹")
+                val scn = set.optString("statsCurrencyName", "Indian Rupee")
+                val lang = set.optString("selectedLanguage", "English")
+
+                _monthlyBudget.value = mb
+                _selectedCurrencyCode.value = cc
+                _selectedCurrencySymbol.value = cs
+                _selectedCurrencyName.value = cn
+                _statsCurrencyCode.value = scc
+                _statsCurrencySymbol.value = scs
+                _statsCurrencyName.value = scn
+                _selectedLanguage.value = lang
+
+                sharedPrefs.edit().apply {
+                    putFloat("monthly_budget", mb.toFloat())
+                    putString("selected_currency_code", cc)
+                    putString("selected_currency_symbol", cs)
+                    putString("selected_currency_name", cn)
+                    putString("stats_currency_code", scc)
+                    putString("stats_currency_symbol", scs)
+                    putString("stats_currency_name", scn)
+                    putString("selected_language", lang)
+                    apply()
+                }
+
+                LanguageManager.applyAppLocale(getApplication(), lang)
+            }
+
+            markBackupPerformed()
+            Result.success("Restored ${newTransactions.size} transactions, ${newGoals.size} goals, profile, and settings successfully!")
+        } catch (e: Exception) {
+            Result.failure(e)
         }
     }
 

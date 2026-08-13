@@ -105,4 +105,24 @@ class FinanceRepository(private val dao: FinanceDao) {
         )
         return true
     }
+
+    suspend fun restoreAllData(
+        expenses: List<Expense>,
+        accounts: List<Account>,
+        transactions: List<Transaction>,
+        budgets: List<Budget>,
+        goals: List<SavingsGoal>
+    ) {
+        dao.deleteAllTransactions()
+        dao.deleteAllExpenses()
+        dao.deleteAllAccounts()
+        dao.deleteAllBudgets()
+        dao.deleteAllSavingsGoals()
+
+        if (accounts.isNotEmpty()) dao.insertAccounts(accounts)
+        if (expenses.isNotEmpty()) dao.insertExpenses(expenses)
+        if (transactions.isNotEmpty()) dao.insertTransactions(transactions)
+        if (budgets.isNotEmpty()) dao.insertBudgets(budgets)
+        if (goals.isNotEmpty()) dao.insertSavingsGoals(goals)
+    }
 }

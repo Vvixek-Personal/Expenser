@@ -34,8 +34,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import kotlinx.coroutines.launch
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -128,7 +132,7 @@ fun PersonalDataScreen(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
         if (uri != null) {
-            viewModel.updateUserProfileImageUri(uri.toString())
+            viewModel.updateUserProfileImageFromUri(context, uri)
             Toast.makeText(context, "Profile photo updated!", Toast.LENGTH_SHORT).show()
         }
     }
@@ -290,7 +294,7 @@ fun PersonalDataScreen(
         AlertDialog(
             onDismissRequest = { showPhotoOptionSheet = false },
             title = { Text("Change Profile Photo") },
-            text = { Text("Select photo from device gallery.") },
+            text = { Text("Select photo from device gallery or remove current photo.") },
             confirmButton = {
                 TextButton(onClick = {
                     showPhotoOptionSheet = false
@@ -298,7 +302,18 @@ fun PersonalDataScreen(
                 }) { Text("Choose from Gallery") }
             },
             dismissButton = {
-                TextButton(onClick = { showPhotoOptionSheet = false }) { Text("Cancel") }
+                Row {
+                    if (!profileImageUri.isNullOrBlank()) {
+                        TextButton(onClick = {
+                            showPhotoOptionSheet = false
+                            viewModel.removeUserProfileImage(context)
+                            Toast.makeText(context, "Profile photo removed", Toast.LENGTH_SHORT).show()
+                        }) {
+                            Text("Remove", color = Color(0xFFDC2626))
+                        }
+                    }
+                    TextButton(onClick = { showPhotoOptionSheet = false }) { Text("Cancel") }
+                }
             }
         )
     }
@@ -4906,7 +4921,7 @@ fun TransactionsSettingsScreen(
 }
 
 // ==========================================
-// 1️⃣1️⃣ BACKUP & RESTORE SCREEN
+// 1️⃣1️⃣ BACKUP & RESTORE SCREEN (WITH PORTABLE CODE SYNC)
 // ==========================================
 @Composable
 fun BackupRestoreScreen(
@@ -4916,6 +4931,14 @@ fun BackupRestoreScreen(
     val autoBackup by viewModel.autoBackupEnabled.collectAsStateWithLifecycle()
     val lastBackup by viewModel.lastBackupTimestamp.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val clipboardManager = LocalClipboardManager.current
+    val scope = rememberCoroutineScope()
+
+    var generatedCode by remember { mutableStateOf<String?>(null) }
+    var inputCode by remember { mutableStateOf("") }
+    var isExporting by remember { mutableStateOf(false) }
+    var isRestoring by remember { mutableStateOf(false) }
+    var showRestoreConfirmDialog by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
@@ -4932,42 +4955,324 @@ fun BackupRestoreScreen(
                 .verticalScroll(rememberScrollState())
                 .padding(20.dp)
         ) {
+            // 📦 SECTION 1: EXPORT BACKUP CODE CARD
             Card(
                 colors = CardDefaults.cardColors(containerColor = SleekSurface),
-                border = BorderStroke(1.dp, SleekBorder),
-                shape = RoundedCornerShape(16.dp),
+                border = BorderStroke(1.5.dp, Brush.horizontalGradient(
+                    colors = listOf(
+                        SleekPrimary.copy(alpha = 0.6f),
+                        Color(0xFF8B5CF6).copy(alpha = 0.6f)
+                    )
+                )),
+                shape = RoundedCornerShape(22.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text("LOCAL OFFLINE BACKUP", fontWeight = FontWeight.Bold, color = SleekTextPrimary)
-                    Text("Your financial database is backed up safely on device storage.", style = MaterialTheme.typography.bodySmall, color = SleekTextSecondary)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text("Last Backup: $lastBackup", style = MaterialTheme.typography.bodySmall, color = SleekPrimary)
+                Column(modifier = Modifier.padding(18.dp)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFF8B5CF6).copy(alpha = 0.15f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.QrCode,
+                                contentDescription = "Backup Code",
+                                tint = Color(0xFF8B5CF6),
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
+                        Column {
+                            Text(
+                                text = "Full Portable Data Code",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 16.sp,
+                                color = SleekTextPrimary
+                            )
+                            Text(
+                                text = "Export 100% of your transactions, profile & settings into text code",
+                                fontSize = 12.sp,
+                                color = SleekTextSecondary
+                            )
+                        }
+                    }
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    Button(
-                        onClick = {
-                            viewModel.markBackupPerformed()
-                            Toast.makeText(context, "Local backup created successfully!", Toast.LENGTH_SHORT).show()
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = SleekPrimary)
-                    ) {
-                        Icon(Icons.Default.Backup, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Create Manual Backup Now")
+                    if (generatedCode == null) {
+                        Button(
+                            onClick = {
+                                isExporting = true
+                                scope.launch {
+                                    val code = viewModel.generateFullBackupCode()
+                                    generatedCode = code
+                                    isExporting = false
+                                }
+                            },
+                            enabled = !isExporting,
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(14.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = SleekPrimary)
+                        ) {
+                            if (isExporting) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(18.dp),
+                                    strokeWidth = 2.dp,
+                                    color = Color.White
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Generating Encrypted Code...")
+                            } else {
+                                Icon(Icons.Default.VpnKey, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Generate My Backup Code", fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    } else {
+                        // Display Generated Code Box
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(SleekBg)
+                                .border(1.dp, SleekBorder, RoundedCornerShape(14.dp))
+                                .padding(12.dp)
+                        ) {
+                            Text(
+                                text = generatedCode!!,
+                                fontFamily = FontFamily.Monospace,
+                                fontSize = 11.sp,
+                                color = SleekTextPrimary,
+                                maxLines = 4,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Button(
+                                onClick = {
+                                    clipboardManager.setText(AnnotatedString(generatedCode!!))
+                                    Toast.makeText(context, "Backup code copied to clipboard!", Toast.LENGTH_LONG).show()
+                                },
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = SleekPrimary)
+                            ) {
+                                Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Copy Code", fontWeight = FontWeight.Bold)
+                            }
+
+                            OutlinedButton(
+                                onClick = {
+                                    isExporting = true
+                                    scope.launch {
+                                        val code = viewModel.generateFullBackupCode()
+                                        generatedCode = code
+                                        isExporting = false
+                                        Toast.makeText(context, "Fresh backup code regenerated!", Toast.LENGTH_SHORT).show()
+                                    }
+                                },
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = Color(0xFF16A34A).copy(alpha = 0.1f),
+                            border = BorderStroke(1.dp, Color(0xFF16A34A).copy(alpha = 0.3f))
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.CheckCircle,
+                                    contentDescription = null,
+                                    tint = Color(0xFF16A34A),
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Text(
+                                    text = "Ready to paste! Includes Profile, 2-Year Transactions, Calendar, Savings & Settings.",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = Color(0xFF16A34A)
+                                )
+                            }
+                        }
                     }
                 }
             }
 
             Spacer(modifier = Modifier.height(20.dp))
 
+            // 📥 SECTION 2: IMPORT / RESTORE FROM CODE
             Card(
                 colors = CardDefaults.cardColors(containerColor = SleekSurface),
                 border = BorderStroke(1.dp, SleekBorder),
-                shape = RoundedCornerShape(16.dp),
+                shape = RoundedCornerShape(22.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(18.dp)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(CircleShape)
+                                .background(SleekPrimary.copy(alpha = 0.15f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.FileDownload,
+                                contentDescription = "Restore Code",
+                                tint = SleekPrimary,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
+                        Column {
+                            Text(
+                                text = "Restore Data From Code",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 16.sp,
+                                color = SleekTextPrimary
+                            )
+                            Text(
+                                text = "Paste your backup code string below to restore all details",
+                                fontSize = 12.sp,
+                                color = SleekTextSecondary
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    OutlinedTextField(
+                        value = inputCode,
+                        onValueChange = { inputCode = it },
+                        placeholder = { Text("Paste AISTUDIO_BACKUP_V1:... code string here", fontSize = 12.sp, color = SleekTextSecondary) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 100.dp),
+                        maxLines = 5,
+                        shape = RoundedCornerShape(14.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = SleekPrimary,
+                            unfocusedBorderColor = SleekBorder,
+                            focusedContainerColor = SleekBg,
+                            unfocusedContainerColor = SleekBg
+                        )
+                    )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = {
+                                val clip = clipboardManager.getText()?.text
+                                if (!clip.isNullOrBlank()) {
+                                    inputCode = clip
+                                    Toast.makeText(context, "Pasted from clipboard!", Toast.LENGTH_SHORT).show()
+                                } else {
+                                    Toast.makeText(context, "Clipboard is empty!", Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Icon(Icons.Default.ContentPaste, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Paste")
+                        }
+
+                        Button(
+                            onClick = {
+                                if (inputCode.isBlank()) {
+                                    Toast.makeText(context, "Please paste a backup code first!", Toast.LENGTH_SHORT).show()
+                                } else {
+                                    showRestoreConfirmDialog = true
+                                }
+                            },
+                            enabled = inputCode.isNotBlank() && !isRestoring,
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = SleekPrimary)
+                        ) {
+                            if (isRestoring) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(18.dp),
+                                    strokeWidth = 2.dp,
+                                    color = Color.White
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Restoring...")
+                            } else {
+                                Icon(Icons.Default.Restore, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Restore Data Now", fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // 💾 SECTION 3: LOCAL OFFLINE MANUAL BACKUP
+            Card(
+                colors = CardDefaults.cardColors(containerColor = SleekSurface),
+                border = BorderStroke(1.dp, SleekBorder),
+                shape = RoundedCornerShape(20.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text("LOCAL STORAGE BACKUP", fontWeight = FontWeight.Bold, color = SleekTextPrimary)
+                    Text("Your database is also snapshot-backed on device storage.", style = MaterialTheme.typography.bodySmall, color = SleekTextSecondary)
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text("Last Local Snapshot: $lastBackup", style = MaterialTheme.typography.bodySmall, color = SleekPrimary)
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    OutlinedButton(
+                        onClick = {
+                            viewModel.markBackupPerformed()
+                            Toast.makeText(context, "Local backup snapshot updated!", Toast.LENGTH_SHORT).show()
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Icon(Icons.Default.Backup, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Create Manual Local Snapshot")
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Automatic Daily Sync Card
+            Card(
+                colors = CardDefaults.cardColors(containerColor = SleekSurface),
+                border = BorderStroke(1.dp, SleekBorder),
+                shape = RoundedCornerShape(20.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Row(
@@ -4975,16 +5280,53 @@ fun BackupRestoreScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column {
-                        Text("Automatic Local Daily Sync", fontWeight = FontWeight.Bold, color = SleekTextPrimary)
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Automatic Daily Snapshot", fontWeight = FontWeight.Bold, color = SleekTextPrimary)
                         Text("Saves local database snapshots daily without cloud dependency", style = MaterialTheme.typography.bodySmall, color = SleekTextSecondary)
                     }
                     Switch(checked = autoBackup, onCheckedChange = { viewModel.toggleAutoBackupEnabled(it) })
                 }
             }
 
-            Spacer(modifier = Modifier.height(200.dp))
+            Spacer(modifier = Modifier.height(150.dp))
         }
+    }
+
+    // 🚨 RESTORE CONFIRMATION DIALOG
+    if (showRestoreConfirmDialog) {
+        AlertDialog(
+            onDismissRequest = { showRestoreConfirmDialog = false },
+            title = { Text("Restore From Backup Code?", fontWeight = FontWeight.Bold) },
+            text = {
+                Text("This action will import all 2-year transactions, calendar logs, savings goals, budgets, profile details, and settings from the backup code. Existing database records will be synced and updated. Proceed?")
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showRestoreConfirmDialog = false
+                        isRestoring = true
+                        scope.launch {
+                            val res = viewModel.restoreFromBackupCode(inputCode)
+                            isRestoring = false
+                            if (res.isSuccess) {
+                                Toast.makeText(context, "🎉 ${res.getOrNull()}", Toast.LENGTH_LONG).show()
+                                inputCode = ""
+                            } else {
+                                Toast.makeText(context, "❌ Error: ${res.exceptionOrNull()?.localizedMessage ?: "Invalid code format"}", Toast.LENGTH_LONG).show()
+                            }
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = SleekPrimary)
+                ) {
+                    Text("Yes, Restore Everything")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showRestoreConfirmDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
 }
 

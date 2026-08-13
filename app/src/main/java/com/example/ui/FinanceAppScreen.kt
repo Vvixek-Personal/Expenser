@@ -6970,7 +6970,111 @@ fun SidebarDrawerContent(
             selectedLanguage = selectedLanguage
         )
 
-        // Section 2: CATEGORIES & DATA
+        // Section 2: PREFERENCES & APPEARANCE
+        SidebarGroupCard(
+            sectionTitle = "PREFERENCES & APPEARANCE",
+            items = listOf(
+                SidebarMenuItemData(
+                    icon = Icons.Default.Palette,
+                    iconColor = Color(0xFF8B5CF6),
+                    iconBgColor = Color(0xFFF3E8FF),
+                    titleKey = "Appearance & Theme",
+                    subtitleKey = "Light/Dark mode, color palettes & custom accent",
+                    onClick = {
+                        onCloseDrawer()
+                        onOpenSettingsScreen(SettingsSubScreen.Appearance)
+                    }
+                ),
+                SidebarMenuItemData(
+                    icon = Icons.Default.Translate,
+                    iconColor = Color(0xFF2563EB),
+                    iconBgColor = Color(0xFFEFF6FF),
+                    titleKey = "Language",
+                    subtitleKey = "App localization, Hindi, English & 9+ languages",
+                    onClick = {
+                        onCloseDrawer()
+                        onOpenSettingsScreen(SettingsSubScreen.Language)
+                    }
+                ),
+                SidebarMenuItemData(
+                    icon = Icons.Default.AttachMoney,
+                    iconColor = Color(0xFF16A34A),
+                    iconBgColor = Color(0xFFDCFCE7),
+                    titleKey = "Currency & Rates",
+                    subtitleKey = "Default currency, 100+ global rates & conversion",
+                    onClick = {
+                        onCloseDrawer()
+                        onOpenSettingsScreen(SettingsSubScreen.Currency)
+                    }
+                )
+            ),
+            selectedLanguage = selectedLanguage
+        )
+
+        // Section 3: FINANCIAL MANAGEMENT
+        SidebarGroupCard(
+            sectionTitle = "FINANCIAL MANAGEMENT",
+            items = listOf(
+                SidebarMenuItemData(
+                    icon = Icons.Default.ReceiptLong,
+                    iconColor = Color(0xFFD97706),
+                    iconBgColor = Color(0xFFFEF3C7),
+                    titleKey = "Bills & Reminders",
+                    subtitleKey = "Configure recurring bills, alerts & due dates",
+                    onClick = {
+                        onCloseDrawer()
+                        onOpenSettingsScreen(SettingsSubScreen.Bills)
+                    }
+                ),
+                SidebarMenuItemData(
+                    icon = Icons.Default.PieChart,
+                    iconColor = Color(0xFF0284C7),
+                    iconBgColor = Color(0xFFE0F2FE),
+                    titleKey = "Budgets",
+                    subtitleKey = "Monthly limits, warning thresholds & indicators",
+                    onClick = {
+                        onCloseDrawer()
+                        onOpenSettingsScreen(SettingsSubScreen.Budgets)
+                    }
+                ),
+                SidebarMenuItemData(
+                    icon = Icons.Default.Savings,
+                    iconColor = Color(0xFF10B981),
+                    iconBgColor = Color(0xFFD1FAE5),
+                    titleKey = "Savings Goals",
+                    subtitleKey = "Goal preferences, progress & contribution rules",
+                    onClick = {
+                        onCloseDrawer()
+                        onOpenSettingsScreen(SettingsSubScreen.SavingsGoals)
+                    }
+                ),
+                SidebarMenuItemData(
+                    icon = Icons.Default.Calculate,
+                    iconColor = Color(0xFF7C3AED),
+                    iconBgColor = Color(0xFFEDE9FE),
+                    titleKey = "Calculations & Tools",
+                    subtitleKey = "Financial tools, percentages, splits & math",
+                    onClick = {
+                        onCloseDrawer()
+                        onOpenSettingsScreen(SettingsSubScreen.Calculations)
+                    }
+                ),
+                SidebarMenuItemData(
+                    icon = Icons.Default.Receipt,
+                    iconColor = Color(0xFFEC4899),
+                    iconBgColor = Color(0xFFFCE7F3),
+                    titleKey = "Transactions Settings",
+                    subtitleKey = "Default types, categories, receipts & date grouping",
+                    onClick = {
+                        onCloseDrawer()
+                        onOpenSettingsScreen(SettingsSubScreen.Transactions)
+                    }
+                )
+            ),
+            selectedLanguage = selectedLanguage
+        )
+
+        // Section 4: CATEGORIES & DATA
         SidebarGroupCard(
             sectionTitle = "CATEGORIES & DATA",
             items = listOf(
@@ -7006,12 +7110,23 @@ fun SidebarDrawerContent(
                         onCloseDrawer()
                         onOpenSettingsScreen(SettingsSubScreen.DataManagement)
                     }
+                ),
+                SidebarMenuItemData(
+                    icon = Icons.Default.QrCode,
+                    iconColor = Color(0xFF8B5CF6),
+                    iconBgColor = Color(0xFFF3E8FF),
+                    titleKey = "Backup & Restore Code",
+                    subtitleKey = "Generate 1-click code or paste code to restore data",
+                    onClick = {
+                        onCloseDrawer()
+                        onOpenSettingsScreen(SettingsSubScreen.BackupRestore)
+                    }
                 )
             ),
             selectedLanguage = selectedLanguage
         )
 
-        // Section 3: SECURITY & ABOUT
+        // Section 5: SECURITY & ABOUT
         SidebarGroupCard(
             sectionTitle = "SECURITY & ABOUT",
             items = listOf(
@@ -7024,6 +7139,28 @@ fun SidebarDrawerContent(
                     onClick = {
                         onCloseDrawer()
                         onOpenSettingsScreen(SettingsSubScreen.Security)
+                    }
+                ),
+                SidebarMenuItemData(
+                    icon = Icons.Default.VisibilityOff,
+                    iconColor = Color(0xFF6366F1),
+                    iconBgColor = Color(0xFFE0E7FF),
+                    titleKey = "Privacy Settings",
+                    subtitleKey = "Blur sensitive amounts, hide balances & privacy mode",
+                    onClick = {
+                        onCloseDrawer()
+                        onOpenSettingsScreen(SettingsSubScreen.Privacy)
+                    }
+                ),
+                SidebarMenuItemData(
+                    icon = Icons.Default.Help,
+                    iconColor = Color(0xFF0284C7),
+                    iconBgColor = Color(0xFFE0F2FE),
+                    titleKey = "Help & Support FAQ",
+                    subtitleKey = "Categorized answers for app features & troubleshooting",
+                    onClick = {
+                        onCloseDrawer()
+                        onOpenSettingsScreen(SettingsSubScreen.HelpSupport)
                     }
                 ),
                 SidebarMenuItemData(

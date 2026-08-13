@@ -13,11 +13,17 @@ interface FinanceDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertExpense(expense: Expense): Long
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertExpenses(expenses: List<Expense>)
+
     @Update
     suspend fun updateExpense(expense: Expense)
 
     @Delete
     suspend fun deleteExpense(expense: Expense)
+
+    @Query("DELETE FROM expenses")
+    suspend fun deleteAllExpenses()
 
     // --- Accounts ---
     @Query("SELECT * FROM accounts ORDER BY name ASC")
@@ -29,11 +35,17 @@ interface FinanceDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAccount(account: Account): Long
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAccounts(accounts: List<Account>)
+
     @Update
     suspend fun updateAccount(account: Account)
 
     @Delete
     suspend fun deleteAccount(account: Account)
+
+    @Query("DELETE FROM accounts")
+    suspend fun deleteAllAccounts()
 
 
     // --- Transactions ---
@@ -49,11 +61,17 @@ interface FinanceDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertTransaction(transaction: Transaction): Long
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertTransactions(transactions: List<Transaction>)
+
     @Update
     suspend fun updateTransaction(transaction: Transaction)
 
     @Delete
     suspend fun deleteTransaction(transaction: Transaction)
+
+    @Query("DELETE FROM transactions")
+    suspend fun deleteAllTransactions()
 
 
     // --- Budgets ---
@@ -66,11 +84,17 @@ interface FinanceDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertBudget(budget: Budget): Long
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertBudgets(budgets: List<Budget>)
+
     @Update
     suspend fun updateBudget(budget: Budget)
 
     @Delete
     suspend fun deleteBudget(budget: Budget)
+
+    @Query("DELETE FROM budgets")
+    suspend fun deleteAllBudgets()
 
 
     // --- Savings Goals ---
@@ -80,9 +104,15 @@ interface FinanceDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertSavingsGoal(goal: SavingsGoal): Long
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertSavingsGoals(goals: List<SavingsGoal>)
+
     @Update
     suspend fun updateSavingsGoal(goal: SavingsGoal)
 
     @Delete
     suspend fun deleteSavingsGoal(goal: SavingsGoal)
+
+    @Query("DELETE FROM savings_goals")
+    suspend fun deleteAllSavingsGoals()
 }
