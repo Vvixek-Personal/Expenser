@@ -9,10 +9,8 @@ import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -68,11 +66,13 @@ fun SavingGoalsFullScreen(
     val accounts by viewModel.accounts.collectAsStateWithLifecycle()
     val selectedLanguage by viewModel.selectedLanguage.collectAsStateWithLifecycle()
     val goalCategoriesList by viewModel.goalCategories.collectAsStateWithLifecycle()
+    val expenses by viewModel.expenses.collectAsStateWithLifecycle()
 
     var selectedCategoryFilter by remember { mutableStateOf("All") }
     var showAddDialog by remember { mutableStateOf(false) }
     var editingGoal by remember { mutableStateOf<SavingsGoal?>(null) }
     var selectedGoalForDeposit by remember { mutableStateOf<SavingsGoal?>(null) }
+    var viewingGoalDetailId by remember { mutableStateOf<Long?>(null) }
     var showCreateCategoryDialog by remember { mutableStateOf(false) }
     var newCategoryInput by remember { mutableStateOf("") }
 
@@ -98,6 +98,21 @@ fun SavingGoalsFullScreen(
         } else {
             savingsGoals.filter { g: SavingsGoal -> g.category.equals(selectedCategoryFilter, ignoreCase = true) }
         }
+    }
+
+    val availableNetBalance = remember(expenses) {
+        val inc = expenses.realIncome()
+        val exp = expenses.realExpense()
+        (inc - exp).coerceAtLeast(0.0)
+    }
+
+    if (viewingGoalDetailId != null) {
+        GoalsDetailScreen(
+            viewModel = viewModel,
+            initialGoalId = viewingGoalDetailId,
+            onBack = { viewingGoalDetailId = null }
+        )
+        return
     }
 
     Box(
@@ -493,10 +508,8 @@ fun SavingGoalsFullScreen(
                     }
                 }
             } else {
-                LazyVerticalGrid(
-                    columns = GridCells.Fixed(2),
-                    horizontalArrangement = Arrangement.spacedBy(14.dp),
-                    verticalArrangement = Arrangement.spacedBy(14.dp),
+                LazyColumn(
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
                     modifier = Modifier
                         .fillMaxWidth()
                         .weight(1f)
@@ -506,7 +519,7 @@ fun SavingGoalsFullScreen(
                             goal = goal,
                             onClick = {
                                 haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                selectedGoalForDeposit = goal
+                                viewingGoalDetailId = goal.id
                             }
                         )
                     }
@@ -663,35 +676,39 @@ fun SavingGoalsFullScreen(
 }
 
 // ==========================================
-// 🎨 GOAL CARD ITEM (MATCHING REFERENCE IMAGE GRID)
+// 🎨 GOAL CARD ITEM (MATCHING REFERENCE IMAGE)
 // ==========================================
 @Composable
 fun SavingGoalCardItem(
     goal: SavingsGoal,
     onClick: () -> Unit
 ) {
-    val progressRatio = if (goal.targetAmount > 0) (goal.currentAmount / goal.targetAmount).toFloat() else 0f
-    val animatedProgress by animateFloatAsState(
-        targetValue = progressRatio.coerceIn(0f, 1f),
-        animationSpec = tween(700, easing = FastOutSlowInEasing),
-        label = "goalProgress"
-    )
+    val progressRatio = if (goal.targetAmount > 0) (goal.currentAmount / goal.targetAmount).toFloat().coerceIn(0f, 1f) else 0f
+    val percentInt = (progressRatio * 100).toInt()
+    val primaryAccent = getCategoryAccentColor(goal.category)
 
-    val formattedDate = remember(goal.targetDate) {
-        if (goal.targetDate > 0) {
-            SimpleDateFormat("dd MMM yyyy", Locale.getDefault()).format(Date(goal.targetDate))
+    val daysToGo = remember(goal.targetDate) {
+        if (goal.targetDate > System.currentTimeMillis()) {
+            val diff = goal.targetDate - System.currentTimeMillis()
+            val days = (diff / (1000 * 60 * 60 * 24)).toInt()
+            if (days > 365) {
+                val years = days / 365
+                if (years == 1) "1 year to go" else "$years years to go"
+            } else {
+                "$days days to go"
+            }
+        } else if (goal.targetDate > 0) {
+            "Completed / Due"
         } else {
-            "Undefined / Open Goal"
+            "Open goal"
         }
     }
 
-    val primaryAccent = getCategoryAccentColor(goal.category)
-
     Card(
-        shape = RoundedCornerShape(22.dp),
+        shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = SleekSurface),
         border = BorderStroke(1.dp, SleekBorder),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
         modifier = Modifier
             .fillMaxWidth()
             .clickable { onClick() }
@@ -699,84 +716,115 @@ fun SavingGoalCardItem(
     ) {
         Column(
             modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // Circular Avatar Badge with surrounding Progress Ring Arc
-            Box(
-                modifier = Modifier.size(52.dp),
-                contentAlignment = Alignment.Center
+            // Top Row: Category Icon Box | Goal Title | Chevron >
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                // Background Track Ring
-                Canvas(modifier = Modifier.fillMaxSize()) {
-                    drawCircle(
-                        color = primaryAccent.copy(alpha = 0.15f),
-                        style = Stroke(width = 4.dp.toPx())
-                    )
-                    drawArc(
-                        color = primaryAccent,
-                        startAngle = -90f,
-                        sweepAngle = 360f * animatedProgress,
-                        useCenter = false,
-                        style = Stroke(width = 4.dp.toPx(), cap = StrokeCap.Round)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = primaryAccent.copy(alpha = 0.12f),
+                        border = BorderStroke(1.dp, primaryAccent.copy(alpha = 0.35f)),
+                        modifier = Modifier.size(38.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            if (!goal.imageUri.isNullOrBlank()) {
+                                AsyncImage(
+                                    model = goal.imageUri,
+                                    contentDescription = goal.name,
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(10.dp))
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = getCategoryVectorIcon(goal.category, goal.name),
+                                    contentDescription = goal.category,
+                                    tint = primaryAccent,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
+                    }
+                    Text(
+                        text = goal.name,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = SleekTextPrimary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
 
-                // Inner Avatar Image or Category Icon
-                Box(
-                    modifier = Modifier
-                        .size(42.dp)
-                        .clip(CircleShape)
-                        .background(primaryAccent.copy(alpha = 0.12f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    if (!goal.imageUri.isNullOrBlank()) {
-                        AsyncImage(
-                            model = goal.imageUri,
-                            contentDescription = goal.name,
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize()
-                        )
-                    } else {
-                        Icon(
-                            imageVector = getCategoryVectorIcon(goal.category, goal.name),
-                            contentDescription = goal.category,
-                            tint = primaryAccent,
-                            modifier = Modifier.size(22.dp)
-                        )
-                    }
-                }
+                Icon(
+                    imageVector = Icons.Rounded.ChevronRight,
+                    contentDescription = null,
+                    tint = SleekTextSecondary,
+                    modifier = Modifier.size(18.dp)
+                )
             }
 
-            // Goal Title
-            Text(
-                text = goal.name,
-                fontSize = 15.sp,
-                fontWeight = FontWeight.Bold,
-                color = SleekTextPrimary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-
-            // Target Date Subtitle
-            Text(
-                text = formattedDate,
-                fontSize = 11.sp,
-                color = SleekTextSecondary
-            )
-
-            // Goal Saved vs Target Amount Row
-            Row(verticalAlignment = Alignment.Bottom) {
+            // Amounts Row: Current Saved (Bold) | Target Amount
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 Text(
                     text = "₹%,.0f".format(goal.currentAmount),
-                    fontSize = 14.sp,
+                    fontSize = 16.sp,
                     fontWeight = FontWeight.Bold,
-                    color = primaryAccent
+                    color = SleekTextPrimary
                 )
                 Text(
-                    text = " of ₹%,.0f".format(goal.targetAmount),
-                    fontSize = 11.sp,
+                    text = "₹%,.0f".format(goal.targetAmount),
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = SleekTextSecondary
+                )
+            }
+
+            // Capsule Progress Bar
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(6.dp)
+                    .clip(RoundedCornerShape(3.dp))
+                    .background(primaryAccent.copy(alpha = 0.15f))
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .fillMaxWidth(progressRatio)
+                        .clip(RoundedCornerShape(3.dp))
+                        .background(primaryAccent)
+                )
+            }
+
+            // Bottom Row: [Days to go] | [Percentage]
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = daysToGo,
+                    fontSize = 12.sp,
                     color = SleekTextSecondary,
-                    fontWeight = FontWeight.Normal
+                    fontWeight = FontWeight.Medium
+                )
+                Text(
+                    text = "$percentInt%",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = SleekTextPrimary
                 )
             }
         }

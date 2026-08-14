@@ -202,12 +202,15 @@ fun FinanceAppScreen(viewModel: FinanceViewModel) {
     var recordedTransactionInfo by remember { mutableStateOf<RecordedTransactionInfo?>(null) }
 
     var activeSettingsSubScreen by remember { mutableStateOf<SettingsSubScreen?>(null) }
+    var showFullScreenSidebar by remember { mutableStateOf(false) }
+    var showQuickShareExportDialog by remember { mutableStateOf(false) }
 
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
 
     val navigateToScreen: (Screen) -> Unit = { selected ->
         activeSettingsSubScreen = null
+        showFullScreenSidebar = false
         if (currentScreen != selected) {
             backStack.add(selected)
             currentScreen = selected
@@ -218,6 +221,7 @@ fun FinanceAppScreen(viewModel: FinanceViewModel) {
     LaunchedEffect(isAppLocked, appPin) {
         if (isAppLocked && !appPin.isNullOrBlank()) {
             drawerState.close()
+            showFullScreenSidebar = false
         }
     }
 
@@ -228,6 +232,8 @@ fun FinanceAppScreen(viewModel: FinanceViewModel) {
 
     // SYSTEM BACK BUTTON HANDLER (Pops navigation stack, closes drawer/settings/dialogs)
     val canHandleBack = (!isAppLocked || appPin.isNullOrBlank()) && (
+            showQuickShareExportDialog ||
+            showFullScreenSidebar ||
             drawerState.isOpen ||
             activeSettingsSubScreen != null ||
             viewingDetailExpense != null ||
@@ -239,6 +245,8 @@ fun FinanceAppScreen(viewModel: FinanceViewModel) {
 
     BackHandler(enabled = canHandleBack) {
         when {
+            showQuickShareExportDialog -> showQuickShareExportDialog = false
+            showFullScreenSidebar -> showFullScreenSidebar = false
             drawerState.isOpen -> scope.launch { drawerState.close() }
             activeSettingsSubScreen != null -> activeSettingsSubScreen = null
             viewingDetailExpense != null -> viewingDetailExpense = null
