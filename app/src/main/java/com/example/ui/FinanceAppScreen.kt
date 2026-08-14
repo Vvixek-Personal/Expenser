@@ -2295,6 +2295,26 @@ fun AnalyticsTab(
 
                     OutlinedButton(
                         onClick = {
+                            DataExporter.exportToJson(
+                                context = context,
+                                expenses = filteredPeriodExpenses,
+                                dateRangeStr = "Period ($selectedTimeFilter)",
+                                typeFilterStr = "All Transactions",
+                                categoryFilterStr = "All Categories"
+                            )
+                            showExportDialog = false
+                        },
+                        border = BorderStroke(1.dp, Color(0xFF8B5CF6)),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Default.Code, contentDescription = null, tint = Color(0xFF8B5CF6), modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Export JSON Document", color = Color(0xFF8B5CF6), fontWeight = FontWeight.Bold)
+                    }
+
+                    OutlinedButton(
+                        onClick = {
                             DataExporter.shareImageReport(
                                 context = context,
                                 expenses = filteredPeriodExpenses,

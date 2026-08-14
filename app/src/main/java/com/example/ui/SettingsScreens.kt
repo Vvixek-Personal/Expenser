@@ -5218,7 +5218,62 @@ fun ExportDataScreen(
                 }
             }
 
-            // EXPORT FORMAT 3: GRAPHIC SUMMARY REPORT
+            // EXPORT FORMAT 3: JSON STRUCTURED DATA
+            Card(
+                colors = CardDefaults.cardColors(containerColor = SleekSurface),
+                border = BorderStroke(1.dp, SleekBorder),
+                shape = RoundedCornerShape(20.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(44.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFF8B5CF6).copy(alpha = 0.15f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Icons.Default.Code, contentDescription = null, tint = Color(0xFF8B5CF6), modifier = Modifier.size(24.dp))
+                        }
+
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("JSON Data Export", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = SleekTextPrimary)
+                            Text("Standard developer & backup JSON schema with itemized ledger array and metrics summary.", fontSize = 11.sp, color = SleekTextSecondary)
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    OutlinedButton(
+                        onClick = {
+                            if (filteredExpenses.isEmpty()) {
+                                Toast.makeText(context, "No transactions found matching the selected filters.", Toast.LENGTH_SHORT).show()
+                            } else {
+                                DataExporter.exportToJson(
+                                    context = context,
+                                    expenses = filteredExpenses,
+                                    dateRangeStr = dateRangeFilter,
+                                    typeFilterStr = typeFilter,
+                                    categoryFilterStr = categoryFilter
+                                )
+                            }
+                        },
+                        shape = RoundedCornerShape(12.dp),
+                        border = BorderStroke(1.5.dp, Color(0xFF8B5CF6)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Default.Code, contentDescription = null, tint = Color(0xFF8B5CF6), modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Export JSON Document", color = Color(0xFF8B5CF6), fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+
+            // EXPORT FORMAT 4: GRAPHIC SUMMARY REPORT
             Card(
                 colors = CardDefaults.cardColors(containerColor = SleekSurface),
                 border = BorderStroke(1.dp, SleekBorder),

@@ -358,6 +358,68 @@ object DataExporter {
         context.startActivity(Intent.createChooser(intent, "Share CSV Statement"))
     }
 
+    fun exportToJson(
+        context: Context,
+        expenses: List<Expense>,
+        dateRangeStr: String,
+        typeFilterStr: String,
+        categoryFilterStr: String
+    ) {
+        val sdf = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
+        val generatedAt = sdf.format(Date())
+
+        val totalIncome = expenses.realIncome()
+        val totalExpense = expenses.realExpense()
+        val netBalance = totalIncome - totalExpense
+
+        val sb = StringBuilder()
+        sb.append("{\n")
+        sb.append("  \"statement\": {\n")
+        sb.append("    \"generated_at\": \"$generatedAt\",\n")
+        sb.append("    \"date_range\": \"$dateRangeStr\",\n")
+        sb.append("    \"type_filter\": \"$typeFilterStr\",\n")
+        sb.append("    \"category_filter\": \"$categoryFilterStr\",\n")
+        sb.append("    \"summary\": {\n")
+        sb.append("      \"total_records\": ${expenses.size},\n")
+        sb.append("      \"total_income\": $totalIncome,\n")
+        sb.append("      \"total_expense\": $totalExpense,\n")
+        sb.append("      \"net_balance\": $netBalance\n")
+        sb.append("    },\n")
+        sb.append("    \"transactions\": [\n")
+
+        expenses.forEachIndexed { index, exp ->
+            val noteEscaped = (exp.note ?: "").replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", " ")
+            val comma = if (index < expenses.size - 1) "," else ""
+            sb.append("      {\n")
+            sb.append("        \"id\": ${exp.id},\n")
+            sb.append("        \"date\": \"${sdf.format(Date(exp.date))}\",\n")
+            sb.append("        \"timestamp\": ${exp.date},\n")
+            sb.append("        \"category\": \"${exp.category.replace("\"", "\\\"")}\",\n")
+            sb.append("        \"amount\": ${exp.amount},\n")
+            sb.append("        \"type\": \"${exp.type}\",\n")
+            sb.append("        \"note\": \"$noteEscaped\"\n")
+            sb.append("      }$comma\n")
+        }
+
+        sb.append("    ]\n")
+        sb.append("  }\n")
+        sb.append("}")
+
+        val cachePath = File(context.cacheDir, "reports")
+        cachePath.mkdirs()
+        val jsonFile = File(cachePath, "finance_statement.json")
+        jsonFile.writeText(sb.toString())
+
+        val uri = FileProvider.getUriForFile(context, "${context.packageName}.provider", jsonFile)
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = "application/json"
+            putExtra(Intent.EXTRA_STREAM, uri)
+            putExtra(Intent.EXTRA_SUBJECT, "Finance JSON Export")
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        context.startActivity(Intent.createChooser(intent, "Share JSON Export"))
+    }
+
     fun shareImageReport(
         context: Context,
         expenses: List<Expense>,
