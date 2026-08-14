@@ -474,10 +474,6 @@ fun FinanceAppScreen(viewModel: FinanceViewModel) {
                     viewModel = viewModel,
                     onBack = { activeSettingsSubScreen = null }
                 )
-                SettingsSubScreen.Currency -> CurrencyScreen(
-                    viewModel = viewModel,
-                    onBack = { activeSettingsSubScreen = null }
-                )
                 SettingsSubScreen.DateTime -> DateTimeScreen(
                     viewModel = viewModel,
                     onBack = { activeSettingsSubScreen = null }
@@ -491,19 +487,6 @@ fun FinanceAppScreen(viewModel: FinanceViewModel) {
                     onBack = { activeSettingsSubScreen = null }
                 )
                 SettingsSubScreen.Budgets -> BudgetSettingsScreen(
-                    viewModel = viewModel,
-                    onBack = { activeSettingsSubScreen = null },
-                    onOpenCurrencySettings = { activeSettingsSubScreen = SettingsSubScreen.Currency }
-                )
-                SettingsSubScreen.SavingsGoals -> SavingsGoalsSettingsScreen(
-                    viewModel = viewModel,
-                    onBack = { activeSettingsSubScreen = null }
-                )
-                SettingsSubScreen.Calculations -> CalculationsScreen(
-                    viewModel = viewModel,
-                    onBack = { activeSettingsSubScreen = null }
-                )
-                SettingsSubScreen.Transactions -> TransactionsSettingsScreen(
                     viewModel = viewModel,
                     onBack = { activeSettingsSubScreen = null }
                 )
@@ -612,6 +595,9 @@ fun DashboardTab(
     val profileImageUri by viewModel.userProfileImageUri.collectAsStateWithLifecycle()
     val currentStreak by viewModel.currentStreak.collectAsStateWithLifecycle()
     val showStreakDialog by viewModel.showStreakDialog.collectAsStateWithLifecycle()
+    val isPrivacyMode by viewModel.privacyModeEnabled.collectAsStateWithLifecycle()
+    val isPrivacyRevealed by viewModel.privacyRevealOverride.collectAsStateWithLifecycle()
+    val shouldHideBalance = isPrivacyMode && !isPrivacyRevealed
 
     if (showStreakDialog) {
         DailyStreakCelebrationDialog(
@@ -854,14 +840,16 @@ fun DashboardTab(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
                         Icon(
                             imageVector = Icons.Default.AccountBalance,
                             contentDescription = null,
                             tint = Color.White.copy(alpha = 0.9f),
                             modifier = Modifier.size(18.dp)
                         )
-                        Spacer(modifier = Modifier.width(6.dp))
                         Text(
                             text = "TOTAL NET BALANCE",
                             style = MaterialTheme.typography.labelMedium,
@@ -869,6 +857,19 @@ fun DashboardTab(
                             fontWeight = FontWeight.Bold,
                             letterSpacing = 1.2.sp
                         )
+                        if (isPrivacyMode) {
+                            IconButton(
+                                onClick = { viewModel.togglePrivacyReveal() },
+                                modifier = Modifier.size(24.dp)
+                            ) {
+                                Icon(
+                                    imageVector = if (shouldHideBalance) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                    contentDescription = "Toggle privacy reveal",
+                                    tint = Color.White.copy(alpha = 0.8f),
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        }
                     }
                     Box(
                         modifier = Modifier
@@ -888,7 +889,7 @@ fun DashboardTab(
                 Spacer(modifier = Modifier.height(8.dp))
 
                 Text(
-                    text = String.format("%s₹%,.2f", if (overallTotalNetBalance >= 0) "" else "-", Math.abs(overallTotalNetBalance)),
+                    text = if (shouldHideBalance) "₹ ••••••" else String.format("%s₹%,.2f", if (overallTotalNetBalance >= 0) "" else "-", Math.abs(overallTotalNetBalance)),
                     style = MaterialTheme.typography.headlineLarge,
                     color = Color.White,
                     fontWeight = FontWeight.Bold,
@@ -908,7 +909,7 @@ fun DashboardTab(
                             modifier = Modifier.size(14.dp)
                         )
                         Text(
-                            text = String.format("Includes ₹%,.0f in Savings Goals", totalSavingsGoalsMoney),
+                            text = if (shouldHideBalance) "Includes ₹•••• in Savings Goals" else String.format("Includes ₹%,.0f in Savings Goals", totalSavingsGoalsMoney),
                             color = Color.White.copy(alpha = 0.85f),
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Medium
@@ -953,7 +954,7 @@ fun DashboardTab(
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
-                                text = String.format("₹%,.0f", totalAllTimeIncome),
+                                text = if (shouldHideBalance) "₹••••" else String.format("₹%,.0f", totalAllTimeIncome),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = Color.White,
                                 fontWeight = FontWeight.Bold
@@ -990,7 +991,7 @@ fun DashboardTab(
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
-                                text = String.format("₹%,.0f", totalAllTimeExpense),
+                                text = if (shouldHideBalance) "₹••••" else String.format("₹%,.0f", totalAllTimeExpense),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = Color.White,
                                 fontWeight = FontWeight.Bold
@@ -7311,26 +7312,41 @@ fun SidebarGroupCard(
     items: List<SidebarMenuItemData>,
     selectedLanguage: String
 ) {
+    if (items.isEmpty()) return
+
     Column(modifier = Modifier.fillMaxWidth()) {
-        Text(
-            text = LanguageManager.tr(sectionTitle, selectedLanguage),
-            style = MaterialTheme.typography.labelMedium,
-            fontWeight = FontWeight.Bold,
-            color = SleekTextSecondary,
-            modifier = Modifier.padding(start = 4.dp, bottom = 8.dp, top = 16.dp)
-        )
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            modifier = Modifier.padding(start = 6.dp, bottom = 8.dp, top = 16.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(6.dp)
+                    .clip(CircleShape)
+                    .background(SleekPrimary)
+            )
+            Text(
+                text = LanguageManager.tr(sectionTitle, selectedLanguage).uppercase(),
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.ExtraBold,
+                color = SleekTextSecondary,
+                letterSpacing = 1.1.sp
+            )
+        }
 
         Card(
             colors = CardDefaults.cardColors(containerColor = SleekSurface),
             border = BorderStroke(1.dp, SleekBorder),
-            shape = RoundedCornerShape(22.dp),
+            shape = RoundedCornerShape(24.dp),
+            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
             modifier = Modifier.fillMaxWidth()
         ) {
             Column(modifier = Modifier.fillMaxWidth()) {
                 items.forEachIndexed { index, item ->
                     var isPressed by remember { mutableStateOf(false) }
                     val scale by animateFloatAsState(
-                        targetValue = if (isPressed) 0.97f else 1.0f,
+                        targetValue = if (isPressed) 0.98f else 1.0f,
                         animationSpec = spring(stiffness = Spring.StiffnessHigh),
                         label = "sidebarPressScale"
                     )
@@ -7345,27 +7361,27 @@ fun SidebarGroupCard(
                                 scaleY = scale
                             }
                             .clickable { item.onClick() }
-                            .padding(16.dp)
+                            .padding(horizontal = 16.dp, vertical = 14.dp)
                     ) {
                         Box(
                             modifier = Modifier
-                                .size(40.dp)
-                                .clip(CircleShape)
+                                .size(42.dp)
+                                .clip(RoundedCornerShape(14.dp))
                                 .background(item.iconBgColor)
-                                .border(1.dp, item.iconColor.copy(alpha = 0.3f), CircleShape),
+                                .border(1.dp, item.iconColor.copy(alpha = 0.25f), RoundedCornerShape(14.dp)),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 imageVector = item.icon,
                                 contentDescription = item.titleKey,
                                 tint = item.iconColor,
-                                modifier = Modifier.size(20.dp)
+                                modifier = Modifier.size(22.dp)
                             )
                         }
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = LanguageManager.tr(item.titleKey, selectedLanguage),
-                                style = MaterialTheme.typography.titleMedium,
+                                style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.SemiBold,
                                 color = SleekTextPrimary,
                                 softWrap = true
@@ -7375,20 +7391,30 @@ fun SidebarGroupCard(
                                 text = LanguageManager.tr(item.subtitleKey, selectedLanguage),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = SleekTextSecondary,
+                                fontSize = 11.5.sp,
+                                lineHeight = 15.sp,
                                 softWrap = true
                             )
                         }
-                        Icon(
-                            imageVector = Icons.Default.ChevronRight,
-                            contentDescription = null,
-                            tint = SleekTextSecondary,
-                            modifier = Modifier.size(20.dp)
-                        )
+                        Box(
+                            modifier = Modifier
+                                .size(28.dp)
+                                .clip(CircleShape)
+                                .background(SleekBorder.copy(alpha = 0.35f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.ChevronRight,
+                                contentDescription = null,
+                                tint = SleekTextSecondary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
                     }
 
                     if (index < items.size - 1) {
                         HorizontalDivider(
-                            color = SleekBorder.copy(alpha = 0.5f),
+                            color = SleekBorder.copy(alpha = 0.45f),
                             modifier = Modifier.padding(horizontal = 16.dp)
                         )
                     }
@@ -7411,141 +7437,13 @@ fun SidebarDrawerContent(
     val selectedLanguage by viewModel.selectedLanguage.collectAsStateWithLifecycle()
     val profileImageUri by viewModel.userProfileImageUri.collectAsStateWithLifecycle()
     val currentStreak by viewModel.currentStreak.collectAsStateWithLifecycle()
+    val isPrivacyMode by viewModel.privacyModeEnabled.collectAsStateWithLifecycle()
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(SleekBg)
-            .statusBarsPadding()
-            .navigationBarsPadding()
-            .verticalScroll(rememberScrollState())
-            .padding(20.dp)
-    ) {
-        // Top Close Row
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = LanguageManager.tr("Settings", selectedLanguage),
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = SleekTextPrimary
-            )
-            IconButton(onClick = onCloseDrawer) {
-                Icon(
-                    imageVector = Icons.Default.Close,
-                    contentDescription = "Close Drawer",
-                    tint = SleekTextSecondary
-                )
-            }
-        }
-        
-        Spacer(modifier = Modifier.height(12.dp))
+    var searchQuery by remember { mutableStateOf("") }
 
-        // 1. User Profile Top Section Card
-        val initials = if (!userName.isNullOrBlank()) {
-            userName!!.split(" ").mapNotNull { it.firstOrNull()?.uppercaseChar() }.joinToString("").take(2)
-        } else "U"
-
-        Card(
-            colors = CardDefaults.cardColors(containerColor = SleekSurface),
-            border = BorderStroke(1.dp, SleekBorder),
-            shape = RoundedCornerShape(24.dp),
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable {
-                    onCloseDrawer()
-                    onOpenSettingsScreen(SettingsSubScreen.PersonalData)
-                }
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(18.dp)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(60.dp)
-                        .clip(CircleShape)
-                        .background(SleekPrimaryContainer),
-                    contentAlignment = Alignment.Center
-                ) {
-                    if (!profileImageUri.isNullOrBlank()) {
-                        AsyncImage(
-                            model = profileImageUri,
-                            contentDescription = "Profile Picture",
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize()
-                        )
-                    } else {
-                        Text(
-                            text = initials,
-                            style = MaterialTheme.typography.titleLarge,
-                            color = SleekOnPrimaryContainer,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
-
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = if (!userName.isNullOrBlank()) userName!! else "Aarav Sharma",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = SleekTextPrimary,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 16.sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-
-                    Spacer(modifier = Modifier.height(4.dp))
-
-                    FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = Color(0xFFFFF7ED),
-                            border = BorderStroke(1.dp, Color(0xFFF97316).copy(alpha = 0.5f))
-                        ) {
-                            Text(
-                                text = "🔥 $currentStreak Day",
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color(0xFFC2410C),
-                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.5.dp)
-                            )
-                        }
-
-                        Text(
-                            text = "Member 2024",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = SleekTextSecondary,
-                            fontSize = 11.sp,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                }
-
-                Icon(
-                    imageVector = Icons.Default.ChevronRight,
-                    contentDescription = "View Profile Page",
-                    tint = SleekTextSecondary,
-                    modifier = Modifier.size(22.dp)
-                )
-            }
-        }
-
-        // Section 1: PROFILE & STREAK
-        SidebarGroupCard(
-            sectionTitle = "ACCOUNT & PROFILE",
-            items = listOf(
+    val allSections = remember(selectedLanguage) {
+        listOf(
+            "ACCOUNT & PROFILE" to listOf(
                 SidebarMenuItemData(
                     icon = Icons.Default.Person,
                     iconColor = Color(0xFF2563EB),
@@ -7569,13 +7467,7 @@ fun SidebarDrawerContent(
                     }
                 )
             ),
-            selectedLanguage = selectedLanguage
-        )
-
-        // Section 2: PREFERENCES & APPEARANCE
-        SidebarGroupCard(
-            sectionTitle = "PREFERENCES & APPEARANCE",
-            items = listOf(
+            "PREFERENCES & APPEARANCE" to listOf(
                 SidebarMenuItemData(
                     icon = Icons.Default.Palette,
                     iconColor = Color(0xFF8B5CF6),
@@ -7597,26 +7489,9 @@ fun SidebarDrawerContent(
                         onCloseDrawer()
                         onOpenSettingsScreen(SettingsSubScreen.Language)
                     }
-                ),
-                SidebarMenuItemData(
-                    icon = Icons.Default.AttachMoney,
-                    iconColor = Color(0xFF16A34A),
-                    iconBgColor = Color(0xFFDCFCE7),
-                    titleKey = "Currency & Rates",
-                    subtitleKey = "Default currency, 100+ global rates & conversion",
-                    onClick = {
-                        onCloseDrawer()
-                        onOpenSettingsScreen(SettingsSubScreen.Currency)
-                    }
                 )
             ),
-            selectedLanguage = selectedLanguage
-        )
-
-        // Section 3: FINANCIAL MANAGEMENT
-        SidebarGroupCard(
-            sectionTitle = "FINANCIAL MANAGEMENT",
-            items = listOf(
+            "FINANCIAL MANAGEMENT" to listOf(
                 SidebarMenuItemData(
                     icon = Icons.Default.ReceiptLong,
                     iconColor = Color(0xFFD97706),
@@ -7638,48 +7513,9 @@ fun SidebarDrawerContent(
                         onCloseDrawer()
                         onOpenSettingsScreen(SettingsSubScreen.Budgets)
                     }
-                ),
-                SidebarMenuItemData(
-                    icon = Icons.Default.Savings,
-                    iconColor = Color(0xFF10B981),
-                    iconBgColor = Color(0xFFD1FAE5),
-                    titleKey = "Savings Goals",
-                    subtitleKey = "Goal preferences, progress & contribution rules",
-                    onClick = {
-                        onCloseDrawer()
-                        onOpenSettingsScreen(SettingsSubScreen.SavingsGoals)
-                    }
-                ),
-                SidebarMenuItemData(
-                    icon = Icons.Default.Calculate,
-                    iconColor = Color(0xFF7C3AED),
-                    iconBgColor = Color(0xFFEDE9FE),
-                    titleKey = "Calculations & Tools",
-                    subtitleKey = "Financial tools, percentages, splits & math",
-                    onClick = {
-                        onCloseDrawer()
-                        onOpenSettingsScreen(SettingsSubScreen.Calculations)
-                    }
-                ),
-                SidebarMenuItemData(
-                    icon = Icons.Default.Receipt,
-                    iconColor = Color(0xFFEC4899),
-                    iconBgColor = Color(0xFFFCE7F3),
-                    titleKey = "Transactions Settings",
-                    subtitleKey = "Default types, categories, receipts & date grouping",
-                    onClick = {
-                        onCloseDrawer()
-                        onOpenSettingsScreen(SettingsSubScreen.Transactions)
-                    }
                 )
             ),
-            selectedLanguage = selectedLanguage
-        )
-
-        // Section 4: CATEGORIES & DATA
-        SidebarGroupCard(
-            sectionTitle = "CATEGORIES & DATA",
-            items = listOf(
+            "CATEGORIES & DATA" to listOf(
                 SidebarMenuItemData(
                     icon = Icons.Default.Category,
                     iconColor = Color(0xFF16A34A),
@@ -7725,13 +7561,7 @@ fun SidebarDrawerContent(
                     }
                 )
             ),
-            selectedLanguage = selectedLanguage
-        )
-
-        // Section 5: SECURITY & ABOUT
-        SidebarGroupCard(
-            sectionTitle = "SECURITY & ABOUT",
-            items = listOf(
+            "SECURITY & ABOUT" to listOf(
                 SidebarMenuItemData(
                     icon = Icons.Default.Lock,
                     iconColor = Color(0xFF8B5CF6),
@@ -7776,9 +7606,257 @@ fun SidebarDrawerContent(
                         onOpenSettingsScreen(SettingsSubScreen.AboutApp)
                     }
                 )
-            ),
-            selectedLanguage = selectedLanguage
+            )
         )
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(SleekBg)
+            .statusBarsPadding()
+            .navigationBarsPadding()
+            .verticalScroll(rememberScrollState())
+            .padding(20.dp)
+    ) {
+        // Top Close & App Brand Header Row
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(32.dp)
+                        .clip(CircleShape)
+                        .background(SleekPrimaryContainer),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Settings,
+                        contentDescription = null,
+                        tint = SleekPrimary,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+                Text(
+                    text = LanguageManager.tr("Settings", selectedLanguage),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = SleekTextPrimary
+                )
+            }
+
+            IconButton(
+                onClick = onCloseDrawer,
+                modifier = Modifier
+                    .size(36.dp)
+                    .clip(CircleShape)
+                    .background(SleekBorder.copy(alpha = 0.4f))
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Close,
+                    contentDescription = "Close Drawer",
+                    tint = SleekTextPrimary,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+        }
+        
+        Spacer(modifier = Modifier.height(14.dp))
+
+        // 1. User Profile Top Section Hero Card
+        val initials = if (!userName.isNullOrBlank()) {
+            userName!!.split(" ").mapNotNull { it.firstOrNull()?.uppercaseChar() }.joinToString("").take(2)
+        } else "U"
+
+        Card(
+            colors = CardDefaults.cardColors(containerColor = SleekSurface),
+            border = BorderStroke(1.dp, SleekBorder),
+            shape = RoundedCornerShape(26.dp),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable {
+                    onCloseDrawer()
+                    onOpenSettingsScreen(SettingsSubScreen.PersonalData)
+                }
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(18.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(62.dp)
+                        .clip(CircleShape)
+                        .background(
+                            Brush.sweepGradient(
+                                listOf(SleekPrimary, SleekPrimaryContainer, SleekPrimary)
+                            )
+                        )
+                        .padding(2.5.dp)
+                        .clip(CircleShape)
+                        .background(SleekPrimaryContainer),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (!profileImageUri.isNullOrBlank()) {
+                        AsyncImage(
+                            model = profileImageUri,
+                            contentDescription = "Profile Picture",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    } else {
+                        Text(
+                            text = initials,
+                            style = MaterialTheme.typography.titleLarge,
+                            color = SleekOnPrimaryContainer,
+                            fontWeight = FontWeight.ExtraBold
+                        )
+                    }
+                }
+
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = if (!userName.isNullOrBlank()) userName!! else "Aarav Sharma",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = SleekTextPrimary,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.5.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = Color(0xFFFFF7ED),
+                            border = BorderStroke(1.dp, Color(0xFFF97316).copy(alpha = 0.5f))
+                        ) {
+                            Text(
+                                text = "🔥 $currentStreak Day Streak",
+                                fontSize = 10.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFFC2410C),
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
+
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = Color(0xFFECFDF5),
+                            border = BorderStroke(1.dp, Color(0xFF10B981).copy(alpha = 0.4f))
+                        ) {
+                            Text(
+                                text = "🛡️ 100% Offline",
+                                fontSize = 10.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF047857),
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
+                }
+
+                Box(
+                    modifier = Modifier
+                        .size(32.dp)
+                        .clip(CircleShape)
+                        .background(SleekBorder.copy(alpha = 0.4f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.ChevronRight,
+                        contentDescription = "View Profile Page",
+                        tint = SleekTextSecondary,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(14.dp))
+
+        // Search Bar for Quick Filtering Settings
+        OutlinedTextField(
+            value = searchQuery,
+            onValueChange = { searchQuery = it },
+            placeholder = {
+                Text(
+                    text = LanguageManager.tr("Search settings...", selectedLanguage),
+                    fontSize = 13.5.sp,
+                    color = SleekTextSecondary
+                )
+            },
+            leadingIcon = {
+                Icon(
+                    imageVector = Icons.Default.Search,
+                    contentDescription = null,
+                    tint = SleekTextSecondary,
+                    modifier = Modifier.size(18.dp)
+                )
+            },
+            trailingIcon = {
+                if (searchQuery.isNotBlank()) {
+                    IconButton(onClick = { searchQuery = "" }) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Clear",
+                            tint = SleekTextSecondary,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
+            },
+            singleLine = true,
+            shape = RoundedCornerShape(16.dp),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedContainerColor = SleekSurface,
+                unfocusedContainerColor = SleekSurface,
+                focusedBorderColor = SleekPrimary,
+                unfocusedBorderColor = SleekBorder
+            ),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(52.dp)
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // Render Filtered Sections
+        allSections.forEach { (sectionTitle, items) ->
+            val filteredItems = if (searchQuery.isBlank()) {
+                items
+            } else {
+                items.filter {
+                    val title = LanguageManager.tr(it.titleKey, selectedLanguage)
+                    val sub = LanguageManager.tr(it.subtitleKey, selectedLanguage)
+                    title.contains(searchQuery, ignoreCase = true) ||
+                    sub.contains(searchQuery, ignoreCase = true)
+                }
+            }
+
+            if (filteredItems.isNotEmpty()) {
+                SidebarGroupCard(
+                    sectionTitle = sectionTitle,
+                    items = filteredItems,
+                    selectedLanguage = selectedLanguage
+                )
+            }
+        }
 
         Spacer(modifier = Modifier.height(24.dp))
         HorizontalDivider(color = SleekBorder)
@@ -7791,7 +7869,7 @@ fun SidebarDrawerContent(
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             Text(
-                text = "Version 1.2.0 (Stable)",
+                text = "Version 1.2.0 (Stable & Secure)",
                 style = MaterialTheme.typography.labelMedium,
                 color = SleekTextSecondary
             )

@@ -140,8 +140,8 @@ private fun AnimatedDockTile(
         label = "tileScale"
     )
 
-    val activePillBg = Color(0xFF0061A4)
-    val activePillBorder = Color(0xFF38BDF8).copy(alpha = 0.8f)
+    val activePillBg = SleekPrimary
+    val activePillBorder = SleekPrimary.copy(alpha = 0.85f)
 
     val containerBg by animateColorAsState(
         targetValue = if (isSelected) activePillBg else Color.Transparent,
@@ -184,8 +184,8 @@ private fun AnimatedDockTile(
                     if (isSelected) {
                         Brush.radialGradient(
                             colors = listOf(
-                                Color(0xFF38BDF8),
-                                Color(0xFF0284C7)
+                                Color.White.copy(alpha = 0.35f),
+                                Color.White.copy(alpha = 0.05f)
                             )
                         )
                     } else {
