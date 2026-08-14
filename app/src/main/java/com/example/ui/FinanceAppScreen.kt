@@ -5581,7 +5581,7 @@ fun CalendarTab(
         temp.before(maxCalendarLimit) || (temp.get(Calendar.MONTH) == maxCalendarLimit.get(Calendar.MONTH) && temp.get(Calendar.YEAR) == maxCalendarLimit.get(Calendar.YEAR))
     }
 
-    val daysOfWeek = listOf("Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat")
+    val daysOfWeek = listOf("SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT")
     var selectedDayOfMonth by remember { mutableStateOf(today.get(Calendar.DAY_OF_MONTH)) }
 
     val selectedDateMillis = remember(activeYear, activeMonth, selectedDayOfMonth) {
@@ -5596,6 +5596,12 @@ fun CalendarTab(
         }.timeInMillis
     }
 
+    val isSelectedDateToday = remember(activeYear, activeMonth, selectedDayOfMonth, today) {
+        today.get(Calendar.YEAR) == activeYear &&
+                today.get(Calendar.MONTH) == activeMonth &&
+                today.get(Calendar.DAY_OF_MONTH) == selectedDayOfMonth
+    }
+
     val selectedDayExpenses = expenses.filter {
         val cal = Calendar.getInstance().apply { timeInMillis = it.date }
         cal.get(Calendar.YEAR) == activeYear &&
@@ -5607,34 +5613,86 @@ fun CalendarTab(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(16.dp)
+            .padding(horizontal = 20.dp, vertical = 16.dp)
     ) {
+        // Top Header: "May 12, 2026"
+        val headerMonthDateStr = remember(activeYear, activeMonth, selectedDayOfMonth) {
+            val cal = Calendar.getInstance().apply {
+                set(Calendar.YEAR, activeYear)
+                set(Calendar.MONTH, activeMonth)
+                set(Calendar.DAY_OF_MONTH, selectedDayOfMonth)
+            }
+            SimpleDateFormat("MMMM d, yyyy", Locale.getDefault()).format(cal.time)
+        }
+
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Column {
-                Text(
-                    text = "Transaction Calendar",
-                    style = MaterialTheme.typography.headlineSmall,
-                    color = SleekTextPrimary,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    text = "Double-tap day to add. Valid until ${SimpleDateFormat("MMM yyyy", Locale.getDefault()).format(maxCalendarLimit.time)}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = SleekTextSecondary
-                )
+            Text(
+                text = headerMonthDateStr,
+                style = MaterialTheme.typography.titleLarge,
+                color = SleekTextPrimary,
+                fontWeight = FontWeight.ExtraBold,
+                fontSize = 22.sp
+            )
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                IconButton(
+                    onClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        navigatedCalendar = Calendar.getInstance().apply {
+                            timeInMillis = navigatedCalendar.timeInMillis
+                            add(Calendar.MONTH, -1)
+                        }
+                        selectedDayOfMonth = 1
+                    },
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.ChevronLeft,
+                        contentDescription = "Previous Month",
+                        tint = SleekTextPrimary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+
+                IconButton(
+                    onClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        if (canGoForward) {
+                            navigatedCalendar = Calendar.getInstance().apply {
+                                timeInMillis = navigatedCalendar.timeInMillis
+                                add(Calendar.MONTH, 1)
+                            }
+                            selectedDayOfMonth = 1
+                        }
+                    },
+                    enabled = canGoForward,
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.ChevronRight,
+                        contentDescription = "Next Month",
+                        tint = if (canGoForward) SleekTextPrimary else SleekTextSecondary.copy(alpha = 0.3f),
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
             }
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(14.dp))
 
+        // Main Calendar Card
         Card(
-            shape = RoundedCornerShape(24.dp),
+            shape = RoundedCornerShape(26.dp),
             colors = CardDefaults.cardColors(containerColor = SleekSurface),
             border = BorderStroke(1.dp, SleekBorder),
+            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
             modifier = Modifier
                 .fillMaxWidth()
                 .pointerInput(canGoForward) {
@@ -5667,71 +5725,29 @@ fun CalendarTab(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(16.dp),
+                    .padding(horizontal = 16.dp, vertical = 20.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
+                // Weekday Headers: SUN MON TUE WED THU FRI SAT
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                    horizontalArrangement = Arrangement.SpaceAround
                 ) {
-                    IconButton(
-                        onClick = {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            navigatedCalendar = Calendar.getInstance().apply {
-                                timeInMillis = navigatedCalendar.timeInMillis
-                                add(Calendar.MONTH, -1)
-                            }
-                            selectedDayOfMonth = 1
-                        }
-                    ) {
-                        Icon(Icons.Default.ChevronLeft, contentDescription = "Prev Month", tint = SleekPrimary)
-                    }
-
-                    Text(
-                        text = SimpleDateFormat("MMMM yyyy", Locale.getDefault()).format(navigatedCalendar.time),
-                        style = MaterialTheme.typography.titleMedium,
-                        color = SleekTextPrimary,
-                        fontWeight = FontWeight.Bold
-                    )
-
-                    IconButton(
-                        onClick = {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            if (canGoForward) {
-                                navigatedCalendar = Calendar.getInstance().apply {
-                                    timeInMillis = navigatedCalendar.timeInMillis
-                                    add(Calendar.MONTH, 1)
-                                }
-                                selectedDayOfMonth = 1
-                            }
-                        },
-                        enabled = canGoForward
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.ChevronRight,
-                            contentDescription = "Next Month",
-                            tint = if (canGoForward) SleekPrimary else SleekTextSecondary.copy(alpha = 0.5f)
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                Row(modifier = Modifier.fillMaxWidth()) {
                     daysOfWeek.forEach { day ->
                         Text(
                             text = day,
                             modifier = Modifier.weight(1f),
                             textAlign = TextAlign.Center,
-                            style = MaterialTheme.typography.labelMedium,
-                            color = SleekTextSecondary,
-                            fontWeight = FontWeight.Bold
+                            style = MaterialTheme.typography.labelSmall,
+                            color = SleekTextSecondary.copy(alpha = 0.8f),
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 11.5.sp,
+                            letterSpacing = 0.8.sp
                         )
                     }
                 }
 
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(14.dp))
 
                 val firstDayCal = Calendar.getInstance().apply {
                     set(Calendar.YEAR, activeYear)
@@ -5742,7 +5758,13 @@ fun CalendarTab(
                 val daysInMonth = firstDayCal.getActualMaximum(Calendar.DAY_OF_MONTH)
                 val dayOffset = firstDayOfWeek - 1
 
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                val prevMonthCal = Calendar.getInstance().apply {
+                    timeInMillis = firstDayCal.timeInMillis
+                    add(Calendar.MONTH, -1)
+                }
+                val daysInPrevMonth = prevMonthCal.getActualMaximum(Calendar.DAY_OF_MONTH)
+
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     for (row in 0 until 6) {
                         Row(modifier = Modifier.fillMaxWidth()) {
                             for (col in 0 until 7) {
@@ -5761,39 +5783,46 @@ fun CalendarTab(
                                                 c.get(Calendar.MONTH) == activeMonth &&
                                                 c.get(Calendar.DAY_OF_MONTH) == dayNum
                                     }
-                                    val dayIncome = dayExpenses.realIncome()
-                                    val dayExpense = dayExpenses.realExpense()
-                                    val hasTransactions = dayExpenses.isNotEmpty()
-                                    val isProfit = hasTransactions && dayIncome >= dayExpense
-                                    val isLoss = hasTransactions && dayExpense > dayIncome
+
+                                    // Build dots for transactions: Max 3 dots total (no extra symbols).
+                                    // Green for Income (#10B981), Red for Expense (#EF4444).
+                                    val incomesCount = dayExpenses.count { it.type == "INCOME" }
+                                    val expensesCount = dayExpenses.count { it.type != "INCOME" }
+
+                                    val dotColors = remember(incomesCount, expensesCount, dayExpenses.size) {
+                                        if (dayExpenses.isEmpty()) {
+                                            emptyList<Color>()
+                                        } else if (incomesCount > 0 && expensesCount > 0) {
+                                            when {
+                                                dayExpenses.size == 2 -> listOf(Color(0xFF10B981), Color(0xFFEF4444))
+                                                incomesCount >= 2 && expensesCount >= 1 -> listOf(Color(0xFF10B981), Color(0xFF10B981), Color(0xFFEF4444))
+                                                expensesCount >= 2 && incomesCount >= 1 -> listOf(Color(0xFF10B981), Color(0xFFEF4444), Color(0xFFEF4444))
+                                                else -> listOf(Color(0xFF10B981), Color(0xFFEF4444))
+                                            }
+                                        } else if (incomesCount > 0) {
+                                            List(minOf(3, incomesCount)) { Color(0xFF10B981) }
+                                        } else {
+                                            List(minOf(3, expensesCount)) { Color(0xFFEF4444) }
+                                        }
+                                    }
 
                                     Box(
                                         modifier = Modifier
                                             .weight(1f)
                                             .aspectRatio(1f)
                                             .padding(2.dp)
-                                            .clip(RoundedCornerShape(12.dp))
+                                            .clip(RoundedCornerShape(14.dp))
                                             .background(
                                                 when {
-                                                    isSelected && isProfit -> Color(0xFF10B981)
-                                                    isSelected && isLoss -> Color(0xFFEF4444)
-                                                    isSelected -> SleekPrimary
-                                                    isProfit -> Color(0xFF10B981).copy(alpha = 0.2f)
-                                                    isLoss -> Color(0xFFEF4444).copy(alpha = 0.2f)
-                                                    isToday -> SleekPrimaryContainer.copy(alpha = 0.5f)
+                                                    isSelected -> Color(0xFF4F46E5) // Sleek Indigo accent
+                                                    isToday -> SleekPrimaryContainer.copy(alpha = 0.45f)
                                                     else -> Color.Transparent
                                                 }
                                             )
                                             .border(
-                                                width = 1.dp,
-                                                color = when {
-                                                    isSelected -> Color.Transparent
-                                                    isProfit -> Color(0xFF10B981).copy(alpha = 0.6f)
-                                                    isLoss -> Color(0xFFEF4444).copy(alpha = 0.6f)
-                                                    isToday -> SleekPrimary
-                                                    else -> Color.Transparent
-                                                },
-                                                shape = RoundedCornerShape(12.dp)
+                                                width = if (isToday && !isSelected) 1.2.dp else 0.dp,
+                                                color = if (isToday && !isSelected) Color(0xFF4F46E5) else Color.Transparent,
+                                                shape = RoundedCornerShape(14.dp)
                                             )
                                             .combinedClickable(
                                                 onClick = {
@@ -5813,38 +5842,67 @@ fun CalendarTab(
                                             ),
                                         contentAlignment = Alignment.Center
                                     ) {
-                                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                        Column(
+                                            horizontalAlignment = Alignment.CenterHorizontally,
+                                            verticalArrangement = Arrangement.Center
+                                        ) {
                                             Text(
                                                 text = dayNum.toString(),
                                                 style = MaterialTheme.typography.bodyMedium,
-                                                fontWeight = if (isSelected || isToday) FontWeight.Bold else FontWeight.Normal,
+                                                fontWeight = if (isSelected || isToday) FontWeight.Bold else FontWeight.Medium,
+                                                fontSize = 14.sp,
                                                 color = when {
                                                     isSelected -> Color.White
-                                                    isProfit -> Color(0xFF10B981)
-                                                    isLoss -> Color(0xFFEF4444)
                                                     isToday -> SleekPrimary
                                                     else -> SleekTextPrimary
                                                 }
                                             )
-                                            if (hasTransactions) {
-                                                Box(
-                                                    modifier = Modifier
-                                                        .padding(top = 2.dp)
-                                                        .size(5.dp)
-                                                        .clip(CircleShape)
-                                                        .background(
-                                                            when {
-                                                                isSelected -> Color.White
-                                                                isProfit -> Color(0xFF10B981)
-                                                                else -> Color(0xFFEF4444)
-                                                            }
+
+                                            // Small Circles row indicating transactions (Max 3 dots, no + symbol)
+                                            if (dotColors.isNotEmpty()) {
+                                                Row(
+                                                    horizontalArrangement = Arrangement.spacedBy(2.5.dp),
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    modifier = Modifier.padding(top = 2.dp)
+                                                ) {
+                                                    dotColors.forEach { dotColor ->
+                                                        Box(
+                                                            modifier = Modifier
+                                                                .size(4.dp)
+                                                                .clip(CircleShape)
+                                                                .background(
+                                                                    if (isSelected) Color.White.copy(alpha = 0.9f) else dotColor
+                                                                )
                                                         )
-                                                )
+                                                    }
+                                                }
+                                            } else {
+                                                Spacer(modifier = Modifier.height(6.dp))
                                             }
                                         }
                                     }
                                 } else {
-                                    Box(modifier = Modifier.weight(1f).aspectRatio(1f))
+                                    // Trailing / Leading muted days
+                                    val displayMutedDay = if (dayNum <= 0) {
+                                        daysInPrevMonth + dayNum
+                                    } else {
+                                        dayNum - daysInMonth
+                                    }
+
+                                    Box(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .aspectRatio(1f)
+                                            .padding(2.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = displayMutedDay.toString(),
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = SleekTextSecondary.copy(alpha = 0.28f),
+                                            fontSize = 13.sp
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -5853,131 +5911,244 @@ fun CalendarTab(
             }
         }
 
-        Spacer(modifier = Modifier.height(20.dp))
+        Spacer(modifier = Modifier.height(24.dp))
+
+        // Lower Header Section: "TUESDAY 12, 2026" and "Today" tag
+        val selectedFullDayStr = remember(activeYear, activeMonth, selectedDayOfMonth) {
+            val cal = Calendar.getInstance().apply {
+                set(Calendar.YEAR, activeYear)
+                set(Calendar.MONTH, activeMonth)
+                set(Calendar.DAY_OF_MONTH, selectedDayOfMonth)
+            }
+            SimpleDateFormat("EEEE d, yyyy", Locale.getDefault()).format(cal.time).uppercase()
+        }
 
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            val selectedDateStr = SimpleDateFormat("MMM dd, yyyy", Locale.getDefault()).format(Date(selectedDateMillis))
             Text(
-                text = "Transactions on $selectedDateStr",
+                text = selectedFullDayStr,
                 style = MaterialTheme.typography.titleMedium,
                 color = SleekTextPrimary,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.ExtraBold,
+                fontSize = 16.sp,
+                letterSpacing = 0.5.sp
             )
 
-            Button(
-                onClick = { onAddExpenseForDate(selectedDateMillis) },
-                colors = ButtonDefaults.buttonColors(containerColor = SleekPrimary),
-                shape = RoundedCornerShape(12.dp),
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                modifier = Modifier.height(32.dp)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Icon(Icons.Default.Add, contentDescription = null, tint = Color.White, modifier = Modifier.size(14.dp))
-                Spacer(modifier = Modifier.width(4.dp))
-                Text("Add", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                if (isSelectedDateToday) {
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = SleekPrimaryContainer.copy(alpha = 0.6f),
+                        border = BorderStroke(1.dp, SleekPrimary.copy(alpha = 0.3f))
+                    ) {
+                        Text(
+                            text = "Today",
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = SleekPrimary,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.5.dp)
+                        )
+                    }
+                }
+
+                IconButton(
+                    onClick = { onAddExpenseForDate(selectedDateMillis) },
+                    modifier = Modifier
+                        .size(32.dp)
+                        .clip(CircleShape)
+                        .background(SleekPrimary)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Add,
+                        contentDescription = "Add Transaction",
+                        tint = Color.White,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
             }
         }
 
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(14.dp))
 
+        // Timeline Transactions Section
         if (selectedDayExpenses.isEmpty()) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 32.dp),
-                contentAlignment = Alignment.Center
+            Card(
+                colors = CardDefaults.cardColors(containerColor = SleekSurface),
+                border = BorderStroke(1.dp, SleekBorder),
+                shape = RoundedCornerShape(20.dp),
+                modifier = Modifier.fillMaxWidth()
             ) {
-                Text(
-                    text = "No transactions logged for this day.",
-                    color = SleekTextSecondary,
-                    style = MaterialTheme.typography.bodyMedium
-                )
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 36.dp, horizontal = 20.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(52.dp)
+                            .clip(CircleShape)
+                            .background(SleekBorder.copy(alpha = 0.4f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.ReceiptLong,
+                            contentDescription = null,
+                            tint = SleekTextSecondary,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        text = "No transactions recorded for this day",
+                        color = SleekTextPrimary,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 14.5.sp
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "Tap + to record income or expense",
+                        color = SleekTextSecondary,
+                        fontSize = 12.sp
+                    )
+                }
             }
         } else {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                selectedDayExpenses.forEach { expense ->
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                selectedDayExpenses.forEachIndexed { index, expense ->
                     val isIncome = expense.type == "INCOME"
                     val catColor = if (isIncome) {
-                        when (expense.category) {
-                            "Salary" -> Color(0xFF10B981)
-                            "Freelance" -> Color(0xFF0D9488)
-                            "Investments" -> Color(0xFF3B82F6)
-                            "Gifts" -> Color(0xFFEC4899)
-                            else -> Color(0xFF10B981)
-                        }
+                        Color(0xFF10B981)
                     } else {
                         categoryColors[expense.category] ?: SleekPrimary
                     }
 
+                    val timeFormatter = remember { SimpleDateFormat("h:mm a", Locale.getDefault()) }
+                    val timeStr = timeFormatter.format(Date(expense.date))
+
                     Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(16.dp))
-                            .background(SleekSurface)
-                            .border(1.dp, SleekBorder, RoundedCornerShape(16.dp))
-                            .clickable { onEditExpense(expense) }
-                            .padding(14.dp),
+                        modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Box(
+                        // Timeline Column: Left Indicator Ring & Vertical Guide Line
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
                             modifier = Modifier
-                                .size(36.dp)
-                                .clip(CircleShape)
-                                .background(catColor.copy(alpha = 0.15f)),
-                            contentAlignment = Alignment.Center
+                                .width(28.dp)
+                                .padding(end = 6.dp)
                         ) {
-                            Text(
-                                text = getCategoryEmoji(expense.category, categoryIcons),
-                                fontSize = 16.sp
+                            Box(
+                                modifier = Modifier
+                                    .size(16.dp)
+                                    .clip(CircleShape)
+                                    .background(Color.Transparent)
+                                    .border(
+                                        width = 2.5.dp,
+                                        color = if (isIncome) Color(0xFF10B981) else Color(0xFFF59E0B),
+                                        shape = CircleShape
+                                    )
                             )
                         }
 
-                        Spacer(modifier = Modifier.width(12.dp))
-
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = expense.note ?: (if (isIncome) "Income" else "Expense"),
-                                style = MaterialTheme.typography.titleSmall,
-                                color = SleekTextPrimary,
-                                fontWeight = FontWeight.Bold,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            Text(
-                                text = expense.category,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = SleekTextSecondary
-                            )
-                        }
-
-                        Text(
-                            text = String.format("%s₹%,.2f", if (isIncome) "+" else "-", expense.amount),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = if (isIncome) Color(0xFF10B981) else ExpenseRed,
-                            fontWeight = FontWeight.Bold
-                        )
-
-                        Spacer(modifier = Modifier.width(12.dp))
-
-                        IconButton(
-                            onClick = { onDeleteExpense(expense) },
-                            modifier = Modifier.size(24.dp)
+                        // Transaction Item Card
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = SleekSurface),
+                            border = BorderStroke(1.dp, SleekBorder),
+                            shape = RoundedCornerShape(20.dp),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+                            modifier = Modifier
+                                .weight(1f)
+                                .clickable { onEditExpense(expense) }
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.Delete,
-                                contentDescription = "Delete",
-                                tint = ExpenseRed.copy(alpha = 0.7f),
-                                modifier = Modifier.size(16.dp)
-                            )
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(44.dp)
+                                        .clip(RoundedCornerShape(14.dp))
+                                        .background(catColor.copy(alpha = 0.15f))
+                                        .border(1.dp, catColor.copy(alpha = 0.25f), RoundedCornerShape(14.dp)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = getCategoryEmoji(expense.category, categoryIcons),
+                                        fontSize = 20.sp
+                                    )
+                                }
+
+                                Spacer(modifier = Modifier.width(12.dp))
+
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = if (!expense.note.isNullOrBlank()) expense.note else expense.category,
+                                        style = MaterialTheme.typography.titleSmall,
+                                        color = SleekTextPrimary,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 14.5.sp,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text(
+                                        text = "$timeStr • ${expense.category}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = SleekTextSecondary,
+                                        fontSize = 11.5.sp
+                                    )
+                                }
+
+                                Column(
+                                    horizontalAlignment = Alignment.End
+                                ) {
+                                    Text(
+                                        text = String.format("%s₹%,.2f", if (isIncome) "+" else "-", expense.amount),
+                                        style = MaterialTheme.typography.titleMedium,
+                                        color = if (isIncome) Color(0xFF10B981) else SleekTextPrimary,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        fontSize = 15.sp
+                                    )
+                                    Text(
+                                        text = if (isIncome) "Income" else "Expense",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = SleekTextSecondary,
+                                        fontSize = 10.5.sp
+                                    )
+                                }
+
+                                Spacer(modifier = Modifier.width(6.dp))
+
+                                IconButton(
+                                    onClick = { onDeleteExpense(expense) },
+                                    modifier = Modifier.size(24.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Delete,
+                                        contentDescription = "Delete",
+                                        tint = ExpenseRed.copy(alpha = 0.6f),
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                            }
                         }
                     }
                 }
             }
         }
-        Spacer(modifier = Modifier.height(110.dp))
+
+        Spacer(modifier = Modifier.height(120.dp))
     }
 }
 
