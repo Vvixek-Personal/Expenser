@@ -131,10 +131,10 @@ fun AddExpenseDialog(
     }
 
     val totalIncome = remember(expenses) {
-        expenses.filter { it.type == "INCOME" }.sumOf { it.amount }
+        expenses.realIncome()
     }
     val totalExpenses = remember(expenses) {
-        expenses.filter { it.type != "INCOME" }.sumOf { it.amount }
+        expenses.realExpense()
     }
     val totalLockedInGoals = remember(savingsGoals) {
         savingsGoals.sumOf { it.currentAmount }

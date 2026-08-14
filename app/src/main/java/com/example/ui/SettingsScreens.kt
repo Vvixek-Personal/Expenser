@@ -3763,7 +3763,7 @@ fun BudgetSettingsScreen(
                 get(Calendar.MONTH) == m && get(Calendar.YEAR) == y
             }
         }.groupBy { it.category }
-            .mapValues { entry -> entry.value.sumOf { it.amount } }
+            .mapValues { entry -> entry.value.realExpense() }
     }
 
     Column(
@@ -6142,8 +6142,8 @@ fun ExportDataScreen(
         }
     }
 
-    val totalIncome = remember(filteredExpenses) { filteredExpenses.filter { it.type == "INCOME" }.sumOf { it.amount } }
-    val totalExpense = remember(filteredExpenses) { filteredExpenses.filter { it.type != "INCOME" }.sumOf { it.amount } }
+    val totalIncome = remember(filteredExpenses) { filteredExpenses.realIncome() }
+    val totalExpense = remember(filteredExpenses) { filteredExpenses.realExpense() }
     val netBalance = totalIncome - totalExpense
 
     Column(

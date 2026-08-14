@@ -89,8 +89,8 @@ object DataExporter {
         )
 
         // Calculate Totals
-        val totalIncome = expenses.filter { it.type == "INCOME" }.sumOf { it.amount }
-        val totalExpense = expenses.filter { it.type != "INCOME" }.sumOf { it.amount }
+        val totalIncome = expenses.realIncome()
+        val totalExpense = expenses.realExpense()
         val netBalance = totalIncome - totalExpense
         val totalCashFlown = totalIncome + totalExpense
         val totalTxCount = expenses.size
@@ -212,8 +212,8 @@ object DataExporter {
             y += 20f
         } else {
             catGroups.forEach { (catName, items) ->
-                val catInc = items.filter { it.type == "INCOME" }.sumOf { it.amount }
-                val catExp = items.filter { it.type != "INCOME" }.sumOf { it.amount }
+                val catInc = items.realIncome()
+                val catExp = items.realExpense()
                 val catTotal = catInc + catExp
                 val sharePct = if (totalVolume > 0) (catTotal / totalVolume) * 100 else 0.0
                 val mainType = if (catInc >= catExp) "Income" else "Expense"
@@ -403,8 +403,8 @@ object DataExporter {
         canvas.drawText("Categories: ${categoryFilterStr.take(50)}", 50f, 118f, subTitlePaint)
 
         // Totals
-        val totalIncome = expenses.filter { it.type == "INCOME" }.sumOf { it.amount }
-        val totalExpense = expenses.filter { it.type != "INCOME" }.sumOf { it.amount }
+        val totalIncome = expenses.realIncome()
+        val totalExpense = expenses.realExpense()
         val netBalance = totalIncome - totalExpense
 
         // KPI Grid Cards (Y: 140..220)
@@ -460,8 +460,8 @@ object DataExporter {
             canvas.drawText("No category distribution available for selected portion.", 70f, distY + 20f, subTitlePaint)
         } else {
             catGroups.entries.take(4).forEach { entry ->
-                val catInc = entry.value.filter { it.type == "INCOME" }.sumOf { it.amount }
-                val catExp = entry.value.filter { it.type != "INCOME" }.sumOf { it.amount }
+                val catInc = entry.value.realIncome()
+                val catExp = entry.value.realExpense()
                 val catSum = catInc + catExp
                 val share = if (totalVolume > 0) (catSum / totalVolume) * 100 else 0.0
 

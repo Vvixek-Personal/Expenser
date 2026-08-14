@@ -625,30 +625,24 @@ fun DashboardTab(
     val currentYear = currentCalendar.get(Calendar.YEAR)
 
     // All-time income, expense, and savings goals totals for Total Net Balance
-    val totalAllTimeIncome = remember(expenses) {
-        expenses.filter { it.type == "INCOME" }.sumOf { it.amount }
-    }
-    val totalAllTimeExpense = remember(expenses) {
-        expenses.filter { it.type != "INCOME" }.sumOf { it.amount }
-    }
-    val totalSavingsGoalsMoney = remember(savingsGoals) {
-        savingsGoals.sumOf { it.currentAmount }
-    }
-    val overallTotalNetBalance = (totalAllTimeIncome - totalAllTimeExpense) + totalSavingsGoalsMoney
+    val totalAllTimeIncome = remember(expenses) { expenses.realIncome() }
+    val totalAllTimeExpense = remember(expenses) { expenses.realExpense() }
+    val totalSavingsGoalsMoney = remember(savingsGoals) { savingsGoals.totalSavings() }
+    val overallTotalNetBalance = remember(expenses, savingsGoals) { expenses.netWorth(savingsGoals) }
 
     // Filter current month expenses
     val thisMonthExpenses = expenses.filter {
         val cal = Calendar.getInstance().apply { timeInMillis = it.date }
-        cal.get(Calendar.MONTH) == currentMonth && cal.get(Calendar.YEAR) == currentYear && it.type != "INCOME"
+        cal.get(Calendar.MONTH) == currentMonth && cal.get(Calendar.YEAR) == currentYear && it.type != "INCOME" && it.category != "Locked Savings"
     }
-    val thisMonthTotal = thisMonthExpenses.sumOf { it.amount }
+    val thisMonthTotal = thisMonthExpenses.realExpense()
 
     // Filter current month incomes
     val thisMonthIncomes = expenses.filter {
         val cal = Calendar.getInstance().apply { timeInMillis = it.date }
-        cal.get(Calendar.MONTH) == currentMonth && cal.get(Calendar.YEAR) == currentYear && it.type == "INCOME"
+        cal.get(Calendar.MONTH) == currentMonth && cal.get(Calendar.YEAR) == currentYear && it.type == "INCOME" && it.category != "Goal Withdrawal"
     }
-    val thisMonthIncomeTotal = thisMonthIncomes.sumOf { it.amount }
+    val thisMonthIncomeTotal = thisMonthIncomes.realIncome()
 
     // Last month expenses
     val lastMonthCalendar = Calendar.getInstance().apply {
@@ -659,9 +653,9 @@ fun DashboardTab(
 
     val lastMonthExpenses = expenses.filter {
         val cal = Calendar.getInstance().apply { timeInMillis = it.date }
-        cal.get(Calendar.MONTH) == lastMonth && cal.get(Calendar.YEAR) == lastMonthYear && it.type != "INCOME"
+        cal.get(Calendar.MONTH) == lastMonth && cal.get(Calendar.YEAR) == lastMonthYear && it.type != "INCOME" && it.category != "Locked Savings"
     }
-    val lastMonthTotal = lastMonthExpenses.sumOf { it.amount }
+    val lastMonthTotal = lastMonthExpenses.realExpense()
 
     // Difference Calculation
     val diffPct = if (lastMonthTotal > 0) {
@@ -2207,8 +2201,8 @@ fun AnalyticsTab(
         }
     }
 
-    val expenseList = remember(filteredPeriodExpenses) { filteredPeriodExpenses.filter { it.type != "INCOME" } }
-    val incomeList = remember(filteredPeriodExpenses) { filteredPeriodExpenses.filter { it.type == "INCOME" } }
+    val expenseList = remember(filteredPeriodExpenses) { filteredPeriodExpenses.filter { it.type != "INCOME" && it.category != "Locked Savings" } }
+    val incomeList = remember(filteredPeriodExpenses) { filteredPeriodExpenses.filter { it.type == "INCOME" && it.category != "Goal Withdrawal" } }
 
     val totalSpent = remember(expenseList) { expenseList.sumOf { it.amount } }
     val totalIncome = remember(incomeList) { incomeList.sumOf { it.amount } }
@@ -2626,8 +2620,8 @@ fun NetWorthOverTimeChartCard(
             )
         } else {
             val points = mutableListOf<Pair<Long, Double>>()
-            val totalIncome = sortedExpenses.filter { it.type == "INCOME" }.sumOf { it.amount }
-            val totalExpense = sortedExpenses.filter { it.type != "INCOME" }.sumOf { it.amount }
+            val totalIncome = sortedExpenses.realIncome()
+            val totalExpense = sortedExpenses.realExpense()
             val initialNetWorth = if (accounts.isNotEmpty()) {
                 totalAccountAssets - (totalIncome - totalExpense)
             } else {
@@ -2904,7 +2898,7 @@ fun CategoryBudgetProgressCard(
         val m = cal.get(Calendar.MONTH)
         val y = cal.get(Calendar.YEAR)
         allExpenses.filter {
-            it.type != "INCOME" &&
+            it.type != "INCOME" && it.category != "Locked Savings" &&
             Calendar.getInstance().apply { timeInMillis = it.date }.run {
                 get(Calendar.MONTH) == m && get(Calendar.YEAR) == y
             }
@@ -3403,8 +3397,8 @@ fun IncomeExpenseLineGraphCard(
             val endTime = startTime + timeStep
 
             val bucketTxns = expenses.filter { it.date in startTime..endTime }
-            val inc = bucketTxns.filter { it.type == "INCOME" }.sumOf { it.amount }
-            val exp = bucketTxns.filter { it.type != "INCOME" }.sumOf { it.amount }
+            val inc = bucketTxns.realIncome()
+            val exp = bucketTxns.realExpense()
             val dateLabel = sdf.format(java.util.Date(startTime))
 
             GraphPoint(
@@ -3721,15 +3715,15 @@ fun CashAtEndOfMonthChartCard(
             cal.timeInMillis = exp.date
             cal.get(Calendar.YEAR) < currentYear
         }
-        var runningNet = priorTxns.filter { it.type == "INCOME" }.sumOf { it.amount } - priorTxns.filter { it.type != "INCOME" }.sumOf { it.amount }
+        var runningNet = priorTxns.realIncome() - priorTxns.realExpense()
 
         (0..11).map { monthIdx ->
             val monthTxns = allExpenses.filter { exp ->
                 cal.timeInMillis = exp.date
                 cal.get(Calendar.YEAR) == currentYear && cal.get(Calendar.MONTH) == monthIdx
             }
-            val inc = monthTxns.filter { it.type == "INCOME" }.sumOf { it.amount }
-            val exp = monthTxns.filter { it.type != "INCOME" }.sumOf { it.amount }
+            val inc = monthTxns.realIncome()
+            val exp = monthTxns.realExpense()
             runningNet += (inc - exp)
             runningNet
         }
@@ -4129,8 +4123,8 @@ fun CategoryIncomeExpenseBarChartCard(
         animPlayed = true
     }
 
-    val expenseList = remember(expenses) { expenses.filter { it.type != "INCOME" } }
-    val incomeList = remember(expenses) { expenses.filter { it.type == "INCOME" } }
+    val expenseList = remember(expenses) { expenses.filter { it.type != "INCOME" && it.category != "Locked Savings" } }
+    val incomeList = remember(expenses) { expenses.filter { it.type == "INCOME" && it.category != "Goal Withdrawal" } }
 
     val totalExpense = remember(expenseList) { expenseList.sumOf { it.amount } }
     val totalIncome = remember(incomeList) { incomeList.sumOf { it.amount } }
@@ -4444,9 +4438,9 @@ fun CategoryPieChartCard(
 
     val filteredList = remember(expenses, selectedType) {
         if (selectedType == "INCOME") {
-            expenses.filter { it.type == "INCOME" && it.amount > 0 }
+            expenses.filter { it.type == "INCOME" && it.category != "Goal Withdrawal" && it.amount > 0 }
         } else {
-            expenses.filter { it.type != "INCOME" && it.amount > 0 }
+            expenses.filter { it.type != "INCOME" && it.category != "Locked Savings" && it.amount > 0 }
         }
     }
 
@@ -4805,10 +4799,10 @@ private fun AddExpenseDialogOld(
     var amountStr by remember { mutableStateOf("") }
 
     val totalIncome = remember(expenses) {
-        expenses.filter { it.type == "INCOME" }.sumOf { it.amount }
+        expenses.realIncome()
     }
     val totalExpenses = remember(expenses) {
-        expenses.filter { it.type != "INCOME" }.sumOf { it.amount }
+        expenses.realExpense()
     }
     val availableBalance = (totalIncome - totalExpenses).coerceAtLeast(0.0)
 
@@ -5235,13 +5229,13 @@ fun EditExpenseDialog(
     var amountStr by remember { mutableStateOf(expense.amount.toString()) }
 
     val otherExpenses = remember(expenses, expense) {
-        expenses.filter { it.id != expense.id && it.type != "INCOME" }.sumOf { it.amount }
+        expenses.filter { it.id != expense.id }.realExpense()
     }
     val totalIncome = remember(expenses, expense, amountStr, type) {
         if (expense.type == "INCOME") {
-            expenses.filter { it.id != expense.id && it.type == "INCOME" }.sumOf { it.amount } + (if (type == "INCOME") (amountStr.toDoubleOrNull() ?: 0.0) else 0.0)
+            expenses.filter { it.id != expense.id }.realIncome() + (if (type == "INCOME") (amountStr.toDoubleOrNull() ?: 0.0) else 0.0)
         } else {
-            expenses.filter { it.type == "INCOME" }.sumOf { it.amount }
+            expenses.realIncome()
         }
     }
 
@@ -5746,8 +5740,8 @@ fun CalendarTab(
                                                 c.get(Calendar.MONTH) == activeMonth &&
                                                 c.get(Calendar.DAY_OF_MONTH) == dayNum
                                     }
-                                    val dayIncome = dayExpenses.filter { it.type == "INCOME" }.sumOf { it.amount }
-                                    val dayExpense = dayExpenses.filter { it.type != "INCOME" }.sumOf { it.amount }
+                                    val dayIncome = dayExpenses.realIncome()
+                                    val dayExpense = dayExpenses.realExpense()
                                     val hasTransactions = dayExpenses.isNotEmpty()
                                     val isProfit = hasTransactions && dayIncome >= dayExpense
                                     val isLoss = hasTransactions && dayExpense > dayIncome

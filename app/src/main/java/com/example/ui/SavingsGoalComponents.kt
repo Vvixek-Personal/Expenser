@@ -620,8 +620,8 @@ fun SavingGoalsFullScreen(
         // Goal Detail & Quick Deposit Sheet
         val expenses by viewModel.expenses.collectAsStateWithLifecycle()
         val availableNetBalance = remember(expenses) {
-            val inc = expenses.filter { it.type == "INCOME" }.sumOf { it.amount }
-            val exp = expenses.filter { it.type != "INCOME" }.sumOf { it.amount }
+            val inc = expenses.realIncome()
+            val exp = expenses.realExpense()
             (inc - exp).coerceAtLeast(0.0)
         }
 

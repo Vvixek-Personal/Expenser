@@ -1360,14 +1360,12 @@ class FinanceViewModel(
 
     fun getAvailableNetBalance(): Double {
         val allExp = expenses.value
-        val totalInc = allExp.filter { it.type == "INCOME" }.sumOf { it.amount }
-        val totalExp = allExp.filter { it.type != "INCOME" }.sumOf { it.amount }
-        val goalsMoney = savingsGoals.value.sumOf { it.currentAmount }
-        val rawBalance = (totalInc - totalExp) + goalsMoney
+        // Cash on hand (all income minus all expenses, including savings transfers)
+        val rawBalance = allExp.availableCash()
 
-        // GST Auto-Tax Reserve: set aside a % of all-time income for tax,
-        // so it never shows as "available" to spend.
-        val gstReserve = if (_isGstEnabled.value) totalInc * (_gstRatePercent.value / 100.0) else 0.0
+        // GST Auto-Tax Reserve: set aside a % of true all-time income for tax
+        val trueIncome = allExp.realIncome()
+        val gstReserve = if (_isGstEnabled.value) trueIncome * (_gstRatePercent.value / 100.0) else 0.0
 
         // Monthly Safe Amount: a fixed emergency buffer that's never counted
         // as available, regardless of income/expense flow.
@@ -1380,16 +1378,12 @@ class FinanceViewModel(
     // for showing "Total Net Balance" on the dashboard as-is, separate from
     // what's actually safe/available to spend.
     fun getRawNetBalance(): Double {
-        val allExp = expenses.value
-        val totalInc = allExp.filter { it.type == "INCOME" }.sumOf { it.amount }
-        val totalExp = allExp.filter { it.type != "INCOME" }.sumOf { it.amount }
-        val goalsMoney = savingsGoals.value.sumOf { it.currentAmount }
-        return (totalInc - totalExp) + goalsMoney
+        return expenses.value.netWorth(savingsGoals.value)
     }
 
     fun getGstReserveAmount(): Double {
         if (!_isGstEnabled.value) return 0.0
-        val totalInc = expenses.value.filter { it.type == "INCOME" }.sumOf { it.amount }
+        val totalInc = expenses.value.realIncome()
         return totalInc * (_gstRatePercent.value / 100.0)
     }
 
@@ -1635,8 +1629,8 @@ class FinanceViewModel(
         viewModelScope.launch {
             val advice = try {
                 val allExp = expenses.value
-                val totalInc = allExp.filter { it.type == "INCOME" }.sumOf { it.amount }
-                val totalExp = allExp.filter { it.type != "INCOME" }.sumOf { it.amount }
+                val totalInc = allExp.realIncome()
+                val totalExp = allExp.realExpense()
                 val context = "User Income: ₹$totalInc, Total Expenses: ₹$totalExp, Categories: ${allCategories.value.joinToString()}"
                 
                 GeminiClient.getFinancialAdvice(
@@ -1658,10 +1652,10 @@ class FinanceViewModel(
         viewModelScope.launch {
             val report = try {
                 val allExp = expenses.value
-                val totalInc = allExp.filter { it.type == "INCOME" }.sumOf { it.amount }
-                val totalExp = allExp.filter { it.type != "INCOME" }.sumOf { it.amount }
+                val totalInc = allExp.realIncome()
+                val totalExp = allExp.realExpense()
                 val net = totalInc - totalExp
-                val topCat = allExp.filter { it.type != "INCOME" }.groupBy { it.category }.mapValues { entry -> entry.value.sumOf { it.amount } }.maxByOrNull { it.value }
+                val topCat = allExp.filter { it.type != "INCOME" && it.category != "Locked Savings" }.groupBy { it.category }.mapValues { entry -> entry.value.sumOf { it.amount } }.maxByOrNull { it.value }
 
                 val prompt = "Perform an AI Financial Audit for the user. Income: ₹$totalInc, Expenses: ₹$totalExp, Net Balance: ₹$net, Top Spending Category: ${topCat?.key ?: "None"} (₹${topCat?.value ?: 0.0}). Provide 3 actionable tips."
                 GeminiClient.getFinancialAdvice(prompt = prompt, systemPrompt = "You are a senior financial auditor.")
@@ -1692,13 +1686,13 @@ class FinanceViewModel(
                     set(Calendar.MILLISECOND, 0)
                 }.timeInMillis
 
-                val todayExpenses = allExp.filter { it.date >= startOfToday && it.type != "INCOME" }
-                val todayTotal = todayExpenses.sumOf { it.amount }
+                val todayExpenses = allExp.filter { it.date >= startOfToday && it.type != "INCOME" && it.category != "Locked Savings" }
+                val todayTotal = todayExpenses.realExpense()
 
                 val startOf7Days = System.currentTimeMillis() - 7 * 24 * 3600 * 1000L
-                val weekExpenses = allExp.filter { it.date >= startOf7Days && it.type != "INCOME" }
-                val weekTotal = weekExpenses.sumOf { it.amount }
-                val weekIncome = allExp.filter { it.date >= startOf7Days && it.type == "INCOME" }.sumOf { it.amount }
+                val weekExpenses = allExp.filter { it.date >= startOf7Days && it.type != "INCOME" && it.category != "Locked Savings" }
+                val weekTotal = weekExpenses.realExpense()
+                val weekIncome = allExp.filter { it.date >= startOf7Days }.realIncome()
 
                 val topCategoryWeek = weekExpenses.groupBy { it.category }
                     .mapValues { entry -> entry.value.sumOf { it.amount } }
