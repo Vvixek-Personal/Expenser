@@ -38,6 +38,9 @@ import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.semantics.Role
+import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -763,27 +766,12 @@ fun DashboardTab(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Surface(
+                // 🔥 Streak Flame Logo (replaces text pill as requested)
+                StreakFlameLogo(
+                    streakCount = currentStreak,
                     onClick = { viewModel.triggerShowStreakDialog() },
-                    shape = RoundedCornerShape(20.dp),
-                    color = Color(0xFFFFF7ED),
-                    border = BorderStroke(1.dp, Color(0xFFF97316)),
-                    shadowElevation = 1.dp
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
-                    ) {
-                        Text("🔥", fontSize = 13.sp)
-                        Text(
-                            text = "$currentStreak Day Streak",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFFC2410C)
-                        )
-                    }
-                }
+                    modifier = Modifier.testTag("dashboard_streak_flame_badge")
+                )
 
                 IconButton(
                     onClick = onAddExpenseClick,
@@ -6364,6 +6352,194 @@ fun EditNameDialog(
 }
 
 // ==========================================
+// 🔥 CUSTOM STREAK FLAME LOGO (AS REQUESTED)
+// ==========================================
+@Composable
+fun StreakFlameLogo(
+    streakCount: Int,
+    modifier: Modifier = Modifier,
+    size: androidx.compose.ui.unit.Dp = 44.dp,
+    onClick: (() -> Unit)? = null
+) {
+    val haptic = LocalHapticFeedback.current
+    val isLarge = size > 60.dp
+    val width = if (isLarge) size * 0.86f else 42.dp
+    val height = if (isLarge) size else 48.dp
+    val cornerRadius = if (isLarge) 28.dp else 14.dp
+
+    Box(
+        modifier = modifier
+            .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
+            .clip(RoundedCornerShape(cornerRadius + 2.dp))
+            .clickable(
+                enabled = onClick != null,
+                role = Role.Button,
+                onClick = {
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    onClick?.invoke()
+                }
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        Surface(
+            shape = RoundedCornerShape(cornerRadius),
+            color = Color(0xFF13121D),
+            border = BorderStroke(if (isLarge) 2.dp else 1.dp, Color(0xFF2B2844)),
+            shadowElevation = if (isLarge) 8.dp else 2.dp,
+            modifier = Modifier.size(width = width, height = height)
+        ) {
+            Canvas(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = if (isLarge) 12.dp else 4.dp, vertical = if (isLarge) 10.dp else 3.dp)
+            ) {
+                val w = this.size.width
+                val h = this.size.height
+
+                // Top Right Spark (small diamond)
+                val spark1 = Path().apply {
+                    val cx = 0.54f * w
+                    val cy = 0.08f * h
+                    val r = 0.042f * minOf(w, h)
+                    moveTo(cx, cy - r)
+                    lineTo(cx + r, cy)
+                    lineTo(cx, cy + r)
+                    lineTo(cx - r, cy)
+                    close()
+                }
+                drawPath(spark1, color = Color(0xFFFFB703))
+
+                // Top Left Spark (larger diamond)
+                val spark2 = Path().apply {
+                    val cx = 0.40f * w
+                    val cy = 0.15f * h
+                    val r = 0.060f * minOf(w, h)
+                    moveTo(cx, cy - r)
+                    lineTo(cx + r, cy)
+                    lineTo(cx, cy + r)
+                    lineTo(cx - r, cy)
+                    close()
+                }
+                drawPath(spark2, color = Color(0xFFFFB703))
+
+                // Outer Flame Body
+                val outerFlame = Path().apply {
+                    val tipX = 0.52f * w
+                    val tipY = 0.22f * h
+                    moveTo(tipX, tipY)
+                    // Left contour swooping down to notch
+                    cubicTo(
+                        0.45f * w, 0.28f * h,
+                        0.36f * w, 0.35f * h,
+                        0.34f * w, 0.42f * h
+                    )
+                    // Notch curve on left
+                    cubicTo(
+                        0.32f * w, 0.44f * h,
+                        0.28f * w, 0.45f * h,
+                        0.27f * w, 0.52f * h
+                    )
+                    // Left belly swelling down
+                    cubicTo(
+                        0.25f * w, 0.62f * h,
+                        0.26f * w, 0.76f * h,
+                        0.34f * w, 0.85f * h
+                    )
+                    // Bottom curve cradling base
+                    cubicTo(
+                        0.42f * w, 0.90f * h,
+                        0.58f * w, 0.90f * h,
+                        0.66f * w, 0.85f * h
+                    )
+                    // Right belly swelling up
+                    cubicTo(
+                        0.74f * w, 0.76f * h,
+                        0.75f * w, 0.62f * h,
+                        0.74f * w, 0.52f * h
+                    )
+                    // Right convex curve back to tip
+                    cubicTo(
+                        0.73f * w, 0.40f * h,
+                        0.63f * w, 0.28f * h,
+                        tipX, tipY
+                    )
+                    close()
+                }
+                drawPath(outerFlame, color = Color(0xFFFF7A00))
+
+                // Inner Flame Core
+                val innerFlame = Path().apply {
+                    val tipX = 0.51f * w
+                    val tipY = 0.53f * h
+                    moveTo(tipX, tipY)
+                    cubicTo(
+                        0.43f * w, 0.64f * h,
+                        0.43f * w, 0.75f * h,
+                        0.48f * w, 0.81f * h
+                    )
+                    cubicTo(
+                        0.50f * w, 0.83f * h,
+                        0.52f * w, 0.83f * h,
+                        0.54f * w, 0.81f * h
+                    )
+                    cubicTo(
+                        0.59f * w, 0.75f * h,
+                        0.59f * w, 0.64f * h,
+                        tipX, tipY
+                    )
+                    close()
+                }
+                drawPath(innerFlame, color = Color(0xFFFFC700))
+
+                // Streak count text at bottom
+                val streakStr = streakCount.toString()
+                drawIntoCanvas { canvas ->
+                    val nativeCanvas = canvas.nativeCanvas
+                    val textSize = when {
+                        streakStr.length <= 2 -> 0.32f * h
+                        streakStr.length == 3 -> 0.25f * h
+                        else -> 0.20f * h
+                    }
+                    val textY = 0.88f * h
+
+                    val typeface = try {
+                        android.graphics.Typeface.create("sans-serif-rounded", android.graphics.Typeface.BOLD)
+                    } catch (e: Exception) {
+                        android.graphics.Typeface.DEFAULT_BOLD
+                    }
+
+                    // Cutout stroke paint (background color punch-out effect)
+                    val strokePaint = android.graphics.Paint().apply {
+                        isAntiAlias = true
+                        color = android.graphics.Color.parseColor("#13121D")
+                        style = android.graphics.Paint.Style.STROKE
+                        strokeWidth = 0.16f * textSize
+                        strokeJoin = android.graphics.Paint.Join.ROUND
+                        strokeCap = android.graphics.Paint.Cap.ROUND
+                        this.textSize = textSize
+                        this.typeface = typeface
+                        textAlign = android.graphics.Paint.Align.CENTER
+                    }
+
+                    // Pure white fill paint
+                    val fillPaint = android.graphics.Paint().apply {
+                        isAntiAlias = true
+                        color = android.graphics.Color.WHITE
+                        style = android.graphics.Paint.Style.FILL
+                        this.textSize = textSize
+                        this.typeface = typeface
+                        textAlign = android.graphics.Paint.Align.CENTER
+                    }
+
+                    nativeCanvas.drawText(streakStr, 0.50f * w, textY, strokePaint)
+                    nativeCanvas.drawText(streakStr, 0.50f * w, textY, fillPaint)
+                }
+            }
+        }
+    }
+}
+
+// ==========================================
 // DAILY STREAK CELEBRATION ANIMATED DIALOG
 // ==========================================
 @Composable
@@ -6391,16 +6567,6 @@ fun DailyStreakCelebrationDialog(
             repeatMode = RepeatMode.Reverse
         ),
         label = "badge_scale"
-    )
-
-    val flameScale by infiniteTransition.animateFloat(
-        initialValue = 0.9f,
-        targetValue = 1.15f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(600, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "flame_scale"
     )
 
     Dialog(
@@ -6451,74 +6617,15 @@ fun DailyStreakCelebrationDialog(
                         }
                     }
 
-                    // Outer Red Ring & Pulsing Inner Badge
-                    Box(
-                        modifier = Modifier
-                            .size(170.dp)
-                            .graphicsLayer {
-                                scaleX = badgeScale
-                                scaleY = badgeScale
-                            }
-                            .clip(CircleShape)
-                            .background(Color(0xFFFEF2F2))
-                            .border(6.dp, Color(0xFFEF4444), CircleShape)
-                            .border(10.dp, Color(0xFFFEE2E2), CircleShape),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center
-                        ) {
-                            // Streak Number at top of badge
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(Color(0xFFDC2626))
-                                    .padding(horizontal = 14.dp, vertical = 3.dp)
-                            ) {
-                                Text(
-                                    text = "$streakCount",
-                                    fontSize = 24.sp,
-                                    fontWeight = FontWeight.Black,
-                                    color = Color.White
-                                )
-                            }
-
-                            Spacer(modifier = Modifier.height(4.dp))
-
-                            // Laurel & Burning Flame
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.Center
-                            ) {
-                                Text(
-                                    text = "🌿",
-                                    fontSize = 24.sp,
-                                    modifier = Modifier.graphicsLayer { scaleX = -1f }
-                                )
-                                Text(
-                                    text = "🔥",
-                                    fontSize = 44.sp,
-                                    modifier = Modifier.graphicsLayer {
-                                        scaleX = flameScale
-                                        scaleY = flameScale
-                                    }
-                                )
-                                Text(
-                                    text = "🌿",
-                                    fontSize = 24.sp
-                                )
-                            }
-
-                            Text(
-                                text = "STREAK",
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.ExtraBold,
-                                color = Color(0xFF991B1B),
-                                letterSpacing = 1.sp
-                            )
+                    // Central Streak Flame Logo
+                    StreakFlameLogo(
+                        streakCount = streakCount,
+                        size = 140.dp,
+                        modifier = Modifier.graphicsLayer {
+                            scaleX = badgeScale
+                            scaleY = badgeScale
                         }
-                    }
+                    )
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))
