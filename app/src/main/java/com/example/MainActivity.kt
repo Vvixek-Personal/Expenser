@@ -12,7 +12,7 @@ import com.example.ui.FinanceViewModel
 import com.example.ui.FinanceViewModelFactory
 import com.example.ui.theme.MyApplicationTheme
 
-class MainActivity : ComponentActivity() {
+class MainActivity : BaseActivity() {
     private val viewModel: FinanceViewModel by viewModels {
         val database = FinanceDatabase.getDatabase(applicationContext)
         val dao = database.financeDao()

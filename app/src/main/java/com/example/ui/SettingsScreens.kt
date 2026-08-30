@@ -828,20 +828,39 @@ fun AppearanceScreen(
             Text("TEXT SIZE PREFERENCE", style = MaterialTheme.typography.labelMedium, color = SleekTextSecondary, fontWeight = FontWeight.Bold)
             Spacer(modifier = Modifier.height(8.dp))
 
+            val context = androidx.compose.ui.platform.LocalContext.current
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf("Small", "Medium", "Large").forEach { option ->
-                    val selected = textSize == option
+                listOf("Small", "Normal", "Large", "Extra Large").forEach { option ->
+                    val selected = textSize == option || (textSize == "Medium" && option == "Normal")
                     OutlinedButton(
-                        onClick = { viewModel.updateTextSizeOption(option) },
+                        onClick = {
+                            val targetOption = if (option == "Medium") "Normal" else option
+                            if (textSize != targetOption) {
+                                viewModel.updateTextSizeOption(targetOption)
+                                val intent = context.packageManager.getLaunchIntentForPackage(context.packageName)
+                                intent?.addFlags(android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP or android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_CLEAR_TASK)
+                                context.startActivity(intent)
+                                if (context is android.app.Activity) {
+                                    context.finish()
+                                }
+                            }
+                        },
                         modifier = Modifier.weight(1f),
                         shape = RoundedCornerShape(12.dp),
+                        contentPadding = PaddingValues(horizontal = 4.dp),
                         colors = ButtonDefaults.outlinedButtonColors(
                             containerColor = if (selected) SleekPrimary.copy(alpha = 0.15f) else SleekSurface,
                             contentColor = if (selected) SleekPrimary else SleekTextPrimary
                         ),
                         border = BorderStroke(1.dp, if (selected) SleekPrimary else SleekBorder)
                     ) {
-                        Text(option, fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal)
+                        Text(
+                            text = option, 
+                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+                            fontSize = 11.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
                     }
                 }
             }

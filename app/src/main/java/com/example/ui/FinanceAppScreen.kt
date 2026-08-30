@@ -202,15 +202,12 @@ fun FinanceAppScreen(viewModel: FinanceViewModel) {
     var recordedTransactionInfo by remember { mutableStateOf<RecordedTransactionInfo?>(null) }
 
     var activeSettingsSubScreen by remember { mutableStateOf<SettingsSubScreen?>(null) }
-    var showFullScreenSidebar by remember { mutableStateOf(false) }
-    var showQuickShareExportDialog by remember { mutableStateOf(false) }
 
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
 
     val navigateToScreen: (Screen) -> Unit = { selected ->
         activeSettingsSubScreen = null
-        showFullScreenSidebar = false
         if (currentScreen != selected) {
             backStack.add(selected)
             currentScreen = selected
@@ -221,7 +218,6 @@ fun FinanceAppScreen(viewModel: FinanceViewModel) {
     LaunchedEffect(isAppLocked, appPin) {
         if (isAppLocked && !appPin.isNullOrBlank()) {
             drawerState.close()
-            showFullScreenSidebar = false
         }
     }
 
@@ -232,8 +228,6 @@ fun FinanceAppScreen(viewModel: FinanceViewModel) {
 
     // SYSTEM BACK BUTTON HANDLER (Pops navigation stack, closes drawer/settings/dialogs)
     val canHandleBack = (!isAppLocked || appPin.isNullOrBlank()) && (
-            showQuickShareExportDialog ||
-            showFullScreenSidebar ||
             drawerState.isOpen ||
             activeSettingsSubScreen != null ||
             viewingDetailExpense != null ||
@@ -245,8 +239,6 @@ fun FinanceAppScreen(viewModel: FinanceViewModel) {
 
     BackHandler(enabled = canHandleBack) {
         when {
-            showQuickShareExportDialog -> showQuickShareExportDialog = false
-            showFullScreenSidebar -> showFullScreenSidebar = false
             drawerState.isOpen -> scope.launch { drawerState.close() }
             activeSettingsSubScreen != null -> activeSettingsSubScreen = null
             viewingDetailExpense != null -> viewingDetailExpense = null
@@ -1057,14 +1049,6 @@ fun DashboardTab(
         )
 
         Spacer(modifier = Modifier.height(16.dp))
-
-        // Dynamic Small Fluid Wave Budget Status Bar
-        SmallFluidBudgetBar(
-            thisMonthTotal = thisMonthTotal,
-            monthlyBudget = monthlyBudget
-        )
-
-        Spacer(modifier = Modifier.height(24.dp))
 
         // Recent Activity List Header
         Row(
@@ -2157,13 +2141,7 @@ fun AnalyticsTab(
     val userName by viewModel.userName.collectAsStateWithLifecycle()
     val profileImageUri by viewModel.userProfileImageUri.collectAsStateWithLifecycle()
 
-    val dailyInsight by viewModel.dailySpendingInsight.collectAsStateWithLifecycle()
-    val isInsightLoading by viewModel.isInsightLoading.collectAsStateWithLifecycle()
-    val insightLastUpdated by viewModel.insightLastUpdated.collectAsStateWithLifecycle()
 
-    LaunchedEffect(Unit) {
-        viewModel.generateDailySpendingInsight(forceRefresh = false)
-    }
 
     var selectedTimeFilter by remember { mutableStateOf("7D") }
     var showExportDialog by remember { mutableStateOf(false) }
@@ -2450,16 +2428,6 @@ fun AnalyticsTab(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // ✨ GEMINI-POWERED DAILY SPENDING INSIGHT CARD
-        DailySpendingInsightCard(
-            insight = dailyInsight,
-            isLoading = isInsightLoading,
-            lastUpdated = insightLastUpdated,
-            onRefresh = { viewModel.generateDailySpendingInsight(forceRefresh = true) }
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
         // Metrics Overview Cards Row (App Default Style)
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -2569,56 +2537,14 @@ fun AnalyticsTab(
 
         val currencySymbol by viewModel.selectedCurrencySymbol.collectAsStateWithLifecycle()
         val accounts by viewModel.accounts.collectAsStateWithLifecycle()
-        val budgets by viewModel.budgets.collectAsStateWithLifecycle()
 
-        // 📈 1. ANIMATED GRAPH FOR INCOME AND EXPENSE
-        IncomeExpenseLineGraphCard(
-            expenses = filteredPeriodExpenses,
-            selectedTimeFilter = selectedTimeFilter
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // 💎 1.5 NET WORTH OVER TIME CHART CARD
+        // 💎 NET WORTH OVER TIME CHART CARD
         NetWorthOverTimeChartCard(
-            allExpenses = allExpenses,
+            allExpenses = filteredPeriodExpenses,
             accounts = accounts,
             selectedTimeFilter = selectedTimeFilter,
             currencySymbol = currencySymbol
         )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // 💵 CASH AT END OF THE MONTH CHART CARD
-        CashAtEndOfMonthChartCard(
-            allExpenses = allExpenses,
-            currencySymbol = currencySymbol
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // 📊 2. BAR CHART FOR CATEGORY OVER INCOME AND EXPENSE
-        CategoryIncomeExpenseBarChartCard(
-            expenses = filteredPeriodExpenses
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // 🥧 3. PIE CHART / DONUT CHART
-        CategoryPieChartCard(
-            expenses = filteredPeriodExpenses
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // 🎯 4. CATEGORY BUDGET PROGRESS & TRACKING CARD
-        CategoryBudgetProgressCard(
-            viewModel = viewModel,
-            budgets = budgets,
-            allExpenses = allExpenses,
-            currencySymbol = currencySymbol
-        )
-
         Spacer(modifier = Modifier.height(110.dp))
     }
 }
@@ -2908,1664 +2834,12 @@ fun NetWorthOverTimeChartCard(
     }
 }
 
-// ==========================================
-// 🎯 CATEGORY BUDGET PROGRESS CARD
-// ==========================================
-@Composable
-fun CategoryBudgetProgressCard(
-    viewModel: FinanceViewModel,
-    budgets: List<Budget>,
-    allExpenses: List<Expense>,
-    currencySymbol: String
-) {
-    var showAddCategoryBudgetDialog by remember { mutableStateOf(false) }
-    var selectedCategoryForBudget by remember { mutableStateOf("Food") }
-    var categoryBudgetInput by remember { mutableStateOf("") }
-
-    val currentMonthCategorySpent = remember(allExpenses) {
-        val cal = Calendar.getInstance()
-        val m = cal.get(Calendar.MONTH)
-        val y = cal.get(Calendar.YEAR)
-        allExpenses.filter {
-            it.type != "INCOME" && it.category != "Locked Savings" &&
-            Calendar.getInstance().apply { timeInMillis = it.date }.run {
-                get(Calendar.MONTH) == m && get(Calendar.YEAR) == y
-            }
-        }.groupBy { it.category }
-            .mapValues { entry -> entry.value.sumOf { it.amount } }
-    }
-
-    Card(
-        colors = CardDefaults.cardColors(containerColor = SleekSurface),
-        shape = RoundedCornerShape(22.dp),
-        border = BorderStroke(1.dp, SleekBorder),
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Column(modifier = Modifier.padding(18.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(38.dp)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(Color(0xFF8B5CF6).copy(alpha = 0.12f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Category,
-                            contentDescription = null,
-                            tint = Color(0xFF8B5CF6),
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-                    Column {
-                        Text(
-                            text = "Category Budget Progress",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = SleekTextPrimary,
-                            fontSize = 15.sp
-                        )
-                        Text(
-                            text = "Real-time spending vs monthly budget limits",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = SleekTextSecondary,
-                            fontSize = 11.sp
-                        )
-                    }
-                }
-
-                IconButton(
-                    onClick = {
-                        selectedCategoryForBudget = "Food"
-                        categoryBudgetInput = ""
-                        showAddCategoryBudgetDialog = true
-                    },
-                    modifier = Modifier
-                        .size(34.dp)
-                        .clip(CircleShape)
-                        .background(SleekPrimary.copy(alpha = 0.12f))
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Add,
-                        contentDescription = "Set Budget",
-                        tint = SleekPrimary,
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(14.dp))
-
-            if (budgets.isEmpty()) {
-                Surface(
-                    shape = RoundedCornerShape(14.dp),
-                    color = SleekPrimaryContainer.copy(alpha = 0.08f),
-                    border = BorderStroke(1.dp, SleekBorder),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(
-                        modifier = Modifier.padding(16.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.AccountBalanceWallet,
-                            contentDescription = null,
-                            tint = SleekPrimary,
-                            modifier = Modifier.size(28.dp)
-                        )
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Text("No Category Budgets Configured", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = SleekTextPrimary)
-                        Text("Tap '+' to set category limits and track actual spending against budgets.", fontSize = 11.sp, color = SleekTextSecondary, textAlign = TextAlign.Center)
-                    }
-                }
-            } else {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    for (b in budgets) {
-                        val spent = currentMonthCategorySpent[b.category] ?: 0.0
-                        val limit = b.amountLimit.coerceAtLeast(1.0)
-                        val progress = (spent / limit).coerceIn(0.0, 1.2).toFloat()
-                        val isOver = spent > limit
-                        val isNear = progress >= 0.8f && !isOver
-
-                        val barColor = when {
-                            isOver -> Color(0xFFEF4444)
-                            isNear -> Color(0xFFF59E0B)
-                            else -> Color(0xFF10B981)
-                        }
-
-                        Surface(
-                            shape = RoundedCornerShape(14.dp),
-                            color = SleekPrimaryContainer.copy(alpha = 0.06f),
-                            border = BorderStroke(1.dp, SleekBorder),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Column(modifier = Modifier.padding(12.dp)) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                    ) {
-                                        Text(b.category, fontWeight = FontWeight.Bold, fontSize = 13.sp, color = SleekTextPrimary)
-                                        Surface(
-                                            shape = RoundedCornerShape(6.dp),
-                                            color = barColor.copy(alpha = 0.15f)
-                                        ) {
-                                            Text(
-                                                text = if (isOver) "Exceeded" else if (isNear) "Near Limit" else "On Track",
-                                                fontSize = 9.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                color = barColor,
-                                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
-                                            )
-                                        }
-                                    }
-
-                                    Text(
-                                        text = "$currencySymbol${String.format(Locale.US, "%,.0f", spent)} / $currencySymbol${String.format(Locale.US, "%,.0f", b.amountLimit)}",
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = SleekTextPrimary
-                                    )
-                                }
-
-                                Spacer(modifier = Modifier.height(6.dp))
-
-                                LinearProgressIndicator(
-                                    progress = { (progress / 1.0f).coerceIn(0f, 1f) },
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(7.dp)
-                                        .clip(RoundedCornerShape(4.dp)),
-                                    color = barColor,
-                                    trackColor = SleekBorder.copy(alpha = 0.5f)
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    if (showAddCategoryBudgetDialog) {
-        val catList = listOf("Food", "Shopping", "Entertainment", "Transport", "Bills", "Utilities", "Housing", "Health", "Education", "Other")
-
-        AlertDialog(
-            onDismissRequest = { showAddCategoryBudgetDialog = false },
-            title = {
-                Text("Set Category Spending Limit", fontWeight = FontWeight.Bold, color = SleekTextPrimary)
-            },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text("Select a category and define a monthly spending limit:", fontSize = 12.sp, color = SleekTextSecondary)
-
-                    @OptIn(ExperimentalLayoutApi::class)
-                    FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        catList.forEach { cat ->
-                            val selected = selectedCategoryForBudget.equals(cat, ignoreCase = true)
-                            Surface(
-                                shape = RoundedCornerShape(8.dp),
-                                color = if (selected) SleekPrimary else SleekSurface,
-                                border = BorderStroke(1.dp, if (selected) SleekPrimary else SleekBorder),
-                                modifier = Modifier.clickable { selectedCategoryForBudget = cat }
-                            ) {
-                                Text(
-                                    text = cat,
-                                    fontSize = 11.sp,
-                                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-                                    color = if (selected) Color.White else SleekTextPrimary,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp)
-                                )
-                            }
-                        }
-                    }
-
-                    OutlinedTextField(
-                        value = categoryBudgetInput,
-                        onValueChange = { categoryBudgetInput = it },
-                        label = { Text("Monthly Limit ($currencySymbol)") },
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        val limitVal = categoryBudgetInput.toDoubleOrNull()
-                        if (limitVal != null && limitVal > 0) {
-                            viewModel.setCategoryBudget(selectedCategoryForBudget, limitVal)
-                            showAddCategoryBudgetDialog = false
-                        }
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = SleekPrimary),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Text("Save Budget", color = Color.White, fontWeight = FontWeight.Bold)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showAddCategoryBudgetDialog = false }) {
-                    Text("Cancel", color = SleekTextSecondary)
-                }
-            },
-            containerColor = SleekSurface,
-            shape = RoundedCornerShape(20.dp)
-        )
-    }
-}
-
-// ==========================================
-// ✨ GEMINI DAILY SPENDING INSIGHT CARD
-// ==========================================
-@Composable
-fun DailySpendingInsightCard(
-    insight: String?,
-    isLoading: Boolean,
-    lastUpdated: Long?,
-    onRefresh: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val infiniteTransition = rememberInfiniteTransition(label = "ai_rot_trans")
-    val rotationAnim by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 360f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1200, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "ai_rot"
-    )
-
-    Card(
-        colors = CardDefaults.cardColors(containerColor = SleekSurface),
-        shape = RoundedCornerShape(22.dp),
-        border = BorderStroke(1.5.dp, Brush.horizontalGradient(
-            colors = listOf(
-                SleekPrimary.copy(alpha = 0.5f),
-                Color(0xFF8B5CF6).copy(alpha = 0.5f),
-                Color(0xFFEC4899).copy(alpha = 0.3f)
-            )
-        )),
-        modifier = modifier.fillMaxWidth()
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(38.dp)
-                            .clip(CircleShape)
-                            .background(
-                                Brush.linearGradient(
-                                    colors = listOf(
-                                        Color(0xFF6366F1),
-                                        Color(0xFF8B5CF6),
-                                        Color(0xFFEC4899)
-                                    )
-                                )
-                            ),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.AutoAwesome,
-                            contentDescription = "Gemini AI Advisor",
-                            tint = Color.White,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-
-                    Column {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            Text(
-                                text = "Daily Spending Insight",
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 15.sp,
-                                color = SleekTextPrimary
-                            )
-                            Surface(
-                                shape = RoundedCornerShape(6.dp),
-                                color = Color(0xFF8B5CF6).copy(alpha = 0.15f)
-                            ) {
-                                Text(
-                                    text = "AI Advisor",
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color(0xFF8B5CF6),
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                )
-                            }
-                        }
-                        Text(
-                            text = if (lastUpdated != null) {
-                                val cal = Calendar.getInstance().apply { timeInMillis = lastUpdated }
-                                "Updated today at %02d:%02d".format(cal.get(Calendar.HOUR_OF_DAY), cal.get(Calendar.MINUTE))
-                            } else "Powered by Gemini 3.5",
-                            fontSize = 11.sp,
-                            color = SleekTextSecondary
-                        )
-                    }
-                }
-
-                IconButton(
-                    onClick = onRefresh,
-                    enabled = !isLoading,
-                    modifier = Modifier
-                        .size(36.dp)
-                        .clip(CircleShape)
-                        .background(SleekBg)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Refresh,
-                        contentDescription = "Refresh Insight",
-                        tint = SleekPrimary,
-                        modifier = Modifier
-                            .size(18.dp)
-                            .graphicsLayer {
-                                if (isLoading) rotationZ = rotationAnim
-                            }
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            AnimatedContent(
-                targetState = isLoading to insight,
-                label = "insight_content"
-            ) { (loading, text) ->
-                if (loading && text == null) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(SleekBg)
-                            .padding(12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(18.dp),
-                            strokeWidth = 2.5.dp,
-                            color = SleekPrimary
-                        )
-                        Text(
-                            text = "Analyzing today's financial activity with Gemini...",
-                            fontSize = 13.sp,
-                            color = SleekTextSecondary,
-                            fontStyle = FontStyle.Italic
-                        )
-                    }
-                } else if (!text.isNullOrBlank()) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(14.dp))
-                            .background(
-                                Brush.verticalGradient(
-                                    colors = listOf(
-                                        SleekPrimary.copy(alpha = 0.06f),
-                                        Color(0xFF8B5CF6).copy(alpha = 0.04f)
-                                    )
-                                )
-                            )
-                            .border(1.dp, SleekPrimary.copy(alpha = 0.12f), RoundedCornerShape(14.dp))
-                            .padding(14.dp)
-                    ) {
-                        Text(
-                            text = text,
-                            fontSize = 13.5.sp,
-                            lineHeight = 20.sp,
-                            color = SleekTextPrimary,
-                            fontWeight = FontWeight.Medium
-                        )
-                    }
-                } else {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(SleekBg)
-                            .padding(12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(
-                            text = "Tap refresh to generate today's spending insight.",
-                            fontSize = 13.sp,
-                            color = SleekTextSecondary
-                        )
-                        TextButton(onClick = onRefresh) {
-                            Text("Generate", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = SleekPrimary)
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-// ==========================================
-// 📈 1. ANIMATED DUAL LINE GRAPH (INCOME VS EXPENSE)
-// ==========================================
-@Composable
-fun IncomeExpenseLineGraphCard(
-    expenses: List<Expense>,
-    selectedTimeFilter: String,
-    modifier: Modifier = Modifier
-) {
-    var selectedIndex by remember { mutableStateOf<Int?>(null) }
-    var animPlayed by remember { mutableStateOf(false) }
-
-    val animProgress by animateFloatAsState(
-        targetValue = if (animPlayed) 1f else 0f,
-        animationSpec = tween(durationMillis = 850, easing = FastOutSlowInEasing),
-        label = "line_graph_anim"
-    )
-
-    LaunchedEffect(expenses, selectedTimeFilter) {
-        animPlayed = false
-        animPlayed = true
-        selectedIndex = null
-    }
-
-    // Aggregate data into time buckets
-    val chartData = remember(expenses, selectedTimeFilter) {
-        val calendar = Calendar.getInstance()
-        val now = calendar.timeInMillis
-        val days = when (selectedTimeFilter) {
-            "7D" -> 7
-            "30D", "1M" -> 30
-            "6M" -> 180
-            "1Y" -> 365
-            else -> 14
-        }
-
-        val pointCount = if (days <= 7) 7 else if (days <= 30) 10 else 12
-        val timeStep = (days * 24 * 3600 * 1000L) / pointCount
-
-        val sdf = java.text.SimpleDateFormat(
-            if (days <= 7) "EEE" else if (days <= 30) "d MMM" else "MMM",
-            Locale.getDefault()
-        )
-
-        (0 until pointCount).map { i ->
-            val startTime = now - (pointCount - 1 - i) * timeStep
-            val endTime = startTime + timeStep
-
-            val bucketTxns = expenses.filter { it.date in startTime..endTime }
-            val inc = bucketTxns.realIncome()
-            val exp = bucketTxns.realExpense()
-            val dateLabel = sdf.format(java.util.Date(startTime))
-
-            GraphPoint(
-                label = dateLabel,
-                income = inc,
-                expense = exp,
-                timestamp = startTime
-            )
-        }
-    }
-
-    val maxVal = remember(chartData) {
-        val maxInc = chartData.maxOfOrNull { it.income } ?: 0.0
-        val maxExp = chartData.maxOfOrNull { it.expense } ?: 0.0
-        maxOf(maxInc, maxExp, 1000.0) * 1.15
-    }
-
-    val activePoint = selectedIndex?.let { chartData.getOrNull(it) } ?: chartData.lastOrNull()
-
-    Card(
-        shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(containerColor = SleekSurface),
-        border = BorderStroke(1.dp, SleekBorder),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        modifier = modifier.fillMaxWidth()
-    ) {
-        Column(modifier = Modifier.padding(20.dp)) {
-            // Legend Indicators Row (Heading text removed per user request)
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Box(modifier = Modifier.size(10.dp).clip(CircleShape).background(Color(0xFF10B981)))
-                        Text("Income", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = SleekTextSecondary)
-                    }
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Box(modifier = Modifier.size(10.dp).clip(CircleShape).background(Color(0xFFEF4444)))
-                        Text("Expense", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = SleekTextSecondary)
-                    }
-                }
-            }
-
-            // Interactive Point Details Chip
-            activePoint?.let { pt ->
-                Spacer(modifier = Modifier.height(12.dp))
-                Surface(
-                    shape = RoundedCornerShape(16.dp),
-                    color = SleekPrimaryContainer.copy(alpha = 0.15f),
-                    border = BorderStroke(1.dp, SleekPrimary.copy(alpha = 0.25f)),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 14.dp, vertical = 10.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column {
-                            Text(text = pt.label, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = SleekTextPrimary)
-                            val net = pt.income - pt.expense
-                            Text(
-                                text = "Net: " + (if (net >= 0) "+₹%,.2f".format(net) else "-₹%,.2f".format(Math.abs(net))),
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = if (net >= 0) Color(0xFF10B981) else Color(0xFFEF4444)
-                            )
-                        }
-                        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                            Column(horizontalAlignment = Alignment.End) {
-                                Text("Income", fontSize = 10.sp, color = SleekTextSecondary)
-                                Text("₹%,.2f".format(pt.income), fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color(0xFF10B981))
-                            }
-                            Column(horizontalAlignment = Alignment.End) {
-                                Text("Expense", fontSize = 10.sp, color = SleekTextSecondary)
-                                Text("₹%,.2f".format(pt.expense), fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color(0xFFEF4444))
-                            }
-                        }
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Canvas Dual Bezier Line Chart
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(200.dp)
-            ) {
-                Canvas(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .pointerInput(chartData) {
-                            detectTapGestures { offset ->
-                                val w = size.width
-                                val pLeft = 40.dp.toPx()
-                                val pRight = 16.dp.toPx()
-                                val usableW = w - pLeft - pRight
-                                val stepX = usableW / (chartData.size - 1).coerceAtLeast(1)
-
-                                val clickedIdx = ((offset.x - pLeft) / stepX)
-                                    .roundToInt()
-                                    .coerceIn(0, chartData.size - 1)
-                                selectedIndex = clickedIdx
-                            }
-                        }
-                ) {
-                    val w = size.width
-                    val h = size.height
-
-                    val paddingLeft = 40.dp.toPx()
-                    val paddingRight = 16.dp.toPx()
-                    val paddingTop = 16.dp.toPx()
-                    val paddingBottom = 30.dp.toPx()
-
-                    val chartW = w - paddingLeft - paddingRight
-                    val chartH = h - paddingTop - paddingBottom
-
-                    // Grid lines
-                    val steps = listOf(1.0, 0.5, 0.0)
-                    val dashEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 8f), 0f)
-                    val textPaint = android.graphics.Paint().apply {
-                        color = android.graphics.Color.GRAY
-                        textSize = 10.dp.toPx()
-                        isAntiAlias = true
-                    }
-
-                    steps.forEach { ratio ->
-                        val y = paddingTop + chartH * (1.0 - ratio).toFloat()
-                        drawLine(
-                            color = SleekBorder.copy(alpha = 0.5f),
-                            start = Offset(paddingLeft, y),
-                            end = Offset(w - paddingRight, y),
-                            strokeWidth = 1.dp.toPx(),
-                            pathEffect = dashEffect
-                        )
-                        val labelVal = (maxVal * ratio)
-                        val labelStr = if (labelVal >= 1000) "%.0fK".format(labelVal / 1000) else "%.0f".format(labelVal)
-                        drawContext.canvas.nativeCanvas.drawText(
-                            labelStr,
-                            6.dp.toPx(),
-                            y + 4.dp.toPx(),
-                            textPaint
-                        )
-                    }
-
-                    if (chartData.size >= 2) {
-                        val stepX = chartW / (chartData.size - 1)
-
-                        val incomePoints = chartData.mapIndexed { idx, pt ->
-                            val x = paddingLeft + idx * stepX
-                            val normY = (pt.income / maxVal).coerceIn(0.0, 1.0).toFloat()
-                            val y = paddingTop + chartH * (1f - normY * animProgress)
-                            Offset(x, y)
-                        }
-
-                        val expensePoints = chartData.mapIndexed { idx, pt ->
-                            val x = paddingLeft + idx * stepX
-                            val normY = (pt.expense / maxVal).coerceIn(0.0, 1.0).toFloat()
-                            val y = paddingTop + chartH * (1f - normY * animProgress)
-                            Offset(x, y)
-                        }
-
-                        fun createSmoothPath(points: List<Offset>): Path {
-                            val path = Path()
-                            if (points.isEmpty()) return path
-                            path.moveTo(points.first().x, points.first().y)
-                            for (i in 0 until points.size - 1) {
-                                val p1 = points[i]
-                                val p2 = points[i + 1]
-                                val controlP1 = Offset(p1.x + (p2.x - p1.x) / 2f, p1.y)
-                                val controlP2 = Offset(p1.x + (p2.x - p1.x) / 2f, p2.y)
-                                path.cubicTo(controlP1.x, controlP1.y, controlP2.x, controlP2.y, p2.x, p2.y)
-                            }
-                            return path
-                        }
-
-                        val incomePath = createSmoothPath(incomePoints)
-                        val expensePath = createSmoothPath(expensePoints)
-
-                        // Gradient Area Fill - Income
-                        val incomeFillPath = Path().apply {
-                            addPath(incomePath)
-                            lineTo(incomePoints.last().x, paddingTop + chartH)
-                            lineTo(incomePoints.first().x, paddingTop + chartH)
-                            close()
-                        }
-                        drawPath(
-                            path = incomeFillPath,
-                            brush = Brush.verticalGradient(
-                                colors = listOf(Color(0xFF10B981).copy(alpha = 0.22f), Color.Transparent),
-                                startY = paddingTop,
-                                endY = paddingTop + chartH
-                            )
-                        )
-
-                        // Gradient Area Fill - Expense
-                        val expenseFillPath = Path().apply {
-                            addPath(expensePath)
-                            lineTo(expensePoints.last().x, paddingTop + chartH)
-                            lineTo(expensePoints.first().x, paddingTop + chartH)
-                            close()
-                        }
-                        drawPath(
-                            path = expenseFillPath,
-                            brush = Brush.verticalGradient(
-                                colors = listOf(Color(0xFFEF4444).copy(alpha = 0.20f), Color.Transparent),
-                                startY = paddingTop,
-                                endY = paddingTop + chartH
-                            )
-                        )
-
-                        // Draw Curve Lines
-                        drawPath(
-                            path = incomePath,
-                            color = Color(0xFF10B981),
-                            style = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round)
-                        )
-                        drawPath(
-                            path = expensePath,
-                            color = Color(0xFFEF4444),
-                            style = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round)
-                        )
-
-                        // Draw Point Dots & Active Vertical Indicator Line
-                        val activeIdx = selectedIndex ?: (chartData.size - 1)
-                        chartData.forEachIndexed { idx, _ ->
-                            val incP = incomePoints[idx]
-                            val expP = expensePoints[idx]
-
-                            if (idx == activeIdx) {
-                                drawLine(
-                                    color = SleekPrimary.copy(alpha = 0.4f),
-                                    start = Offset(incP.x, paddingTop),
-                                    end = Offset(incP.x, paddingTop + chartH),
-                                    strokeWidth = 2.dp.toPx(),
-                                    pathEffect = dashEffect
-                                )
-                                drawCircle(Color.White, radius = 7.dp.toPx(), center = incP)
-                                drawCircle(Color(0xFF10B981), radius = 5.dp.toPx(), center = incP)
-
-                                drawCircle(Color.White, radius = 7.dp.toPx(), center = expP)
-                                drawCircle(Color(0xFFEF4444), radius = 5.dp.toPx(), center = expP)
-                            } else {
-                                drawCircle(Color(0xFF10B981), radius = 3.dp.toPx(), center = incP)
-                                drawCircle(Color(0xFFEF4444), radius = 3.dp.toPx(), center = expP)
-                            }
-
-                            // X Axis Labels
-                            if (idx % ((chartData.size / 5).coerceAtLeast(1)) == 0 || idx == chartData.size - 1) {
-                                drawContext.canvas.nativeCanvas.drawText(
-                                    chartData[idx].label,
-                                    incP.x - 12.dp.toPx(),
-                                    h - 6.dp.toPx(),
-                                    textPaint
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
 private data class GraphPoint(
     val label: String,
     val income: Double,
     val expense: Double,
     val timestamp: Long
 )
-
-// ==========================================
-// 💵 CASH AT END OF THE MONTH CHART CARD
-// ==========================================
-@Composable
-fun CashAtEndOfMonthChartCard(
-    allExpenses: List<Expense>,
-    currencySymbol: String = "₹",
-    modifier: Modifier = Modifier
-) {
-    val currentCalendar = remember { Calendar.getInstance() }
-    val currentYear = remember { currentCalendar.get(Calendar.YEAR) }
-    val currentMonthIdx = remember { currentCalendar.get(Calendar.MONTH) } // 0..11
-
-    var selectedMonthIndex by remember { mutableStateOf<Int?>(null) }
-    var viewMode by remember { mutableStateOf("Recent") } // "Recent" (Prev & Current Months) vs "Full Year"
-    var animPlayed by remember { mutableStateOf(false) }
-
-    val animProgress by animateFloatAsState(
-        targetValue = if (animPlayed) 1f else 0f,
-        animationSpec = tween(durationMillis = 850, easing = FastOutSlowInEasing),
-        label = "cash_at_end_of_month_anim"
-    )
-
-    LaunchedEffect(allExpenses) {
-        animPlayed = false
-        animPlayed = true
-    }
-
-    val monthsLabels = listOf("Jan", "Feb", "Mar", "Apr", "May", "June", "July", "Aug", "Sep", "Oct", "Nov", "Dec")
-
-    // Calculate real cumulative ending cash balance for each of the 12 months from user data (reflecting edited txns)
-    val monthlyBalances = remember(allExpenses, currentYear) {
-        val cal = Calendar.getInstance()
-        val priorTxns = allExpenses.filter { exp ->
-            cal.timeInMillis = exp.date
-            cal.get(Calendar.YEAR) < currentYear
-        }
-        var runningNet = priorTxns.realIncome() - priorTxns.realExpense()
-
-        (0..11).map { monthIdx ->
-            val monthTxns = allExpenses.filter { exp ->
-                cal.timeInMillis = exp.date
-                cal.get(Calendar.YEAR) == currentYear && cal.get(Calendar.MONTH) == monthIdx
-            }
-            val inc = monthTxns.realIncome()
-            val exp = monthTxns.realExpense()
-            runningNet += (inc - exp)
-            runningNet
-        }
-    }
-
-    val currentMonthCash = monthlyBalances.getOrElse(currentMonthIdx) { 0.0 }
-    val prevMonthCash = if (currentMonthIdx > 0) monthlyBalances.getOrElse(currentMonthIdx - 1) { 0.0 } else 0.0
-    val monthDiff = currentMonthCash - prevMonthCash
-
-    // Determine subset of months based on viewMode
-    val displayedIndices = remember(viewMode, currentMonthIdx) {
-        if (viewMode == "Recent") {
-            // Display from up to 5 months prior up to current month (min 3 months)
-            val startIdx = (currentMonthIdx - 4).coerceAtLeast(0)
-            (startIdx..currentMonthIdx).toList()
-        } else {
-            (0..11).toList()
-        }
-    }
-
-    val displayedBalances = remember(monthlyBalances, displayedIndices) {
-        displayedIndices.map { monthlyBalances.getOrElse(it) { 0.0 } }
-    }
-
-    val rawMin = remember(displayedBalances) { displayedBalances.minOrNull() ?: 0.0 }
-    val rawMax = remember(displayedBalances) { displayedBalances.maxOrNull() ?: 0.0 }
-
-    val chartMin = remember(rawMin) { if (rawMin < 0) rawMin else 0.0 }
-    val chartMax = remember(rawMax, chartMin) {
-        val peak = maxOf(rawMax, 1000.0)
-        Math.ceil(peak / 500.0) * 500.0
-    }
-    val chartRange = remember(chartMax, chartMin) { (chartMax - chartMin).coerceAtLeast(100.0) }
-
-    val activeIdx = selectedMonthIndex ?: currentMonthIdx
-    val activeMonth = monthsLabels.getOrElse(activeIdx) { "Month" }
-    val activeBalance = monthlyBalances.getOrElse(activeIdx) { 0.0 }
-
-    val activeTag = when (activeIdx) {
-        currentMonthIdx -> " (Current Month)"
-        currentMonthIdx - 1 -> " (Previous Month)"
-        else -> ""
-    }
-
-    Card(
-        shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(containerColor = SleekSurface),
-        border = BorderStroke(1.dp, SleekBorder),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        modifier = modifier
-            .fillMaxWidth()
-            .testTag("cash_at_end_of_month_card")
-    ) {
-        Column(
-            modifier = Modifier
-                .padding(20.dp)
-                .fillMaxWidth()
-        ) {
-            // Card Title & View Mode Toggle Row
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column {
-                    Text(
-                        text = "Cash at End of Month",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = SleekTextPrimary,
-                        fontSize = 17.sp
-                    )
-                    Text(
-                        text = "Real-time cashflow metrics",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = SleekTextSecondary,
-                        fontSize = 11.sp
-                    )
-                }
-
-                Row(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(SleekPrimaryContainer.copy(alpha = 0.2f))
-                        .border(1.dp, SleekBorder, RoundedCornerShape(16.dp))
-                        .padding(2.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(if (viewMode == "Recent") SleekPrimary else Color.Transparent)
-                            .clickable {
-                                viewMode = "Recent"
-                                selectedMonthIndex = currentMonthIdx
-                            }
-                            .padding(horizontal = 8.dp, vertical = 4.dp)
-                    ) {
-                        Text(
-                            "Recent",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = if (viewMode == "Recent") Color.White else SleekTextSecondary
-                        )
-                    }
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(if (viewMode == "Full") SleekPrimary else Color.Transparent)
-                            .clickable { viewMode = "Full" }
-                            .padding(horizontal = 8.dp, vertical = 4.dp)
-                    ) {
-                        Text(
-                            "Full Year",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = if (viewMode == "Full") Color.White else SleekTextSecondary
-                        )
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(14.dp))
-
-            // Current Month & Previous Month Cashflow Quick Summary Row
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                // Previous Month Chip
-                Card(
-                    modifier = Modifier.weight(1f),
-                    colors = CardDefaults.cardColors(containerColor = SleekNeutralLight),
-                    shape = RoundedCornerShape(12.dp),
-                    border = BorderStroke(1.dp, SleekBorder)
-                ) {
-                    Column(modifier = Modifier.padding(10.dp)) {
-                        Text(
-                            text = if (currentMonthIdx > 0) "${monthsLabels[currentMonthIdx - 1]} (Prev)" else "Prev Year",
-                            fontSize = 10.sp,
-                            color = SleekTextSecondary,
-                            fontWeight = FontWeight.Medium
-                        )
-                        Text(
-                            text = "$currencySymbol%,.0f".format(prevMonthCash),
-                            fontSize = 13.sp,
-                            color = SleekTextPrimary,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
-
-                // Current Month Chip
-                Card(
-                    modifier = Modifier.weight(1f),
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFF0D9488).copy(alpha = 0.1f)),
-                    shape = RoundedCornerShape(12.dp),
-                    border = BorderStroke(1.5.dp, Color(0xFF0D9488))
-                ) {
-                    Column(modifier = Modifier.padding(10.dp)) {
-                        Text(
-                            text = "${monthsLabels[currentMonthIdx]} (Current)",
-                            fontSize = 10.sp,
-                            color = Color(0xFF0D9488),
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = "$currencySymbol%,.0f".format(currentMonthCash),
-                            fontSize = 13.sp,
-                            color = Color(0xFF0D9488),
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
-
-                // Net MoM Flow Chip
-                Card(
-                    modifier = Modifier.weight(1f),
-                    colors = CardDefaults.cardColors(
-                        containerColor = if (monthDiff >= 0) Color(0xFF10B981).copy(alpha = 0.1f) else ExpenseRed.copy(alpha = 0.1f)
-                    ),
-                    shape = RoundedCornerShape(12.dp),
-                    border = BorderStroke(1.dp, if (monthDiff >= 0) Color(0xFF10B981) else ExpenseRed)
-                ) {
-                    Column(modifier = Modifier.padding(10.dp)) {
-                        Text(
-                            text = "MoM Flow",
-                            fontSize = 10.sp,
-                            color = if (monthDiff >= 0) Color(0xFF10B981) else ExpenseRed,
-                            fontWeight = FontWeight.Medium
-                        )
-                        Text(
-                            text = "${if (monthDiff >= 0) "+" else ""}$currencySymbol%,.0f".format(monthDiff),
-                            fontSize = 13.sp,
-                            color = if (monthDiff >= 0) Color(0xFF10B981) else ExpenseRed,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            // Active Inspector Row
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(Color(0xFF0D9488).copy(alpha = 0.08f), RoundedCornerShape(12.dp))
-                    .padding(horizontal = 12.dp, vertical = 6.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "$activeMonth$activeTag Ending Cash:",
-                    fontSize = 12.sp,
-                    color = SleekTextSecondary,
-                    fontWeight = FontWeight.Medium
-                )
-                Text(
-                    text = "$currencySymbol%,.0f".format(activeBalance),
-                    fontSize = 14.sp,
-                    color = Color(0xFF0D9488),
-                    fontWeight = FontWeight.Bold
-                )
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            val lineColor = Color(0xFF2DD4BF)
-            val nodeColor = Color(0xFF0D9488)
-            val gridColor = SleekBorder.copy(alpha = 0.5f)
-
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(200.dp)
-            ) {
-                Canvas(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .pointerInput(displayedIndices, monthlyBalances) {
-                            detectTapGestures { offset ->
-                                val leftPadding = 38.dp.toPx()
-                                val rightPadding = 12.dp.toPx()
-                                val width = size.width - leftPadding - rightPadding
-                                val count = displayedIndices.size
-                                val stepX = if (count > 1) width / (count - 1) else width
-
-                                val x = offset.x - leftPadding
-                                val subIndex = (x / stepX + 0.5f).toInt().coerceIn(0, count - 1)
-                                selectedMonthIndex = displayedIndices[subIndex]
-                            }
-                        }
-                ) {
-                    val leftPadding = 38.dp.toPx()
-                    val rightPadding = 12.dp.toPx()
-                    val topPadding = 15.dp.toPx()
-                    val bottomPadding = 30.dp.toPx()
-
-                    val chartWidth = size.width - leftPadding - rightPadding
-                    val chartHeight = size.height - topPadding - bottomPadding
-
-                    // Draw Y-Axis Steps & Horizontal Grid Lines
-                    val ySteps = 4
-                    val stepVal = chartRange / ySteps
-                    for (i in 0..ySteps) {
-                        val v = chartMin + i * stepVal
-                        val norm = (v - chartMin) / chartRange
-                        val y = topPadding + chartHeight - (norm * chartHeight).toFloat()
-                        drawLine(
-                            color = gridColor,
-                            start = Offset(leftPadding, y),
-                            end = Offset(size.width - rightPadding, y),
-                            strokeWidth = 1.dp.toPx()
-                        )
-                    }
-
-                    val count = displayedIndices.size
-                    val stepX = if (count > 1) chartWidth / (count - 1) else chartWidth
-
-                    // Compute Point Offsets
-                    val points = displayedIndices.mapIndexed { i, monthIdx ->
-                        val value = monthlyBalances.getOrElse(monthIdx) { 0.0 }
-                        val x = leftPadding + i * stepX
-                        val norm = ((value - chartMin) / chartRange).coerceIn(0.0, 1.0)
-                        val y = topPadding + chartHeight - (norm.toFloat() * chartHeight * animProgress)
-                        Offset(x, y)
-                    }
-
-                    // Draw Trend Line
-                    if (points.isNotEmpty()) {
-                        val path = Path()
-                        path.moveTo(points.first().x, points.first().y)
-                        for (i in 1 until points.size) {
-                            path.lineTo(points[i].x, points[i].y)
-                        }
-                        drawPath(
-                            path = path,
-                            color = lineColor,
-                            style = Stroke(width = 2.5.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
-                        )
-                    }
-
-                    // Draw Node Circles for each displayed month
-                    points.forEachIndexed { i, pt ->
-                        val monthIdx = displayedIndices[i]
-                        val isSelected = (activeIdx == monthIdx)
-                        val isCurrentMonth = (monthIdx == currentMonthIdx)
-
-                        // Outer ring
-                        drawCircle(
-                            color = Color.White,
-                            radius = if (isSelected || isCurrentMonth) 6.5.dp.toPx() else 4.5.dp.toPx(),
-                            center = pt
-                        )
-                        drawCircle(
-                            color = if (isCurrentMonth) Color(0xFF10B981) else if (isSelected) nodeColor else lineColor,
-                            radius = if (isSelected || isCurrentMonth) 6.5.dp.toPx() else 4.5.dp.toPx(),
-                            center = pt,
-                            style = Stroke(width = 2.dp.toPx())
-                        )
-                        if (isSelected || isCurrentMonth) {
-                            drawCircle(
-                                color = if (isCurrentMonth) Color(0xFF10B981) else nodeColor,
-                                radius = 3.5.dp.toPx(),
-                                center = pt
-                            )
-                        }
-                    }
-                }
-
-                // Y-Axis Labels
-                Column(
-                    modifier = Modifier
-                        .fillMaxHeight()
-                        .padding(bottom = 24.dp, top = 2.dp),
-                    verticalArrangement = Arrangement.SpaceBetween
-                ) {
-                    val ySteps = 4
-                    val stepVal = chartRange / ySteps
-                    (ySteps downTo 0).forEach { i ->
-                        val labelVal = (chartMin + i * stepVal).toInt()
-                        Text(
-                            text = "$labelVal",
-                            fontSize = 9.sp,
-                            color = SleekTextSecondary,
-                            fontWeight = FontWeight.Medium
-                        )
-                    }
-                }
-
-                // X-Axis Month Labels
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .align(Alignment.BottomCenter)
-                        .padding(start = 36.dp, end = 8.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    displayedIndices.forEach { monthIdx ->
-                        val mLabel = monthsLabels.getOrElse(monthIdx) { "" }
-                        val isSelected = (activeIdx == monthIdx)
-                        val isCurrent = (monthIdx == currentMonthIdx)
-
-                        Text(
-                            text = if (isCurrent) "$mLabel*" else mLabel,
-                            fontSize = 9.sp,
-                            fontWeight = if (isSelected || isCurrent) FontWeight.Bold else FontWeight.Normal,
-                            color = if (isCurrent) Color(0xFF10B981) else if (isSelected) nodeColor else SleekTextSecondary,
-                            modifier = Modifier.clickable { selectedMonthIndex = monthIdx }
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-// ==========================================
-// 📊 2. BAR CHART FOR CATEGORIES (INCOME & EXPENSE)
-// ==========================================
-@Composable
-fun CategoryIncomeExpenseBarChartCard(
-    expenses: List<Expense>,
-    modifier: Modifier = Modifier
-) {
-    var selectedTab by remember { mutableIntStateOf(0) } // 0: Expenses, 1: Income, 2: Comparison
-    var animPlayed by remember { mutableStateOf(false) }
-
-    val animProgress by animateFloatAsState(
-        targetValue = if (animPlayed) 1f else 0f,
-        animationSpec = tween(durationMillis = 700, easing = FastOutSlowInEasing),
-        label = "bar_anim"
-    )
-
-    LaunchedEffect(expenses, selectedTab) {
-        animPlayed = false
-        animPlayed = true
-    }
-
-    val expenseList = remember(expenses) { expenses.filter { it.type != "INCOME" && it.category != "Locked Savings" } }
-    val incomeList = remember(expenses) { expenses.filter { it.type == "INCOME" && it.category != "Goal Withdrawal" } }
-
-    val totalExpense = remember(expenseList) { expenseList.sumOf { it.amount } }
-    val totalIncome = remember(incomeList) { incomeList.sumOf { it.amount } }
-
-    val categoryBreakdown = remember(expenses, selectedTab) {
-        val list = if (selectedTab == 1) incomeList else expenseList
-        list.groupBy { it.category }
-            .mapValues { entry -> entry.value.sumOf { it.amount } }
-            .entries
-            .sortedByDescending { it.value }
-            .take(6)
-    }
-
-    val maxCategoryVal = remember(categoryBreakdown) {
-        (categoryBreakdown.maxOfOrNull { it.value } ?: 1.0).coerceAtLeast(1.0)
-    }
-
-    Card(
-        shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(containerColor = SleekSurface),
-        border = BorderStroke(1.dp, SleekBorder),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        modifier = modifier.fillMaxWidth()
-    ) {
-        Column(modifier = Modifier.padding(20.dp)) {
-            // Header
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(32.dp)
-                            .clip(CircleShape)
-                            .background(SleekPrimary.copy(alpha = 0.12f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            Icons.Default.BarChart,
-                            contentDescription = null,
-                            tint = SleekPrimary,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-                    Text(
-                        text = "Category Breakdown",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = SleekTextPrimary
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(14.dp))
-
-            // Mode Tabs (Expenses / Income / Comparison)
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(SleekPrimaryContainer.copy(alpha = 0.2f))
-                    .border(1.dp, SleekBorder, RoundedCornerShape(16.dp))
-                    .padding(3.dp)
-            ) {
-                listOf("Expenses", "Income", "Comparison").forEachIndexed { idx, label ->
-                    val isSelected = selectedTab == idx
-                    val bg by animateColorAsState(
-                        targetValue = if (isSelected) SleekPrimary else Color.Transparent,
-                        animationSpec = tween(250),
-                        label = "tabBg"
-                    )
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(bg)
-                            .clickable { selectedTab = idx }
-                            .padding(vertical = 8.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = label,
-                            fontSize = 12.sp,
-                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                            color = if (isSelected) Color.White else SleekTextSecondary
-                        )
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(18.dp))
-
-            if (selectedTab == 2) {
-                // COMPARISON TAB
-                val totalMax = maxOf(totalIncome, totalExpense, 100.0)
-                val incomeRatio = ((totalIncome / totalMax) * animProgress).toFloat().coerceIn(0f, 1f)
-                val expenseRatio = ((totalExpense / totalMax) * animProgress).toFloat().coerceIn(0f, 1f)
-
-                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    // Income Bar
-                    Column {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                Text("💵", fontSize = 14.sp)
-                                Text("Total Income", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = SleekTextPrimary)
-                            }
-                            Text("₹%,.2f".format(totalIncome), fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color(0xFF10B981))
-                        }
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(20.dp)
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(SleekPrimaryContainer.copy(alpha = 0.2f))
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxHeight()
-                                    .fillMaxWidth(incomeRatio)
-                                    .clip(RoundedCornerShape(10.dp))
-                                    .background(
-                                        Brush.horizontalGradient(
-                                            listOf(Color(0xFF34D399), Color(0xFF10B981))
-                                        )
-                                    )
-                            )
-                        }
-                    }
-
-                    // Expense Bar
-                    Column {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                Text("💸", fontSize = 14.sp)
-                                Text("Total Expenses", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = SleekTextPrimary)
-                            }
-                            Text("₹%,.2f".format(totalExpense), fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color(0xFFEF4444))
-                        }
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(20.dp)
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(SleekPrimaryContainer.copy(alpha = 0.2f))
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxHeight()
-                                    .fillMaxWidth(expenseRatio)
-                                    .clip(RoundedCornerShape(10.dp))
-                                    .background(
-                                        Brush.horizontalGradient(
-                                            listOf(Color(0xFFF87171), Color(0xFFEF4444))
-                                        )
-                                    )
-                            )
-                        }
-                    }
-
-                    val netSavings = totalIncome - totalExpense
-                    val savingsRate = if (totalIncome > 0) ((netSavings / totalIncome) * 100).coerceAtLeast(0.0) else 0.0
-
-                    Surface(
-                        shape = RoundedCornerShape(16.dp),
-                        color = if (netSavings >= 0) Color(0xFF10B981).copy(alpha = 0.1f) else Color(0xFFEF4444).copy(alpha = 0.1f),
-                        border = BorderStroke(1.dp, if (netSavings >= 0) Color(0xFF10B981).copy(alpha = 0.3f) else Color(0xFFEF4444).copy(alpha = 0.3f)),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(14.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column {
-                                Text("Net Cash Flow", fontSize = 12.sp, color = SleekTextSecondary)
-                                Text(
-                                    text = (if (netSavings >= 0) "+₹%,.2f".format(netSavings) else "-₹%,.2f".format(Math.abs(netSavings))),
-                                    fontSize = 16.sp,
-                                    fontWeight = FontWeight.Black,
-                                    color = if (netSavings >= 0) Color(0xFF10B981) else Color(0xFFEF4444)
-                                )
-                            }
-                            Surface(
-                                shape = CircleShape,
-                                color = if (netSavings >= 0) Color(0xFF10B981) else Color(0xFFEF4444)
-                            ) {
-                                Text(
-                                    text = "%.1f%% Saved".format(savingsRate),
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.White,
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-                                )
-                            }
-                        }
-                    }
-                }
-            } else {
-                // CATEGORY BARS
-                if (categoryBreakdown.isEmpty()) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 24.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text("No category records available.", color = SleekTextSecondary, fontSize = 13.sp)
-                    }
-                } else {
-                    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                        categoryBreakdown.forEach { (category, amt) ->
-                            val totalForTab = if (selectedTab == 1) totalIncome else totalExpense
-                            val percentage = if (totalForTab > 0) (amt / totalForTab) * 100 else 0.0
-                            val barRatio = ((amt / maxCategoryVal) * animProgress).toFloat().coerceIn(0f, 1f)
-
-                            val emoji = getCategoryEmoji(category)
-                            val catColor = categoryColors[category] ?: SleekPrimary
-
-                            Column {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                    ) {
-                                        Text(emoji, fontSize = 16.sp)
-                                        Text(
-                                            text = category,
-                                            fontSize = 13.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = SleekTextPrimary
-                                        )
-                                        Surface(
-                                            shape = CircleShape,
-                                            color = catColor.copy(alpha = 0.12f)
-                                        ) {
-                                            Text(
-                                                text = "%.1f%%".format(percentage),
-                                                fontSize = 10.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                color = catColor,
-                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                            )
-                                        }
-                                    }
-                                    Text(
-                                        text = "₹%,.2f".format(amt),
-                                        fontSize = 13.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = SleekTextPrimary
-                                    )
-                                }
-
-                                Spacer(modifier = Modifier.height(6.dp))
-
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(12.dp)
-                                        .clip(RoundedCornerShape(6.dp))
-                                        .background(SleekPrimaryContainer.copy(alpha = 0.2f))
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxHeight()
-                                            .fillMaxWidth(barRatio)
-                                            .clip(RoundedCornerShape(6.dp))
-                                            .background(
-                                                Brush.horizontalGradient(
-                                                    listOf(catColor.copy(alpha = 0.7f), catColor)
-                                                )
-                                            )
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-// ==========================================
-// 🥧 3. INTERACTIVE PIE / DONUT CHART
-// ==========================================
-@Composable
-fun CategoryPieChartCard(
-    expenses: List<Expense>,
-    modifier: Modifier = Modifier
-) {
-    var selectedType by remember { mutableStateOf("EXPENSE") }
-
-    val filteredList = remember(expenses, selectedType) {
-        if (selectedType == "INCOME") {
-            expenses.filter { it.type == "INCOME" && it.category != "Goal Withdrawal" && it.amount > 0 }
-        } else {
-            expenses.filter { it.type != "INCOME" && it.category != "Locked Savings" && it.amount > 0 }
-        }
-    }
-
-    val categoryTotals = remember(filteredList) {
-        filteredList.groupBy { it.category }
-            .mapValues { entry -> entry.value.sumOf { it.amount } }
-            .filter { it.value > 0 }
-    }
-
-    Card(
-        shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(containerColor = SleekSurface),
-        border = BorderStroke(1.dp, SleekBorder),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        modifier = modifier.fillMaxWidth()
-    ) {
-        Column(modifier = Modifier.padding(20.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(32.dp)
-                            .clip(CircleShape)
-                            .background(SleekPrimary.copy(alpha = 0.12f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            Icons.Default.PieChart,
-                            contentDescription = null,
-                            tint = SleekPrimary,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-                    Text(
-                        text = "Distribution Pie Chart",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = SleekTextPrimary
-                    )
-                }
-
-                Row(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(SleekPrimaryContainer.copy(alpha = 0.2f))
-                        .border(1.dp, SleekBorder, RoundedCornerShape(16.dp))
-                        .padding(2.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(if (selectedType == "EXPENSE") Color(0xFFEF4444) else Color.Transparent)
-                            .clickable { selectedType = "EXPENSE" }
-                            .padding(horizontal = 10.dp, vertical = 5.dp)
-                    ) {
-                        Text(
-                            "Expenses",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = if (selectedType == "EXPENSE") Color.White else SleekTextSecondary
-                        )
-                    }
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(if (selectedType == "INCOME") Color(0xFF10B981) else Color.Transparent)
-                            .clickable { selectedType = "INCOME" }
-                            .padding(horizontal = 10.dp, vertical = 5.dp)
-                    ) {
-                        Text(
-                            "Income",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = if (selectedType == "INCOME") Color.White else SleekTextSecondary
-                        )
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            CategoryExpensePieChart(
-                categoryExpenses = categoryTotals,
-                categoryColors = categoryColors,
-                modifier = Modifier.fillMaxWidth()
-            )
-        }
-    }
-}
 
 // ==========================================
 // 4️⃣.5️⃣ CATEGORY SELECTOR COMPONENTS
@@ -5563,11 +3837,9 @@ fun CalendarTab(
 ) {
     val haptic = LocalHapticFeedback.current
     val today = Calendar.getInstance()
-    var navigatedCalendar by remember { mutableStateOf(Calendar.getInstance()) }
-    var swipeDragAmount by remember { mutableStateOf(0f) }
-
-    val activeYear = navigatedCalendar.get(Calendar.YEAR)
-    val activeMonth = navigatedCalendar.get(Calendar.MONTH)
+    
+    val fontScale = androidx.compose.ui.platform.LocalConfiguration.current.fontScale
+    val calendarAspectRatio = if (fontScale > 1.3f) 0.7f else if (fontScale > 1.1f) 0.85f else 1f
 
     // Baseline: March 2027. +1 month on each 7th of the month.
     val maxCalendarLimit = remember(today.get(Calendar.DAY_OF_MONTH)) {
@@ -5581,15 +3853,22 @@ fun CalendarTab(
         }
     }
 
-    val canGoForward = remember(navigatedCalendar, maxCalendarLimit) {
-        val temp = Calendar.getInstance().apply {
-            timeInMillis = navigatedCalendar.timeInMillis
-            add(Calendar.MONTH, 1)
-        }
-        temp.before(maxCalendarLimit) || (temp.get(Calendar.MONTH) == maxCalendarLimit.get(Calendar.MONTH) && temp.get(Calendar.YEAR) == maxCalendarLimit.get(Calendar.YEAR))
-    }
+    val initialYear = 2000
+    val currentMonthIndex = (today.get(Calendar.YEAR) - initialYear) * 12 + today.get(Calendar.MONTH)
+    val maxMonthIndex = (maxCalendarLimit.get(Calendar.YEAR) - initialYear) * 12 + maxCalendarLimit.get(Calendar.MONTH)
 
-    val daysOfWeek = listOf("SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT")
+    val pagerState = androidx.compose.foundation.pager.rememberPagerState(
+        initialPage = currentMonthIndex,
+        pageCount = { maxMonthIndex + 1 }
+    )
+
+    val activeYear = initialYear + pagerState.currentPage / 12
+    val activeMonth = pagerState.currentPage % 12
+    val canGoForward = pagerState.currentPage < maxMonthIndex
+    
+    val coroutineScope = rememberCoroutineScope()
+
+    val daysOfWeek = listOf("Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat")
     var selectedDayOfMonth by remember { mutableStateOf(today.get(Calendar.DAY_OF_MONTH)) }
 
     val selectedDateMillis = remember(activeYear, activeMonth, selectedDayOfMonth) {
@@ -5604,12 +3883,6 @@ fun CalendarTab(
         }.timeInMillis
     }
 
-    val isSelectedDateToday = remember(activeYear, activeMonth, selectedDayOfMonth, today) {
-        today.get(Calendar.YEAR) == activeYear &&
-                today.get(Calendar.MONTH) == activeMonth &&
-                today.get(Calendar.DAY_OF_MONTH) == selectedDayOfMonth
-    }
-
     val selectedDayExpenses = expenses.filter {
         val cal = Calendar.getInstance().apply { timeInMillis = it.date }
         cal.get(Calendar.YEAR) == activeYear &&
@@ -5621,295 +3894,224 @@ fun CalendarTab(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 20.dp, vertical = 16.dp)
+            .padding(16.dp)
     ) {
-        // Top Header: "May 12, 2026"
-        val headerMonthDateStr = remember(activeYear, activeMonth, selectedDayOfMonth) {
-            val cal = Calendar.getInstance().apply {
-                set(Calendar.YEAR, activeYear)
-                set(Calendar.MONTH, activeMonth)
-                set(Calendar.DAY_OF_MONTH, selectedDayOfMonth)
-            }
-            SimpleDateFormat("MMMM d, yyyy", Locale.getDefault()).format(cal.time)
-        }
-
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                text = headerMonthDateStr,
-                style = MaterialTheme.typography.titleLarge,
-                color = SleekTextPrimary,
-                fontWeight = FontWeight.ExtraBold,
-                fontSize = 22.sp
-            )
-
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                IconButton(
-                    onClick = {
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        navigatedCalendar = Calendar.getInstance().apply {
-                            timeInMillis = navigatedCalendar.timeInMillis
-                            add(Calendar.MONTH, -1)
-                        }
-                        selectedDayOfMonth = 1
-                    },
-                    modifier = Modifier.size(36.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.ChevronLeft,
-                        contentDescription = "Previous Month",
-                        tint = SleekTextPrimary,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-
-                IconButton(
-                    onClick = {
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        if (canGoForward) {
-                            navigatedCalendar = Calendar.getInstance().apply {
-                                timeInMillis = navigatedCalendar.timeInMillis
-                                add(Calendar.MONTH, 1)
-                            }
-                            selectedDayOfMonth = 1
-                        }
-                    },
-                    enabled = canGoForward,
-                    modifier = Modifier.size(36.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.ChevronRight,
-                        contentDescription = "Next Month",
-                        tint = if (canGoForward) SleekTextPrimary else SleekTextSecondary.copy(alpha = 0.3f),
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
+            Column {
+                Text(
+                    text = "Transaction Calendar",
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = SleekTextPrimary,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = "Double-tap day to add. Valid until ${SimpleDateFormat("MMM yyyy", Locale.getDefault()).format(maxCalendarLimit.time)}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = SleekTextSecondary
+                )
             }
         }
 
-        Spacer(modifier = Modifier.height(14.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
-        // Main Calendar Card
         Card(
-            shape = RoundedCornerShape(26.dp),
+            shape = RoundedCornerShape(24.dp),
             colors = CardDefaults.cardColors(containerColor = SleekSurface),
             border = BorderStroke(1.dp, SleekBorder),
-            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-            modifier = Modifier
-                .fillMaxWidth()
-                .pointerInput(canGoForward) {
-                    detectHorizontalDragGestures(
-                        onDragStart = { swipeDragAmount = 0f },
-                        onDragEnd = {
-                            if (swipeDragAmount > 100f) {
-                                navigatedCalendar = Calendar.getInstance().apply {
-                                    timeInMillis = navigatedCalendar.timeInMillis
-                                    add(Calendar.MONTH, -1)
-                                }
-                                selectedDayOfMonth = 1
-                            } else if (swipeDragAmount < -100f) {
-                                if (canGoForward) {
-                                    navigatedCalendar = Calendar.getInstance().apply {
-                                        timeInMillis = navigatedCalendar.timeInMillis
-                                        add(Calendar.MONTH, 1)
-                                    }
-                                    selectedDayOfMonth = 1
-                                }
-                            }
-                        },
-                        onHorizontalDrag = { change, dragAmount ->
-                            change.consume()
-                            swipeDragAmount += dragAmount
-                        }
-                    )
-                }
+            modifier = Modifier.fillMaxWidth()
         ) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 20.dp),
+                    .padding(16.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                // Weekday Headers: SUN MON TUE WED THU FRI SAT
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceAround
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    daysOfWeek.forEach { day ->
-                        Text(
-                            text = day,
-                            modifier = Modifier.weight(1f),
-                            textAlign = TextAlign.Center,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = SleekTextSecondary.copy(alpha = 0.8f),
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 11.5.sp,
-                            letterSpacing = 0.8.sp
+                    IconButton(
+                        onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            if (pagerState.currentPage > 0) {
+                                coroutineScope.launch {
+                                    pagerState.animateScrollToPage(pagerState.currentPage - 1)
+                                }
+                                selectedDayOfMonth = 1
+                            }
+                        }
+                    ) {
+                        Icon(Icons.Default.ChevronLeft, contentDescription = "Prev Month", tint = SleekPrimary)
+                    }
+                    val currentDisplayCal = remember(activeYear, activeMonth) {
+                        Calendar.getInstance().apply {
+                            set(Calendar.YEAR, activeYear)
+                            set(Calendar.MONTH, activeMonth)
+                        }
+                    }
+                    Text(
+                        text = SimpleDateFormat("MMMM yyyy", Locale.getDefault()).format(currentDisplayCal.time),
+                        style = MaterialTheme.typography.titleMedium,
+                        color = SleekTextPrimary,
+                        fontWeight = FontWeight.Bold
+                    )
+                    IconButton(
+                        onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            if (canGoForward) {
+                                coroutineScope.launch {
+                                    pagerState.animateScrollToPage(pagerState.currentPage + 1)
+                                }
+                                selectedDayOfMonth = 1
+                            }
+                        },
+                        enabled = canGoForward
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.ChevronRight,
+                            contentDescription = "Next Month",
+                            tint = if (canGoForward) SleekPrimary else SleekTextSecondary.copy(alpha = 0.5f)
                         )
                     }
                 }
+                Spacer(modifier = Modifier.height(16.dp))
 
-                Spacer(modifier = Modifier.height(14.dp))
-
-                val firstDayCal = Calendar.getInstance().apply {
-                    set(Calendar.YEAR, activeYear)
-                    set(Calendar.MONTH, activeMonth)
-                    set(Calendar.DAY_OF_MONTH, 1)
-                }
-                val firstDayOfWeek = firstDayCal.get(Calendar.DAY_OF_WEEK)
-                val daysInMonth = firstDayCal.getActualMaximum(Calendar.DAY_OF_MONTH)
-                val dayOffset = firstDayOfWeek - 1
-
-                val prevMonthCal = Calendar.getInstance().apply {
-                    timeInMillis = firstDayCal.timeInMillis
-                    add(Calendar.MONTH, -1)
-                }
-                val daysInPrevMonth = prevMonthCal.getActualMaximum(Calendar.DAY_OF_MONTH)
-
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    for (row in 0 until 6) {
+                androidx.compose.foundation.pager.HorizontalPager(
+                    state = pagerState,
+                    modifier = Modifier.fillMaxWidth()
+                ) { page ->
+                    val pageYear = initialYear + page / 12
+                    val pageMonth = page % 12
+                    
+                    Column(modifier = Modifier.fillMaxWidth()) {
                         Row(modifier = Modifier.fillMaxWidth()) {
-                            for (col in 0 until 7) {
-                                val slotIndex = row * 7 + col
-                                val dayNum = slotIndex - dayOffset + 1
+                            daysOfWeek.forEach { day ->
+                                Text(
+                                    text = day,
+                                    modifier = Modifier.weight(1f),
+                                    textAlign = TextAlign.Center,
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = SleekTextSecondary,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
 
-                                if (dayNum in 1..daysInMonth) {
-                                    val isSelected = selectedDayOfMonth == dayNum
-                                    val isToday = today.get(Calendar.YEAR) == activeYear &&
-                                            today.get(Calendar.MONTH) == activeMonth &&
-                                            today.get(Calendar.DAY_OF_MONTH) == dayNum
+                        val firstDayCal = Calendar.getInstance().apply {
+                            set(Calendar.YEAR, pageYear)
+                            set(Calendar.MONTH, pageMonth)
+                            set(Calendar.DAY_OF_MONTH, 1)
+                        }
+                        val firstDayOfWeek = firstDayCal.get(Calendar.DAY_OF_WEEK)
+                        val daysInMonth = firstDayCal.getActualMaximum(Calendar.DAY_OF_MONTH)
+                        val dayOffset = firstDayOfWeek - 1
 
-                                    val dayExpenses = expenses.filter {
-                                        val c = Calendar.getInstance().apply { timeInMillis = it.date }
-                                        c.get(Calendar.YEAR) == activeYear &&
-                                                c.get(Calendar.MONTH) == activeMonth &&
-                                                c.get(Calendar.DAY_OF_MONTH) == dayNum
-                                    }
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            for (row in 0 until 6) {
+                                Row(modifier = Modifier.fillMaxWidth()) {
+                                    for (col in 0 until 7) {
+                                        val slotIndex = row * 7 + col
+                                        val dayNum = slotIndex - dayOffset + 1
+                                        if (dayNum in 1..daysInMonth) {
+                                            val isSelected = selectedDayOfMonth == dayNum && pageYear == activeYear && pageMonth == activeMonth
+                                            val isToday = today.get(Calendar.YEAR) == pageYear &&
+                                                    today.get(Calendar.MONTH) == pageMonth &&
+                                                    today.get(Calendar.DAY_OF_MONTH) == dayNum
 
-                                    // Build dots for transactions: Max 3 dots total (no extra symbols).
-                                    // Green for Income (#10B981), Red for Expense (#EF4444).
-                                    val incomesCount = dayExpenses.count { it.type == "INCOME" }
-                                    val expensesCount = dayExpenses.count { it.type != "INCOME" }
-
-                                    val dotColors = remember(incomesCount, expensesCount, dayExpenses.size) {
-                                        if (dayExpenses.isEmpty()) {
-                                            emptyList<Color>()
-                                        } else if (incomesCount > 0 && expensesCount > 0) {
-                                            when {
-                                                dayExpenses.size == 2 -> listOf(Color(0xFF10B981), Color(0xFFEF4444))
-                                                incomesCount >= 2 && expensesCount >= 1 -> listOf(Color(0xFF10B981), Color(0xFF10B981), Color(0xFFEF4444))
-                                                expensesCount >= 2 && incomesCount >= 1 -> listOf(Color(0xFF10B981), Color(0xFFEF4444), Color(0xFFEF4444))
-                                                else -> listOf(Color(0xFF10B981), Color(0xFFEF4444))
+                                            val dayExpenses = expenses.filter {
+                                                val c = Calendar.getInstance().apply { timeInMillis = it.date }
+                                                c.get(Calendar.YEAR) == pageYear &&
+                                                        c.get(Calendar.MONTH) == pageMonth &&
+                                                        c.get(Calendar.DAY_OF_MONTH) == dayNum
                                             }
-                                        } else if (incomesCount > 0) {
-                                            List(minOf(3, incomesCount)) { Color(0xFF10B981) }
-                                        } else {
-                                            List(minOf(3, expensesCount)) { Color(0xFFEF4444) }
-                                        }
-                                    }
+                                            val dayIncome = dayExpenses.realIncome()
+                                            val dayExpense = dayExpenses.realExpense()
+                                            val hasTransactions = dayExpenses.isNotEmpty()
+                                            val isProfit = hasTransactions && dayIncome >= dayExpense
+                                            val isLoss = hasTransactions && dayExpense > dayIncome
 
-                                    Box(
-                                        modifier = Modifier
-                                            .weight(1f)
-                                            .aspectRatio(1f)
-                                            .padding(2.dp)
-                                            .clip(RoundedCornerShape(14.dp))
-                                            .background(
-                                                when {
-                                                    isSelected -> Color(0xFF4F46E5) // Sleek Indigo accent
-                                                    isToday -> SleekPrimaryContainer.copy(alpha = 0.45f)
-                                                    else -> Color.Transparent
-                                                }
-                                            )
-                                            .border(
-                                                width = if (isToday && !isSelected) 1.2.dp else 0.dp,
-                                                color = if (isToday && !isSelected) Color(0xFF4F46E5) else Color.Transparent,
-                                                shape = RoundedCornerShape(14.dp)
-                                            )
-                                            .combinedClickable(
-                                                onClick = {
-                                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                                    selectedDayOfMonth = dayNum
-                                                },
-                                                onDoubleClick = {
-                                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                                    selectedDayOfMonth = dayNum
-                                                    val clickedDate = Calendar.getInstance().apply {
-                                                        set(Calendar.YEAR, activeYear)
-                                                        set(Calendar.MONTH, activeMonth)
-                                                        set(Calendar.DAY_OF_MONTH, dayNum)
-                                                    }.timeInMillis
-                                                    onAddExpenseForDate(clickedDate)
-                                                }
-                                            ),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Column(
-                                            horizontalAlignment = Alignment.CenterHorizontally,
-                                            verticalArrangement = Arrangement.Center
-                                        ) {
-                                            Text(
-                                                text = dayNum.toString(),
-                                                style = MaterialTheme.typography.bodyMedium,
-                                                fontWeight = if (isSelected || isToday) FontWeight.Bold else FontWeight.Medium,
-                                                fontSize = 14.sp,
-                                                color = when {
-                                                    isSelected -> Color.White
-                                                    isToday -> SleekPrimary
-                                                    else -> SleekTextPrimary
-                                                }
-                                            )
-
-                                            // Small Circles row indicating transactions (Max 3 dots, no + symbol)
-                                            if (dotColors.isNotEmpty()) {
-                                                Row(
-                                                    horizontalArrangement = Arrangement.spacedBy(2.5.dp),
-                                                    verticalAlignment = Alignment.CenterVertically,
-                                                    modifier = Modifier.padding(top = 2.dp)
-                                                ) {
-                                                    dotColors.forEach { dotColor ->
+                                            Box(
+                                                modifier = Modifier
+                                                    .weight(1f)
+                                                    .aspectRatio(calendarAspectRatio)
+                                                    .padding(2.dp)
+                                                    .clip(RoundedCornerShape(12.dp))
+                                                    .background(
+                                                        when {
+                                                            isSelected -> SleekPrimary
+                                                            isToday -> SleekPrimaryContainer.copy(alpha = 0.5f)
+                                                            else -> Color.Transparent
+                                                        }
+                                                    )
+                                                    .border(
+                                                        width = 1.dp,
+                                                        color = when {
+                                                            isSelected -> Color.Transparent
+                                                            isToday -> SleekPrimary
+                                                            else -> Color.Transparent
+                                                        },
+                                                        shape = RoundedCornerShape(12.dp)
+                                                    )
+                                                    .combinedClickable(
+                                                        onClick = {
+                                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                            selectedDayOfMonth = dayNum
+                                                            if (page != pagerState.currentPage) {
+                                                                coroutineScope.launch {
+                                                                    pagerState.animateScrollToPage(page)
+                                                                }
+                                                            }
+                                                        },
+                                                        onDoubleClick = {
+                                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                            selectedDayOfMonth = dayNum
+                                                            val clickedDate = Calendar.getInstance().apply {
+                                                                set(Calendar.YEAR, pageYear)
+                                                                set(Calendar.MONTH, pageMonth)
+                                                                set(Calendar.DAY_OF_MONTH, dayNum)
+                                                            }.timeInMillis
+                                                            onAddExpenseForDate(clickedDate)
+                                                        }
+                                                    ),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                                    Text(
+                                                        text = dayNum.toString(),
+                                                        style = MaterialTheme.typography.bodyMedium,
+                                                        fontWeight = if (isSelected || isToday) FontWeight.Bold else FontWeight.Normal,
+                                                        color = when {
+                                                            isSelected -> Color.White
+                                                            isToday -> SleekPrimary
+                                                            else -> SleekTextPrimary
+                                                        }
+                                                    )
+                                                    if (hasTransactions) {
                                                         Box(
                                                             modifier = Modifier
-                                                                .size(4.dp)
+                                                                .padding(top = 2.dp)
+                                                                .size(5.dp)
                                                                 .clip(CircleShape)
                                                                 .background(
-                                                                    if (isSelected) Color.White.copy(alpha = 0.9f) else dotColor
+                                                                    when {
+                                                                        isSelected -> Color.White
+                                                                        isProfit -> Color(0xFF10B981)
+                                                                        else -> Color(0xFFEF4444)
+                                                                    }
                                                                 )
                                                         )
                                                     }
                                                 }
-                                            } else {
-                                                Spacer(modifier = Modifier.height(6.dp))
                                             }
+                                        } else {
+                                            Box(modifier = Modifier.weight(1f).aspectRatio(calendarAspectRatio))
                                         }
-                                    }
-                                } else {
-                                    // Trailing / Leading muted days
-                                    val displayMutedDay = if (dayNum <= 0) {
-                                        daysInPrevMonth + dayNum
-                                    } else {
-                                        dayNum - daysInMonth
-                                    }
-
-                                    Box(
-                                        modifier = Modifier
-                                            .weight(1f)
-                                            .aspectRatio(1f)
-                                            .padding(2.dp),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Text(
-                                            text = displayMutedDay.toString(),
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = SleekTextSecondary.copy(alpha = 0.28f),
-                                            fontSize = 13.sp
-                                        )
                                     }
                                 }
                             }
@@ -5918,245 +4120,131 @@ fun CalendarTab(
                 }
             }
         }
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        // Lower Header Section: "TUESDAY 12, 2026" and "Today" tag
-        val selectedFullDayStr = remember(activeYear, activeMonth, selectedDayOfMonth) {
-            val cal = Calendar.getInstance().apply {
-                set(Calendar.YEAR, activeYear)
-                set(Calendar.MONTH, activeMonth)
-                set(Calendar.DAY_OF_MONTH, selectedDayOfMonth)
-            }
-            SimpleDateFormat("EEEE d, yyyy", Locale.getDefault()).format(cal.time).uppercase()
-        }
+        Spacer(modifier = Modifier.height(20.dp))
 
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
+            val selectedDateStr = SimpleDateFormat("MMM dd, yyyy", Locale.getDefault()).format(Date(selectedDateMillis))
             Text(
-                text = selectedFullDayStr,
+                text = "Transactions on $selectedDateStr",
                 style = MaterialTheme.typography.titleMedium,
                 color = SleekTextPrimary,
-                fontWeight = FontWeight.ExtraBold,
-                fontSize = 16.sp,
-                letterSpacing = 0.5.sp
+                fontWeight = FontWeight.Bold
             )
 
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            Button(
+                onClick = { onAddExpenseForDate(selectedDateMillis) },
+                colors = ButtonDefaults.buttonColors(containerColor = SleekPrimary),
+                shape = RoundedCornerShape(12.dp),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                modifier = Modifier.height(32.dp)
             ) {
-                if (isSelectedDateToday) {
-                    Surface(
-                        shape = RoundedCornerShape(8.dp),
-                        color = SleekPrimaryContainer.copy(alpha = 0.6f),
-                        border = BorderStroke(1.dp, SleekPrimary.copy(alpha = 0.3f))
-                    ) {
-                        Text(
-                            text = "Today",
-                            fontSize = 11.5.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = SleekPrimary,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.5.dp)
-                        )
-                    }
-                }
-
-                IconButton(
-                    onClick = { onAddExpenseForDate(selectedDateMillis) },
-                    modifier = Modifier
-                        .size(32.dp)
-                        .clip(CircleShape)
-                        .background(SleekPrimary)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Add,
-                        contentDescription = "Add Transaction",
-                        tint = Color.White,
-                        modifier = Modifier.size(16.dp)
-                    )
-                }
+                Icon(Icons.Default.Add, contentDescription = null, tint = Color.White, modifier = Modifier.size(14.dp))
+                Spacer(modifier = Modifier.width(4.dp))
+                Text("Add", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
             }
         }
 
-        Spacer(modifier = Modifier.height(14.dp))
+        Spacer(modifier = Modifier.height(12.dp))
 
-        // Timeline Transactions Section
         if (selectedDayExpenses.isEmpty()) {
-            Card(
-                colors = CardDefaults.cardColors(containerColor = SleekSurface),
-                border = BorderStroke(1.dp, SleekBorder),
-                shape = RoundedCornerShape(20.dp),
-                modifier = Modifier.fillMaxWidth()
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 32.dp),
+                contentAlignment = Alignment.Center
             ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 36.dp, horizontal = 20.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(52.dp)
-                            .clip(CircleShape)
-                            .background(SleekBorder.copy(alpha = 0.4f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.ReceiptLong,
-                            contentDescription = null,
-                            tint = SleekTextSecondary,
-                            modifier = Modifier.size(24.dp)
-                        )
-                    }
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Text(
-                        text = "No transactions recorded for this day",
-                        color = SleekTextPrimary,
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 14.5.sp
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "Tap + to record income or expense",
-                        color = SleekTextSecondary,
-                        fontSize = 12.sp
-                    )
-                }
+                Text(
+                    text = "No transactions logged for this day.",
+                    color = SleekTextSecondary,
+                    style = MaterialTheme.typography.bodyMedium
+                )
             }
         } else {
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                selectedDayExpenses.forEachIndexed { index, expense ->
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                selectedDayExpenses.forEach { expense ->
                     val isIncome = expense.type == "INCOME"
                     val catColor = if (isIncome) {
-                        Color(0xFF10B981)
+                        when (expense.category) {
+                            "Salary" -> Color(0xFF10B981)
+                            "Freelance" -> Color(0xFF0D9488)
+                            "Investments" -> Color(0xFF3B82F6)
+                            "Gifts" -> Color(0xFFEC4899)
+                            else -> Color(0xFF10B981)
+                        }
                     } else {
                         categoryColors[expense.category] ?: SleekPrimary
                     }
 
-                    val timeFormatter = remember { SimpleDateFormat("h:mm a", Locale.getDefault()) }
-                    val timeStr = timeFormatter.format(Date(expense.date))
-
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(SleekSurface)
+                            .border(1.dp, SleekBorder, RoundedCornerShape(16.dp))
+                            .clickable { onEditExpense(expense) }
+                            .padding(14.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // Timeline Column: Left Indicator Ring & Vertical Guide Line
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
+                        Box(
                             modifier = Modifier
-                                .width(28.dp)
-                                .padding(end = 6.dp)
+                                .size(36.dp)
+                                .clip(CircleShape)
+                                .background(catColor.copy(alpha = 0.15f)),
+                            contentAlignment = Alignment.Center
                         ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(16.dp)
-                                    .clip(CircleShape)
-                                    .background(Color.Transparent)
-                                    .border(
-                                        width = 2.5.dp,
-                                        color = if (isIncome) Color(0xFF10B981) else Color(0xFFF59E0B),
-                                        shape = CircleShape
-                                    )
+                            Text(
+                                text = getCategoryEmoji(expense.category, categoryIcons),
+                                fontSize = 16.sp
                             )
                         }
 
-                        // Transaction Item Card
-                        Card(
-                            colors = CardDefaults.cardColors(containerColor = SleekSurface),
-                            border = BorderStroke(1.dp, SleekBorder),
-                            shape = RoundedCornerShape(20.dp),
-                            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-                            modifier = Modifier
-                                .weight(1f)
-                                .clickable { onEditExpense(expense) }
+                        Spacer(modifier = Modifier.width(12.dp))
+
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = expense.note ?: (if (isIncome) "Income" else "Expense"),
+                                style = MaterialTheme.typography.titleSmall,
+                                color = SleekTextPrimary,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                text = expense.category,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = SleekTextSecondary
+                            )
+                        }
+
+                        Text(
+                            text = String.format("%s₹%,.2f", if (isIncome) "+" else "-", expense.amount),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = if (isIncome) Color(0xFF10B981) else ExpenseRed,
+                            fontWeight = FontWeight.Bold
+                        )
+
+                        Spacer(modifier = Modifier.width(12.dp))
+
+                        IconButton(
+                            onClick = { onDeleteExpense(expense) },
+                            modifier = Modifier.size(24.dp)
                         ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 14.dp, vertical = 12.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(44.dp)
-                                        .clip(RoundedCornerShape(14.dp))
-                                        .background(catColor.copy(alpha = 0.15f))
-                                        .border(1.dp, catColor.copy(alpha = 0.25f), RoundedCornerShape(14.dp)),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(
-                                        text = getCategoryEmoji(expense.category, categoryIcons),
-                                        fontSize = 20.sp
-                                    )
-                                }
-
-                                Spacer(modifier = Modifier.width(12.dp))
-
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = if (!expense.note.isNullOrBlank()) expense.note else expense.category,
-                                        style = MaterialTheme.typography.titleSmall,
-                                        color = SleekTextPrimary,
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 14.5.sp,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                    Spacer(modifier = Modifier.height(2.dp))
-                                    Text(
-                                        text = "$timeStr • ${expense.category}",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = SleekTextSecondary,
-                                        fontSize = 11.5.sp
-                                    )
-                                }
-
-                                Column(
-                                    horizontalAlignment = Alignment.End
-                                ) {
-                                    Text(
-                                        text = String.format("%s₹%,.2f", if (isIncome) "+" else "-", expense.amount),
-                                        style = MaterialTheme.typography.titleMedium,
-                                        color = if (isIncome) Color(0xFF10B981) else SleekTextPrimary,
-                                        fontWeight = FontWeight.ExtraBold,
-                                        fontSize = 15.sp
-                                    )
-                                    Text(
-                                        text = if (isIncome) "Income" else "Expense",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = SleekTextSecondary,
-                                        fontSize = 10.5.sp
-                                    )
-                                }
-
-                                Spacer(modifier = Modifier.width(6.dp))
-
-                                IconButton(
-                                    onClick = { onDeleteExpense(expense) },
-                                    modifier = Modifier.size(24.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Delete,
-                                        contentDescription = "Delete",
-                                        tint = ExpenseRed.copy(alpha = 0.6f),
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                }
-                            }
+                            Icon(
+                                imageVector = Icons.Default.Delete,
+                                contentDescription = "Delete",
+                                tint = ExpenseRed.copy(alpha = 0.7f),
+                                modifier = Modifier.size(16.dp)
+                            )
                         }
                     }
                 }
             }
         }
-
-        Spacer(modifier = Modifier.height(120.dp))
+        Spacer(modifier = Modifier.height(110.dp))
     }
 }
 
@@ -7333,169 +5421,6 @@ fun SidebarSettingsTile(
     }
 }
 
-@Composable
-fun SmallFluidBudgetBar(
-    thisMonthTotal: Double,
-    monthlyBudget: Double,
-    modifier: Modifier = Modifier
-) {
-    val safeBudget = if (monthlyBudget <= 0) 1.0 else monthlyBudget
-    val rawProgress = (thisMonthTotal / safeBudget).coerceIn(0.0, 1.2)
-    val animatedProgress by animateFloatAsState(
-        targetValue = rawProgress.toFloat(),
-        animationSpec = tween(durationMillis = 1000, easing = FastOutSlowInEasing),
-        label = "smallFluidProgress"
-    )
-
-    val infiniteTransition = rememberInfiniteTransition(label = "smallWaveTransition")
-    val wavePhase by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = (2 * Math.PI).toFloat(),
-        animationSpec = infiniteRepeatable(
-            animation = tween(2200, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "smallWavePhase"
-    )
-
-    // Dynamic color transition: Green (0-65%) -> Amber (65-85%) -> Red (85%+)
-    val statusColor = when {
-        rawProgress >= 0.85 -> Color(0xFFEF4444) // Bright Red
-        rawProgress >= 0.65 -> Color(0xFFF59E0B) // Amber
-        else -> Color(0xFF10B981)               // Green
-    }
-
-    val remaining = monthlyBudget - thisMonthTotal
-    val isOver = thisMonthTotal > monthlyBudget
-
-    Card(
-        colors = CardDefaults.cardColors(containerColor = SleekSurface),
-        border = BorderStroke(1.dp, SleekBorder),
-        shape = RoundedCornerShape(20.dp),
-        modifier = modifier.fillMaxWidth()
-    ) {
-        Column(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
-        ) {
-            // Header Row: Spent Status on Left, Percentage Badge on Right
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(8.dp)
-                            .clip(CircleShape)
-                            .background(statusColor)
-                    )
-                    Text(
-                        text = String.format("Spent Status: ₹%,.0f / ₹%,.0f", thisMonthTotal, monthlyBudget),
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = SleekTextPrimary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-
-                Surface(
-                    shape = CircleShape,
-                    color = statusColor.copy(alpha = 0.15f),
-                    border = BorderStroke(1.dp, statusColor.copy(alpha = 0.3f))
-                ) {
-                    Text(
-                        text = String.format("%.0f%% Spent", rawProgress * 100),
-                        color = statusColor,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Sleek Small Fluid Wave Meter Bar
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(28.dp)
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(statusColor.copy(alpha = 0.12f))
-                    .border(1.dp, statusColor.copy(alpha = 0.25f), RoundedCornerShape(14.dp))
-            ) {
-                Canvas(modifier = Modifier.fillMaxSize()) {
-                    val width = size.width
-                    val height = size.height
-                    val fillWidth = (width * animatedProgress.coerceAtMost(1.0f))
-
-                    if (fillWidth > 0f) {
-                        val path = Path()
-                        path.moveTo(0f, height)
-                        path.lineTo(0f, 0f)
-
-                        val waveAmplitude = 3.dp.toPx()
-                        val waveFrequency = (2 * Math.PI / (width * 0.35f)).toFloat()
-
-                        var x = 0f
-                        while (x <= fillWidth) {
-                            val y = (java.lang.Math.sin((x * waveFrequency + wavePhase).toDouble()) * waveAmplitude).toFloat() + 3.dp.toPx()
-                            path.lineTo(x, y)
-                            x += 4f
-                        }
-
-                        path.lineTo(fillWidth, height)
-                        path.close()
-
-                        drawPath(
-                            path = path,
-                            brush = Brush.horizontalGradient(
-                                colors = listOf(
-                                    statusColor.copy(alpha = 0.75f),
-                                    statusColor
-                                )
-                            )
-                        )
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(6.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = if (isOver) String.format("Over limit by ₹%,.0f", Math.abs(remaining))
-                           else String.format("₹%,.0f remaining this month", remaining),
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = if (isOver) Color(0xFFEF4444) else SleekTextSecondary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-
-                Text(
-                    text = if (isOver) "Over Budget" else if (rawProgress >= 0.8) "Near Limit" else "On Track",
-                    color = statusColor,
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-        }
-    }
-}
-
 data class SidebarMenuItemData(
     val icon: ImageVector,
     val iconColor: Color,
@@ -8431,296 +6356,6 @@ fun EditNameDialog(
                         modifier = Modifier.weight(1f)
                     ) {
                         Text("Save", color = Color.White)
-                    }
-                }
-            }
-        }
-    }
-}
-
-// ==========================================
-// 📈 IMAGE-INSPIRED TREND LINE & AREA CHART
-// ==========================================
-@Composable
-fun ImageInspiredAnalyticsChartCard(
-    expenses: List<Expense>,
-    selectedPeriodLabel: String = "01 Jun - 17"
-) {
-    var selectedIndex by remember { mutableStateOf<Int?>(null) }
-
-    val calendar = Calendar.getInstance()
-    val maxDay = calendar.get(Calendar.DAY_OF_MONTH).coerceAtLeast(17)
-
-    // Compute aggregate daily values
-    val dailyAmounts = remember(expenses, maxDay) {
-        val map = mutableMapOf<Int, Double>()
-        expenses.forEach { exp ->
-            val cal = Calendar.getInstance().apply { timeInMillis = exp.date }
-            val day = cal.get(Calendar.DAY_OF_MONTH)
-            map[day] = (map[day] ?: 0.0) + exp.amount
-        }
-        (1..maxDay).map { day ->
-            val valFromMap = map[day]
-            val amount = valFromMap ?: when {
-                day == 1 -> 3200.0
-                day == 3 -> 5100.0
-                day == 4 -> 2100.0
-                day == 7 -> 3800.0
-                day == 9 -> 5800.0
-                day == 10 -> 3500.0
-                day == 12 -> 2000.0
-                day == 14 -> 9200.0 // Peak matching reference image!
-                day == 15 -> 7500.0
-                day == 16 -> 5900.0
-                day == 17 -> 4350.0 // Active dot matching reference image!
-                day % 3 == 0 -> 3400.0
-                else -> 2800.0
-            }
-            day to amount
-        }
-    }
-
-    val maxVal = remember(dailyAmounts) {
-        (dailyAmounts.maxOfOrNull { it.second } ?: 10000.0).coerceAtLeast(10000.0)
-    }
-
-    val activeIdx = selectedIndex ?: (dailyAmounts.size - 1)
-    val activePoint = dailyAmounts.getOrNull(activeIdx) ?: (17 to 4350.0)
-
-    Card(
-        shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(containerColor = SleekSurface),
-        border = BorderStroke(1.dp, SleekBorder),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        modifier = Modifier
-            .fillMaxWidth()
-            .testTag("analytics_inspired_line_chart")
-    ) {
-        Column(
-            modifier = Modifier.padding(20.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column {
-                    Text(
-                        text = "Spending Trend",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = SleekTextPrimary,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = selectedPeriodLabel,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = SleekTextSecondary
-                    )
-                }
-
-                Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = SleekPrimary.copy(alpha = 0.12f),
-                    border = BorderStroke(1.dp, SleekPrimary.copy(alpha = 0.3f))
-                ) {
-                    Text(
-                        text = "Day ${activePoint.first}: ₹%,.0f".format(activePoint.second),
-                        color = SleekPrimary,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(20.dp))
-
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(190.dp)
-            ) {
-                val gridLineColor = SleekTextSecondary.copy(alpha = 0.18f)
-
-                Canvas(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .pointerInput(dailyAmounts) {
-                            detectTapGestures { offset ->
-                                val width = size.width
-                                val paddingLeft = 45.dp.toPx()
-                                val paddingRight = 15.dp.toPx()
-                                val chartWidth = width - paddingLeft - paddingRight
-                                val stepX = chartWidth / (dailyAmounts.size - 1).coerceAtLeast(1)
-
-                                val clickedIndex = ((offset.x - paddingLeft) / stepX)
-                                    .roundToInt()
-                                    .coerceIn(0, dailyAmounts.size - 1)
-                                selectedIndex = clickedIndex
-                            }
-                        }
-                ) {
-                    val width = size.width
-                    val height = size.height
-
-                    val paddingLeft = 45.dp.toPx()
-                    val paddingBottom = 25.dp.toPx()
-                    val paddingTop = 15.dp.toPx()
-                    val paddingRight = 15.dp.toPx()
-
-                    val chartWidth = width - paddingLeft - paddingRight
-                    val chartHeight = height - paddingTop - paddingBottom
-
-                    // 1. Grid lines (10K, 5K, 0)
-                    val steps = listOf(1.0, 0.5, 0.0)
-                    val dashPathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 6f), 0f)
-
-                    val textPaint = android.graphics.Paint().apply {
-                        color = android.graphics.Color.GRAY
-                        textSize = 10.dp.toPx()
-                        isAntiAlias = true
-                    }
-
-                    steps.forEach { ratio ->
-                        val y = paddingTop + chartHeight * (1.0 - ratio).toFloat()
-                        drawLine(
-                            color = gridLineColor,
-                            start = Offset(paddingLeft, y),
-                            end = Offset(width - paddingRight, y),
-                            strokeWidth = 1.dp.toPx(),
-                            pathEffect = dashPathEffect
-                        )
-                        val label = if (ratio == 0.0) "0" else "%.0fK".format((maxVal * ratio) / 1000)
-                        drawContext.canvas.nativeCanvas.drawText(
-                            label,
-                            8.dp.toPx(),
-                            y + 4.dp.toPx(),
-                            textPaint
-                        )
-                    }
-
-                    // 2. Points mapping
-                    val points = dailyAmounts.mapIndexed { index, pair ->
-                        val x = paddingLeft + (index.toFloat() / (dailyAmounts.size - 1).coerceAtLeast(1)) * chartWidth
-                        val normalizedY = (pair.second / maxVal).coerceIn(0.0, 1.0).toFloat()
-                        val y = paddingTop + chartHeight * (1f - normalizedY)
-                        Offset(x, y)
-                    }
-
-                    if (points.size >= 2) {
-                        val strokePath = Path()
-                        val fillPath = Path()
-
-                        strokePath.moveTo(points.first().x, points.first().y)
-                        fillPath.moveTo(points.first().x, height - paddingBottom)
-                        fillPath.lineTo(points.first().x, points.first().y)
-
-                        for (i in 0 until points.size - 1) {
-                            val p1 = points[i]
-                            val p2 = points[i + 1]
-                            val controlPoint1 = Offset(p1.x + (p2.x - p1.x) / 2f, p1.y)
-                            val controlPoint2 = Offset(p1.x + (p2.x - p1.x) / 2f, p2.y)
-
-                            strokePath.cubicTo(
-                                controlPoint1.x, controlPoint1.y,
-                                controlPoint2.x, controlPoint2.y,
-                                p2.x, p2.y
-                            )
-                            fillPath.cubicTo(
-                                controlPoint1.x, controlPoint1.y,
-                                controlPoint2.x, controlPoint2.y,
-                                p2.x, p2.y
-                            )
-                        }
-
-                        fillPath.lineTo(points.last().x, height - paddingBottom)
-                        fillPath.close()
-
-                        val strokeBrush = Brush.verticalGradient(
-                            colors = listOf(
-                                Color(0xFFA3E635), // Lime yellow peak
-                                Color(0xFF10B981), // Mint emerald
-                                Color(0xFF06B6D4)  // Cyan
-                            )
-                        )
-                        val fillBrush = Brush.verticalGradient(
-                            colors = listOf(
-                                Color(0xFF10B981).copy(alpha = 0.25f),
-                                Color(0xFF06B6D4).copy(alpha = 0.05f),
-                                Color.Transparent
-                            )
-                        )
-
-                        // Draw Gradient Area Fill
-                        drawPath(path = fillPath, brush = fillBrush)
-
-                        // Draw Smooth Cubic Line Stroke
-                        drawPath(
-                            path = strokePath,
-                            brush = strokeBrush,
-                            style = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round)
-                        )
-
-                        // 3. Active Point Dot & Guide Line (Inspired by reference image)
-                        val activeOffset = points[activeIdx.coerceIn(0, points.size - 1)]
-
-                        // Vertical guide line
-                        drawLine(
-                            color = Color(0xFF1E1B4B).copy(alpha = 0.6f),
-                            start = Offset(activeOffset.x, activeOffset.y),
-                            end = Offset(activeOffset.x, height - paddingBottom),
-                            strokeWidth = 1.5.dp.toPx(),
-                            pathEffect = dashPathEffect
-                        )
-
-                        // Outer ring halo
-                        drawCircle(
-                            color = Color(0xFF818CF8).copy(alpha = 0.35f),
-                            radius = 9.dp.toPx(),
-                            center = activeOffset
-                        )
-
-                        // Solid dark dot matching reference image
-                        drawCircle(
-                            color = Color(0xFF1E1B4B),
-                            radius = 5.5.dp.toPx(),
-                            center = activeOffset
-                        )
-
-                        // White inner core
-                        drawCircle(
-                            color = Color.White,
-                            radius = 2.dp.toPx(),
-                            center = activeOffset
-                        )
-
-                        // 4. X-axis tick labels ("01 Jun", "17")
-                        drawContext.canvas.nativeCanvas.drawText(
-                            "01 Jun",
-                            paddingLeft + chartWidth * 0.40f,
-                            height - 4.dp.toPx(),
-                            textPaint
-                        )
-                        drawContext.canvas.nativeCanvas.drawText(
-                            "${maxDay}",
-                            paddingLeft + chartWidth - 12.dp.toPx(),
-                            height - 4.dp.toPx(),
-                            textPaint
-                        )
-
-                        // X-axis tick indicators
-                        drawLine(
-                            color = Color.Gray,
-                            start = Offset(paddingLeft + chartWidth * 0.46f, height - paddingBottom),
-                            end = Offset(paddingLeft + chartWidth * 0.46f, height - paddingBottom + 5.dp.toPx()),
-                            strokeWidth = 2.dp.toPx()
-                        )
-                        drawLine(
-                            color = Color.Gray,
-                            start = Offset(paddingLeft + chartWidth - 5.dp.toPx(), height - paddingBottom),
-                            end = Offset(paddingLeft + chartWidth - 5.dp.toPx(), height - paddingBottom + 5.dp.toPx()),
-                            strokeWidth = 2.dp.toPx()
-                        )
                     }
                 }
             }
