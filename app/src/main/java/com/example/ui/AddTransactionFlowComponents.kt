@@ -34,9 +34,11 @@ import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -80,6 +82,7 @@ fun AddExpenseDialog(
     onDismiss: () -> Unit,
     onConfirm: (amount: Double, category: String, date: Long, note: String, imagePath: String?, type: String) -> Unit
 ) {
+    val haptic = LocalHapticFeedback.current
     var step by remember { mutableIntStateOf(1) } // 1: Main Add Screen, 2: Add Description Screen
     var showCategorySheet by remember { mutableStateOf(false) }
 
@@ -257,6 +260,7 @@ fun AddExpenseDialog(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(20.dp))
                                 .clickable {
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                     type = "EXPENSE"
                                     category = (if (rememberLastCategory) lastUsedExpenseCategory else null)
                                         ?: expenseCategories.firstOrNull() ?: categories.firstOrNull() ?: "Food"
@@ -298,6 +302,7 @@ fun AddExpenseDialog(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(20.dp))
                                 .clickable {
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                     type = "INCOME"
                                     category = (if (rememberLastCategory) lastUsedIncomeCategory else null)
                                         ?: incomeCategories.firstOrNull() ?: "Salary"
@@ -353,7 +358,10 @@ fun AddExpenseDialog(
                                 ),
                                 shape = CircleShape
                             )
-                            .clickable { isAmountEditing = true }
+                            .clickable {
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                isAmountEditing = true
+                            }
                             .padding(20.dp),
                         contentAlignment = Alignment.Center
                     ) {
@@ -419,6 +427,7 @@ fun AddExpenseDialog(
                                     .clip(RoundedCornerShape(12.dp))
                                     .background(activeSoftBg)
                                     .clickable {
+                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                         val current = amountStr.toDoubleOrNull() ?: 0.0
                                         amountStr = "%.0f".format(current + amt)
                                     }
@@ -458,7 +467,10 @@ fun AddExpenseDialog(
                         border = BorderStroke(1.dp, SleekBorder),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable { showCategorySheet = true }
+                            .clickable {
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                showCategorySheet = true
+                            }
                     ) {
                         Row(
                             modifier = Modifier
@@ -507,6 +519,7 @@ fun AddExpenseDialog(
                     // 5. Confirm Button
                     Button(
                         onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                             if (enteredAmount > 0) {
                                 step = 2 // Proceed to Add Description step
                             } else {
@@ -746,6 +759,7 @@ fun AddExpenseDialog(
                     val finalNote = if (note.trim().isBlank()) category else note.trim()
                     Button(
                         onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                             onConfirm(
                                 enteredAmount,
                                 category,
@@ -844,6 +858,7 @@ fun SelectCategorySheet(
     val finalExpenseList = (defaultExpensePreset + (if (expenseCategories.isNotEmpty()) expenseCategories else categories.filter { !defaultIncomePreset.contains(it) })).distinct()
     val finalIncomeList = (defaultIncomePreset + (if (incomeCategories.isNotEmpty()) incomeCategories else categories.filter { defaultIncomePreset.contains(it) })).distinct()
 
+    val haptic = LocalHapticFeedback.current
     var activeTab by remember { mutableStateOf(if (type == "INCOME") "INCOME" else "EXPENSE") }
 
     Dialog(onDismissRequest = onDismiss) {
@@ -894,7 +909,10 @@ fun SelectCategorySheet(
                             .weight(1f)
                             .clip(RoundedCornerShape(10.dp))
                             .background(if (isExpTab) Color(0xFFEF5350) else Color.Transparent)
-                            .clickable { activeTab = "EXPENSE" }
+                            .clickable {
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                activeTab = "EXPENSE"
+                            }
                             .padding(vertical = 10.dp),
                         contentAlignment = Alignment.Center
                     ) {
@@ -912,7 +930,10 @@ fun SelectCategorySheet(
                             .weight(1f)
                             .clip(RoundedCornerShape(10.dp))
                             .background(if (isIncTab) Color(0xFF10B981) else Color.Transparent)
-                            .clickable { activeTab = "INCOME" }
+                            .clickable {
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                activeTab = "INCOME"
+                            }
                             .padding(vertical = 10.dp),
                         contentAlignment = Alignment.Center
                     ) {
@@ -1034,6 +1055,7 @@ fun CategoryGridSection(
     activeColor: Color,
     onSelect: (String) -> Unit
 ) {
+    val haptic = LocalHapticFeedback.current
     val columns = 4
     val rows = items.chunked(columns)
 
@@ -1052,7 +1074,10 @@ fun CategoryGridSection(
                         modifier = Modifier
                             .weight(1f)
                             .clip(RoundedCornerShape(14.dp))
-                            .clickable { onSelect(cat) }
+                            .clickable {
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                onSelect(cat)
+                            }
                             .padding(4.dp)
                     ) {
                         Box(

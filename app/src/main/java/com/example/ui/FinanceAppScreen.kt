@@ -65,6 +65,7 @@ import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
 import java.io.File
+import android.content.Context
 import kotlin.math.roundToInt
 import android.graphics.Bitmap
 import android.graphics.ImageDecoder
@@ -355,7 +356,8 @@ fun FinanceAppScreen(viewModel: FinanceViewModel) {
                             prefilledDateForAddDialog = null
                             showAddExpenseDialog = true
                         },
-                        onProfileClick = { scope.launch { drawerState.open() } }
+                        onProfileClick = { scope.launch { drawerState.open() } },
+                        onExpenseClick = { viewingDetailExpense = it }
                     )
                     Screen.Calendar -> CalendarTab(
                         expenses = expenses,
@@ -654,7 +656,6 @@ fun DashboardTab(
     }
 
     var showChangeNameDialog by remember { mutableStateOf(false) }
-    var showAdjustBudgetDialog by remember { mutableStateOf(false) }
     var showBillsScreen by remember { mutableStateOf(false) }
     var showRemindersScreen by remember { mutableStateOf(false) }
     var showSavingGoalsScreen by remember { mutableStateOf(false) }
@@ -747,8 +748,15 @@ fun DashboardTab(
                     }
                 }
                 Column {
+                    val timeOfDay = remember {
+                        when (Calendar.getInstance().get(Calendar.HOUR_OF_DAY)) {
+                            in 0..11 -> "Good Morning,"
+                            in 12..16 -> "Good Afternoon,"
+                            else -> "Good Evening,"
+                        }
+                    }
                     Text(
-                        text = "Welcome,",
+                        text = timeOfDay,
                         style = MaterialTheme.typography.bodySmall,
                         color = SleekTextSecondary
                     )
@@ -1151,20 +1159,7 @@ fun DashboardTab(
         }
         Spacer(modifier = Modifier.height(110.dp))
     }
-
-    if (showAdjustBudgetDialog) {
-        AdjustBudgetDialog(
-            currentBudget = monthlyBudget,
-            onDismiss = { showAdjustBudgetDialog = false },
-            onConfirm = {
-                onUpdateBudget(it)
-                showAdjustBudgetDialog = false
-            }
-        )
-    }
 }
-
-
 
 // ==========================================
 // 🎨 QUICK SHORTCUTS & CATEGORY FEED
@@ -1270,45 +1265,46 @@ fun CategoryFeedTile(
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = modifier
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(16.dp))
             .clickable { onClick() }
-            .padding(vertical = 2.dp, horizontal = 1.dp)
+            .padding(vertical = 6.dp, horizontal = 2.dp)
     ) {
         Box(
             modifier = Modifier
-                .size(42.dp)
-                .clip(RoundedCornerShape(14.dp))
-                .background(tileColor),
+                .size(52.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .background(tileColor.copy(alpha = 0.15f)),
             contentAlignment = Alignment.Center
         ) {
             Icon(
                 imageVector = icon,
                 contentDescription = label,
-                tint = Color.White,
-                modifier = Modifier.size(20.dp)
+                tint = tileColor,
+                modifier = Modifier.size(26.dp)
             )
             if (hasBadge) {
                 Box(
                     modifier = Modifier
                         .align(Alignment.TopEnd)
                         .offset(x = 2.dp, y = (-2).dp)
-                        .size(10.dp)
+                        .size(12.dp)
                         .clip(CircleShape)
                         .background(Color(0xFFEF4444))
-                        .border(1.dp, Color.White, CircleShape)
+                        .border(1.5.dp, SleekSurface, CircleShape)
                 )
             }
         }
 
-        Spacer(modifier = Modifier.height(4.dp))
+        Spacer(modifier = Modifier.height(8.dp))
 
         Text(
             text = label,
-            fontSize = 10.sp,
+            fontSize = 11.sp,
             color = SleekTextPrimary,
             fontWeight = FontWeight.SemiBold,
             textAlign = TextAlign.Center,
-            maxLines = 1
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
         )
     }
 }
@@ -1438,11 +1434,11 @@ fun ExpensesTab(
         }
     }
 
-    // Soft mint background inspired by Image 1
+    // Use standard sleek background
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFFE8F3EB))
+            .background(SleekBg)
     ) {
         Column(
             modifier = Modifier
@@ -1470,12 +1466,12 @@ fun ExpensesTab(
                     modifier = Modifier
                         .size(40.dp)
                         .clip(CircleShape)
-                        .background(Color.White.copy(alpha = 0.8f))
+                        .background(SleekSurface.copy(alpha = 0.8f))
                 ) {
                     Icon(
                         imageVector = Icons.Default.ArrowBack,
                         contentDescription = "Back",
-                        tint = Color(0xFF1E293B),
+                        tint = SleekTextPrimary,
                         modifier = Modifier.size(20.dp)
                     )
                 }
@@ -1483,7 +1479,7 @@ fun ExpensesTab(
                 Text(
                     text = "Transactions",
                     style = MaterialTheme.typography.titleLarge,
-                    color = Color(0xFF1E293B),
+                    color = SleekTextPrimary,
                     fontWeight = FontWeight.Bold
                 )
 
@@ -1493,12 +1489,12 @@ fun ExpensesTab(
                     modifier = Modifier
                         .size(40.dp)
                         .clip(CircleShape)
-                        .background(Color.White.copy(alpha = 0.8f))
+                        .background(SleekSurface.copy(alpha = 0.8f))
                 ) {
                     Icon(
                         imageVector = Icons.Default.Search,
                         contentDescription = "Search Transactions",
-                        tint = Color(0xFF1E293B),
+                        tint = SleekTextPrimary,
                         modifier = Modifier.size(20.dp)
                     )
                 }
@@ -1530,8 +1526,8 @@ fun ExpensesTab(
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedBorderColor = SleekPrimary,
                             unfocusedBorderColor = SleekBorder,
-                            focusedContainerColor = Color.White,
-                            unfocusedContainerColor = Color.White
+                            focusedContainerColor = SleekSurface,
+                            unfocusedContainerColor = SleekSurface
                         ),
                         modifier = Modifier
                             .fillMaxWidth()
@@ -1548,13 +1544,15 @@ fun ExpensesTab(
             ) {
                 items(categories) { cat ->
                     val selected = selectedCategoryFilter == cat
-                    val chipBg = if (selected) Color(0xFF1E293B) else Color.White
-                    val chipText = if (selected) Color.White else Color(0xFF64748B)
+                    val chipBg = if (selected) SleekPrimary else SleekSurface
+                    val chipText = if (selected) Color.White else SleekTextSecondary
+                    val chipBorder = if (!selected) BorderStroke(1.dp, SleekBorder) else null
 
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(14.dp))
                             .background(chipBg)
+                            .then(if (chipBorder != null) Modifier.border(chipBorder, RoundedCornerShape(14.dp)) else Modifier)
                             .clickable { selectedCategoryFilter = cat }
                             .padding(horizontal = 14.dp, vertical = 7.dp)
                     ) {
@@ -1597,7 +1595,7 @@ fun ExpensesTab(
                             Text(
                                 text = dateHeader,
                                 style = MaterialTheme.typography.labelLarge,
-                                color = Color(0xFF64748B),
+                                color = SleekTextSecondary,
                                 fontWeight = FontWeight.Medium,
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -1642,7 +1640,7 @@ fun ExpensesTab(
             val selectedExpenses = filteredExpenses.filter { selectedExpenseIds.contains(it.id) }
             if (selectedExpenses.isNotEmpty()) {
                 Card(
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFF0F172A)),
+                    colors = CardDefaults.cardColors(containerColor = SleekPrimary),
                     shape = RoundedCornerShape(20.dp),
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
@@ -1736,11 +1734,11 @@ fun Image1TransactionRow(
 
     Card(
         colors = CardDefaults.cardColors(
-            containerColor = Color.White
+            containerColor = SleekSurface
         ),
         shape = RoundedCornerShape(22.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        border = if (isSelected) BorderStroke(2.dp, SleekPrimary) else null,
+        border = if (isSelected) BorderStroke(2.dp, SleekPrimary) else BorderStroke(1.dp, SleekBorder),
         modifier = Modifier
             .fillMaxWidth()
             .combinedClickable(
@@ -1760,7 +1758,7 @@ fun Image1TransactionRow(
                     .size(46.dp)
                     .clip(CircleShape)
                     .background(
-                        if (isIncome) Color(0xFFDCFCE7) else Color(0xFFF1F5F9)
+                        if (isIncome) IncomeGreenBg else SleekBg
                     ),
                 contentAlignment = Alignment.Center
             ) {
@@ -1774,13 +1772,13 @@ fun Image1TransactionRow(
                         text = firstChar.toString(),
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color(0xFF16A34A)
+                        color = IncomeGreen
                     )
                 } else {
                     Icon(
                         imageVector = getCategoryIcon(expense.category, categoryIcons),
                         contentDescription = expense.category,
-                        tint = if (isIncome) Color(0xFF16A34A) else Color(0xFF0F172A),
+                        tint = if (isIncome) IncomeGreen else SleekTextPrimary,
                         modifier = Modifier.size(22.dp)
                     )
                 }
@@ -1793,7 +1791,7 @@ fun Image1TransactionRow(
                 Text(
                     text = displayName,
                     style = MaterialTheme.typography.titleMedium,
-                    color = Color(0xFF0F172A),
+                    color = SleekTextPrimary,
                     fontWeight = FontWeight.Bold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
@@ -1803,14 +1801,14 @@ fun Image1TransactionRow(
                     Text(
                         text = if (isIncome) "Received" else "Paid",
                         style = MaterialTheme.typography.bodySmall,
-                        color = Color(0xFF94A3B8),
+                        color = SleekTextSecondary,
                         fontWeight = FontWeight.Medium
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Icon(
                         imageVector = Icons.Default.Schedule,
                         contentDescription = null,
-                        tint = Color(0xFF94A3B8),
+                        tint = SleekTextSecondary,
                         modifier = Modifier.size(13.dp)
                     )
                 }
@@ -1821,7 +1819,7 @@ fun Image1TransactionRow(
                 text = String.format("%s₹%,.2f", if (isIncome) "+" else "-", expense.amount),
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Bold,
-                color = if (isIncome) Color(0xFF16A34A) else Color(0xFF991B1B)
+                color = if (isIncome) IncomeGreen else ExpenseRed
             )
         }
     }
@@ -2123,17 +2121,29 @@ fun AnalyticsStatCard(
 fun AnalyticsTab(
     viewModel: FinanceViewModel,
     onAddClick: () -> Unit,
-    onProfileClick: () -> Unit = {}
+    onProfileClick: () -> Unit = {},
+    onExpenseClick: (Expense) -> Unit = {}
 ) {
     val allExpenses by viewModel.expenses.collectAsStateWithLifecycle()
     val userName by viewModel.userName.collectAsStateWithLifecycle()
     val profileImageUri by viewModel.userProfileImageUri.collectAsStateWithLifecycle()
+    val haptic = LocalHapticFeedback.current
+    val categoryIcons by viewModel.categoryIcons.collectAsStateWithLifecycle()
+    val currencySymbol by viewModel.selectedCurrencySymbol.collectAsStateWithLifecycle()
+    val accounts by viewModel.accounts.collectAsStateWithLifecycle()
 
-
-
-    var selectedTimeFilter by remember { mutableStateOf("7D") }
+    val context = LocalContext.current
+    val sharedPrefs = remember(context) {
+        context.getSharedPreferences("finance_prefs", Context.MODE_PRIVATE)
+    }
+    // Filter presets: 7D, 1M, 6M, 1Y, All (removed redundant 30D filter)
+    val timeFilters = listOf("7D", "1M", "6M", "1Y", "All")
+    var selectedTimeFilter by remember {
+        val savedPreset = sharedPrefs.getString("analytics_time_filter", "7D") ?: "7D"
+        val effectivePreset = if (savedPreset == "30D") "1M" else savedPreset
+        mutableStateOf(if (effectivePreset in timeFilters) effectivePreset else "7D")
+    }
     var showExportDialog by remember { mutableStateOf(false) }
-    val timeFilters = listOf("7D", "30D", "1M", "6M", "1Y", "All")
 
     val initials = remember(userName) {
         if (!userName.isNullOrBlank()) {
@@ -2141,39 +2151,50 @@ fun AnalyticsTab(
         } else "U"
     }
 
-    // Filter expenses based on selected time filter
-    val filteredPeriodExpenses = remember(allExpenses, selectedTimeFilter) {
-        val now = Calendar.getInstance()
-        when (selectedTimeFilter) {
+    // Aligned date range calculation for each filter preset
+    val periodDateRange = remember(selectedTimeFilter, allExpenses) {
+        val endCal = Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, 23)
+            set(Calendar.MINUTE, 59)
+            set(Calendar.SECOND, 59)
+            set(Calendar.MILLISECOND, 999)
+        }
+        val end = endCal.timeInMillis
+        val startCal = Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
+        val start = when (selectedTimeFilter) {
             "7D" -> {
-                val start = now.timeInMillis - 7 * 24 * 3600 * 1000L
-                allExpenses.filter { it.date >= start }
-            }
-            "30D" -> {
-                val start = now.timeInMillis - 30L * 24 * 3600 * 1000L
-                allExpenses.filter { it.date >= start }
+                // Last 7 full days (today - 6 days through today)
+                startCal.apply { add(Calendar.DAY_OF_YEAR, -6) }.timeInMillis
             }
             "1M" -> {
-                val m = now.get(Calendar.MONTH)
-                val y = now.get(Calendar.YEAR)
-                allExpenses.filter {
-                    val cal = Calendar.getInstance().apply { timeInMillis = it.date }
-                    cal.get(Calendar.MONTH) == m && cal.get(Calendar.YEAR) == y
-                }
+                // Last 1 month rolling back from today, aligned to start of day
+                startCal.apply { add(Calendar.MONTH, -1) }.timeInMillis
             }
             "6M" -> {
-                val start = Calendar.getInstance().apply { add(Calendar.MONTH, -6) }.timeInMillis
-                allExpenses.filter { it.date >= start }
+                // Last 6 months rolling back from today, aligned to start of day
+                startCal.apply { add(Calendar.MONTH, -6) }.timeInMillis
             }
             "1Y" -> {
-                val y = now.get(Calendar.YEAR)
-                allExpenses.filter {
-                    val cal = Calendar.getInstance().apply { timeInMillis = it.date }
-                    cal.get(Calendar.YEAR) == y
-                }
+                // Last 1 full year rolling back from today, aligned to start of day
+                startCal.apply { add(Calendar.YEAR, -1) }.timeInMillis
             }
-            else -> allExpenses
+            else -> {
+                val minExpenseDate = allExpenses.minOfOrNull { it.date } ?: startCal.timeInMillis
+                minOf(minExpenseDate, startCal.timeInMillis)
+            }
         }
+        Pair(start, end)
+    }
+
+    // Filter expenses based on selected time filter's strictly aligned date boundaries
+    val filteredPeriodExpenses = remember(allExpenses, periodDateRange) {
+        val (start, end) = periodDateRange
+        allExpenses.filter { it.date in start..end }
     }
 
     val expenseList = remember(filteredPeriodExpenses) { filteredPeriodExpenses.filter { it.type != "INCOME" && it.category != "Locked Savings" } }
@@ -2183,7 +2204,39 @@ fun AnalyticsTab(
     val totalIncome = remember(incomeList) { incomeList.sumOf { it.amount } }
     val netBalance = totalIncome - totalSpent
 
-    val context = LocalContext.current
+    val periodDays = remember(periodDateRange) {
+        val (start, end) = periodDateRange
+        val diffMs = (end - start).coerceAtLeast(86400000L)
+        (diffMs / (24 * 3600 * 1000L)).toInt().coerceAtLeast(1)
+    }
+    val dailyAvg = if (periodDays > 0) totalSpent / periodDays else 0.0
+    val savingsRate = if (totalIncome > 0) (((totalIncome - totalSpent) / totalIncome) * 100).coerceIn(-100.0, 100.0) else 0.0
+
+    val dateRangeLabel = remember(periodDateRange, selectedTimeFilter) {
+        val sdf = SimpleDateFormat("MMM d, yyyy", Locale.getDefault())
+        val startStr = sdf.format(Date(periodDateRange.first))
+        val endStr = sdf.format(Date(periodDateRange.second))
+        if (selectedTimeFilter == "All") "All Time" else "$startStr – $endStr"
+    }
+
+    val categoryColors = remember {
+        mapOf(
+            "Food" to Color(0xFFF97316),
+            "Travel" to Color(0xFF06B6D4),
+            "Rent" to Color(0xFF8B5CF6),
+            "Utilities" to Color(0xFFEC4899),
+            "Entertainment" to Color(0xFF3B82F6),
+            "Shopping" to Color(0xFF10B981),
+            "Home" to Color(0xFFF59E0B),
+            "Bills" to Color(0xFFEF4444),
+            "Persons" to Color(0xFF6366F1),
+            "Salary" to Color(0xFF10B981),
+            "Freelance" to Color(0xFF06B6D4),
+            "Investments" to Color(0xFF8B5CF6),
+            "Gifts" to Color(0xFFEC4899),
+            "Others" to Color(0xFF64748B)
+        )
+    }
 
     if (showExportDialog) {
         Dialog(onDismissRequest = { showExportDialog = false }) {
@@ -2222,14 +2275,14 @@ fun AnalyticsTab(
                         }
                     }
 
-                    Text("Export analytics data for period ($selectedTimeFilter):", fontSize = 13.sp, color = SleekTextSecondary)
+                    Text("Export analytics data for $selectedTimeFilter ($dateRangeLabel):", fontSize = 13.sp, color = SleekTextSecondary)
 
                     Button(
                         onClick = {
                             DataExporter.sharePdfReport(
                                 context = context,
                                 expenses = filteredPeriodExpenses,
-                                dateRangeStr = "Period ($selectedTimeFilter)",
+                                dateRangeStr = "$selectedTimeFilter ($dateRangeLabel)",
                                 typeFilterStr = "All Transactions",
                                 categoryFilterStr = "All Categories",
                                 amountSaved = (totalIncome - totalSpent).coerceAtLeast(0.0),
@@ -2252,7 +2305,7 @@ fun AnalyticsTab(
                             DataExporter.exportToCSV(
                                 context = context,
                                 expenses = filteredPeriodExpenses,
-                                dateRangeStr = "Period ($selectedTimeFilter)",
+                                dateRangeStr = "$selectedTimeFilter ($dateRangeLabel)",
                                 typeFilterStr = "All Transactions",
                                 categoryFilterStr = "All Categories"
                             )
@@ -2272,7 +2325,7 @@ fun AnalyticsTab(
                             DataExporter.exportToJson(
                                 context = context,
                                 expenses = filteredPeriodExpenses,
-                                dateRangeStr = "Period ($selectedTimeFilter)",
+                                dateRangeStr = "$selectedTimeFilter ($dateRangeLabel)",
                                 typeFilterStr = "All Transactions",
                                 categoryFilterStr = "All Categories"
                             )
@@ -2400,7 +2453,11 @@ fun AnalyticsTab(
                         .weight(1f)
                         .clip(RoundedCornerShape(14.dp))
                         .background(pillBg)
-                        .clickable { selectedTimeFilter = tf }
+                        .clickable {
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            selectedTimeFilter = tf
+                            sharedPrefs.edit().putString("analytics_time_filter", tf).apply()
+                        }
                         .padding(vertical = 8.dp),
                     contentAlignment = Alignment.Center
                 ) {
@@ -2414,7 +2471,41 @@ fun AnalyticsTab(
             }
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // Aligned Date Range Indicator
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 4.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(5.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.DateRange,
+                    contentDescription = null,
+                    tint = SleekPrimary,
+                    modifier = Modifier.size(13.dp)
+                )
+                Text(
+                    text = dateRangeLabel,
+                    fontSize = 11.sp,
+                    color = SleekTextSecondary,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+            Text(
+                text = "${filteredPeriodExpenses.size} transactions",
+                fontSize = 11.sp,
+                color = SleekTextSecondary
+            )
+        }
+
+        Spacer(modifier = Modifier.height(14.dp))
 
         // Metrics Overview Cards Row (App Default Style)
         Row(
@@ -2446,7 +2537,7 @@ fun AnalyticsTab(
                     }
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = "₹%,.0f".format(totalIncome),
+                        text = "$currencySymbol%,.0f".format(totalIncome),
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Black,
                         color = Color(0xFF10B981)
@@ -2479,7 +2570,7 @@ fun AnalyticsTab(
                     }
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = "₹%,.0f".format(totalSpent),
+                        text = "$currencySymbol%,.0f".format(totalSpent),
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Black,
                         color = Color(0xFFEF4444)
@@ -2512,7 +2603,7 @@ fun AnalyticsTab(
                     }
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = (if (netBalance >= 0) "+₹%,.0f".format(netBalance) else "-₹%,.0f".format(Math.abs(netBalance))),
+                        text = (if (netBalance >= 0) "+$currencySymbol%,.0f".format(netBalance) else "-$currencySymbol%,.0f".format(Math.abs(netBalance))),
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Black,
                         color = if (netBalance >= 0) Color(0xFF10B981) else Color(0xFFEF4444)
@@ -2521,10 +2612,54 @@ fun AnalyticsTab(
             }
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(12.dp))
 
-        val currencySymbol by viewModel.selectedCurrencySymbol.collectAsStateWithLifecycle()
-        val accounts by viewModel.accounts.collectAsStateWithLifecycle()
+        // Secondary Metrics Bar (Activity count, Daily Average, Savings Rate)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(16.dp))
+                .background(SleekSurface)
+                .border(1.dp, SleekBorder, RoundedCornerShape(16.dp))
+                .padding(horizontal = 14.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.SpaceAround,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("Activity", fontSize = 10.sp, color = SleekTextSecondary)
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = "${filteredPeriodExpenses.size} txs",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = SleekTextPrimary
+                )
+            }
+            Box(modifier = Modifier.width(1.dp).height(24.dp).background(SleekBorder))
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("Daily Avg", fontSize = 10.sp, color = SleekTextSecondary)
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = "$currencySymbol%,.0f".format(dailyAvg),
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = SleekTextPrimary
+                )
+            }
+            Box(modifier = Modifier.width(1.dp).height(24.dp).background(SleekBorder))
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("Savings Rate", fontSize = 10.sp, color = SleekTextSecondary)
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = "${savingsRate.roundToInt()}%",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = if (savingsRate >= 0) Color(0xFF10B981) else Color(0xFFEF4444)
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
 
         // 💎 NET WORTH OVER TIME CHART CARD
         NetWorthOverTimeChartCard(
@@ -2533,7 +2668,221 @@ fun AnalyticsTab(
             selectedTimeFilter = selectedTimeFilter,
             currencySymbol = currencySymbol
         )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // 📊 CATEGORY SPENDING BREAKDOWN
+        Card(
+            shape = RoundedCornerShape(24.dp),
+            colors = CardDefaults.cardColors(containerColor = SleekSurface),
+            border = BorderStroke(1.dp, SleekBorder),
+            modifier = Modifier.fillMaxWidth().testTag("analytics_category_breakdown_card")
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                val categoryExpenses = remember(expenseList) {
+                    expenseList.groupBy { it.category }.mapValues { entry -> entry.value.sumOf { it.amount } }
+                }
+                CategoryExpensePieChart(
+                    categoryExpenses = categoryExpenses,
+                    categoryColors = categoryColors,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // 🏷️ TAG & NOTE SPENDING BAR CHART
+        TagSpendingBarChart(
+            expenses = filteredPeriodExpenses,
+            categoryColors = categoryColors,
+            periodLabel = "$selectedTimeFilter ($dateRangeLabel)",
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // 📋 TRANSACTIONS IN SELECTED PERIOD
+        AnalyticsPeriodTransactionsCard(
+            expenses = filteredPeriodExpenses,
+            selectedTimeFilter = selectedTimeFilter,
+            dateRangeLabel = dateRangeLabel,
+            currencySymbol = currencySymbol,
+            categoryIcons = categoryIcons,
+            onExpenseClick = onExpenseClick
+        )
+
         Spacer(modifier = Modifier.height(110.dp))
+    }
+}
+
+// ==========================================
+// 📋 ANALYTICS PERIOD TRANSACTIONS CARD
+// ==========================================
+@Composable
+fun AnalyticsPeriodTransactionsCard(
+    expenses: List<Expense>,
+    selectedTimeFilter: String,
+    dateRangeLabel: String = "",
+    currencySymbol: String,
+    categoryIcons: Map<String, String>,
+    onExpenseClick: (Expense) -> Unit = {}
+) {
+    val haptic = LocalHapticFeedback.current
+    var isExpanded by remember(selectedTimeFilter) { mutableStateOf(false) }
+
+    Card(
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(containerColor = SleekSurface),
+        border = BorderStroke(1.dp, SleekBorder),
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("analytics_period_transactions_card")
+    ) {
+        Column(modifier = Modifier.padding(18.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text(
+                        text = "Transactions in Period",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = SleekTextPrimary
+                    )
+                    Text(
+                        text = if (dateRangeLabel.isNotBlank()) "$selectedTimeFilter • $dateRangeLabel • ${expenses.size} records" else "$selectedTimeFilter • ${expenses.size} records",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = SleekTextSecondary,
+                        fontSize = 11.sp
+                    )
+                }
+
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(SleekPrimaryContainer.copy(alpha = 0.25f))
+                        .padding(horizontal = 10.dp, vertical = 5.dp)
+                ) {
+                    Text(
+                        text = "${expenses.size} total",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = SleekPrimary
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            if (expenses.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 24.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "No transactions found for $selectedTimeFilter",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = SleekTextSecondary
+                    )
+                }
+            } else {
+                val sorted = remember(expenses) { expenses.sortedByDescending { it.date } }
+                val displayCount = if (isExpanded) sorted.size else minOf(6, sorted.size)
+                val visibleItems = remember(sorted, displayCount) { sorted.take(displayCount) }
+
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    visibleItems.forEach { exp ->
+                        val isExpense = exp.type != "INCOME" && exp.category != "Locked Savings"
+                        val amountColor = if (isExpense) Color(0xFFEF4444) else Color(0xFF10B981)
+                        val sign = if (isExpense) "-" else "+"
+                        val emoji = getCategoryEmoji(exp.category, categoryIcons)
+                        val dateStr = SimpleDateFormat("dd MMM, hh:mm a", Locale.getDefault()).format(Date(exp.date))
+
+                        Surface(
+                            shape = RoundedCornerShape(14.dp),
+                            color = SleekNeutralLight.copy(alpha = 0.45f),
+                            border = BorderStroke(0.5.dp, SleekBorder.copy(alpha = 0.5f)),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(14.dp))
+                                .clickable {
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    onExpenseClick(exp)
+                                }
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(36.dp)
+                                            .clip(CircleShape)
+                                            .background(amountColor.copy(alpha = 0.12f)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(text = emoji.ifBlank { if (isExpense) "💸" else "💰" }, fontSize = 16.sp)
+                                    }
+                                    Column {
+                                        Text(
+                                            text = if (!exp.note.isNullOrBlank()) exp.note else exp.category,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = SleekTextPrimary,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                        Text(
+                                            text = "${exp.category} • $dateStr",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = SleekTextSecondary,
+                                            fontSize = 11.sp
+                                        )
+                                    }
+                                }
+
+                                Text(
+                                    text = "$sign$currencySymbol%,.2f".format(exp.amount),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = amountColor
+                                )
+                            }
+                        }
+                    }
+
+                    if (sorted.size > 6) {
+                        TextButton(
+                            onClick = {
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                isExpanded = !isExpanded
+                            },
+                            modifier = Modifier.align(Alignment.CenterHorizontally)
+                        ) {
+                            Text(
+                                text = if (isExpanded) "Show Less" else "View All (${sorted.size})",
+                                color = SleekPrimary,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 13.sp
+                            )
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -2556,9 +2905,16 @@ fun NetWorthOverTimeChartCard(
     val dataPoints = remember(sortedExpenses, totalAccountAssets, selectedTimeFilter) {
         val now = System.currentTimeMillis()
         val dayMs = 86400000L
+        val periodStartMs = when (selectedTimeFilter) {
+            "7D" -> now - 7 * dayMs
+            "1M" -> now - 30 * dayMs
+            "6M" -> now - 180 * dayMs
+            "1Y" -> now - 365 * dayMs
+            else -> sortedExpenses.firstOrNull()?.date ?: (now - 30 * dayMs)
+        }
         if (sortedExpenses.isEmpty()) {
             listOf(
-                Pair(now - 7 * dayMs, totalAccountAssets),
+                Pair(periodStartMs, totalAccountAssets),
                 Pair(now, totalAccountAssets)
             )
         } else {
@@ -2572,7 +2928,7 @@ fun NetWorthOverTimeChartCard(
             }
 
             var runningFlow = initialNetWorth
-            val firstDate = (sortedExpenses.firstOrNull()?.date ?: now) - dayMs
+            val firstDate = minOf(periodStartMs, (sortedExpenses.firstOrNull()?.date ?: now) - dayMs)
             points.add(Pair(firstDate, initialNetWorth))
 
             val step = (sortedExpenses.size / 7).coerceAtLeast(1)
@@ -2584,7 +2940,7 @@ fun NetWorthOverTimeChartCard(
                 points.add(Pair(date, runningFlow))
             }
             if (points.size < 2) {
-                points.add(0, Pair(now - dayMs, initialNetWorth))
+                points.add(0, Pair(periodStartMs, initialNetWorth))
             }
             points
         }
@@ -2843,6 +3199,7 @@ fun CategorySelectorGrid(
     onDeleteCustomCategory: ((String) -> Unit)? = null,
     onEditCustomCategory: ((String, String) -> Unit)? = null
 ) {
+    val haptic = LocalHapticFeedback.current
     FlowRow(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -2860,9 +3217,13 @@ fun CategorySelectorGrid(
                 modifier = Modifier
                     .clip(CircleShape)
                     .combinedClickable(
-                        onClick = { onCategorySelected(cat) },
+                        onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            onCategorySelected(cat)
+                        },
                         onLongClick = {
                             if (!isDefault && (onDeleteCustomCategory != null || onEditCustomCategory != null)) {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                 showEditDeleteDialog = true
                             }
                         }
@@ -3516,6 +3877,7 @@ fun EditExpenseDialog(
     onDismiss: () -> Unit,
     onConfirm: (Expense) -> Unit
 ) {
+    val haptic = LocalHapticFeedback.current
     var type by remember { mutableStateOf(expense.type) }
     var amountStr by remember { mutableStateOf(expense.amount.toString()) }
 
@@ -3591,7 +3953,10 @@ fun EditExpenseDialog(
                             .weight(1f)
                             .clip(RoundedCornerShape(8.dp))
                             .background(if (type == "EXPENSE") SleekPrimary else Color.Transparent)
-                            .clickable { type = "EXPENSE" }
+                            .clickable {
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                type = "EXPENSE"
+                            }
                             .padding(vertical = 8.dp),
                         contentAlignment = Alignment.Center
                     ) {
@@ -3607,7 +3972,10 @@ fun EditExpenseDialog(
                             .weight(1f)
                             .clip(RoundedCornerShape(8.dp))
                             .background(if (type == "INCOME") Color(0xFF10B981) else Color.Transparent)
-                            .clickable { type = "INCOME" }
+                            .clickable {
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                type = "INCOME"
+                            }
                             .padding(vertical = 8.dp),
                         contentAlignment = Alignment.Center
                     ) {
@@ -3774,6 +4142,7 @@ fun EditExpenseDialog(
 
                     Button(
                         onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                             val amount = amountStr.toDoubleOrNull() ?: 0.0
                             if (amount > 0 && note.trim().isNotEmpty()) {
                                 onConfirm(
@@ -6547,6 +6916,12 @@ fun DailyStreakCelebrationDialog(
     streakCount: Int,
     onDismiss: () -> Unit
 ) {
+    val haptic = LocalHapticFeedback.current
+    LaunchedEffect(streakCount) {
+        try {
+            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+        } catch (_: Exception) {}
+    }
     val infiniteTransition = rememberInfiniteTransition(label = "streak_anim")
 
     val rayRotation by infiniteTransition.animateFloat(
@@ -6660,7 +7035,10 @@ fun DailyStreakCelebrationDialog(
                         )
                         Spacer(modifier = Modifier.height(18.dp))
                         Button(
-                            onClick = onDismiss,
+                            onClick = {
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                onDismiss()
+                            },
                             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF97316)),
                             shape = RoundedCornerShape(14.dp),
                             modifier = Modifier.fillMaxWidth()
@@ -6696,6 +7074,7 @@ fun TransactionSuccessDialog(
     currencySymbol: String = "₹",
     onDismiss: () -> Unit
 ) {
+    val haptic = LocalHapticFeedback.current
     var animPhase by remember { mutableIntStateOf(0) } // 0: rotating red swoosh in navy circle, 1: white checkmark draw, 2: card reveal
     val scaleAnim = remember { Animatable(0.35f) }
     val checkmarkProgress = remember { Animatable(0f) }
@@ -6731,6 +7110,9 @@ fun TransactionSuccessDialog(
             targetValue = 1f,
             animationSpec = tween(450, easing = FastOutSlowInEasing)
         )
+        try {
+            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+        } catch (_: Exception) {}
         animPhase = 2
 
         // Step 3: Reveal text card
@@ -6896,7 +7278,10 @@ fun TransactionSuccessDialog(
                             Spacer(modifier = Modifier.height(20.dp))
 
                             Button(
-                                onClick = onDismiss,
+                                onClick = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    onDismiss()
+                                },
                                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0B2E4E)),
                                 shape = RoundedCornerShape(14.dp),
                                 modifier = Modifier

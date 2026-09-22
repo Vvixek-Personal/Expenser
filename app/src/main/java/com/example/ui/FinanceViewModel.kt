@@ -331,6 +331,60 @@ class FinanceViewModel(
         }
     }
 
+    fun updateStreakCount(newStreak: Int? = null) {
+        val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+        val todayStr = sdf.format(Date())
+        val current = _currentStreak.value
+        val target = newStreak ?: (current + 1)
+        sharedPrefs.edit()
+            .putString("last_streak_date", todayStr)
+            .putInt("current_streak", target)
+            .apply()
+        _currentStreak.value = target
+        _showStreakDialog.value = true
+    }
+
+    fun recordDailyTransactionActivity() {
+        val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+        val todayStr = sdf.format(Date())
+        val lastStreakDate = sharedPrefs.getString("last_streak_date", null)
+        var streak = sharedPrefs.getInt("current_streak", 0)
+
+        if (lastStreakDate == null) {
+            streak = 1
+            sharedPrefs.edit()
+                .putString("last_streak_date", todayStr)
+                .putInt("current_streak", streak)
+                .apply()
+            _currentStreak.value = streak
+        } else if (lastStreakDate != todayStr) {
+            try {
+                val lastDate = sdf.parse(lastStreakDate)
+                val todayDate = sdf.parse(todayStr)
+                if (lastDate != null && todayDate != null) {
+                    val diffInMillis = todayDate.time - lastDate.time
+                    val diffInDays = (diffInMillis / (1000 * 60 * 60 * 24)).toInt()
+                    if (diffInDays == 1) {
+                        streak += 1
+                    } else if (diffInDays > 1) {
+                        streak = 1
+                    } else {
+                        if (streak < 1) streak = 1
+                    }
+                } else {
+                    streak = 1
+                }
+            } catch (e: Exception) {
+                streak = 1
+            }
+            sharedPrefs.edit()
+                .putString("last_streak_date", todayStr)
+                .putInt("current_streak", streak)
+                .apply()
+            _currentStreak.value = streak
+        }
+    }
+
     private val _monthlyBudget = MutableStateFlow(25000.0)
     val monthlyBudget: StateFlow<Double> = _monthlyBudget.asStateFlow()
 
@@ -1415,6 +1469,9 @@ class FinanceViewModel(
             )
         }
 
+        // Keep streak updated on adding transaction
+        recordDailyTransactionActivity()
+
         // Remember this category as the last-used one for its type, so the
         // next Add Transaction dialog can pre-select it (if the "Remember
         // Last Selected Category" setting is on).
@@ -1918,8 +1975,8 @@ class FinanceViewModel(
                         category = o.optString("category", "General"),
                         timestamp = o.optLong("timestamp", System.currentTimeMillis()),
                         accountId = o.optLong("accountId", 1L),
-                        note = o.optString("note", null).ifBlank { null },
-                        imagePath = o.optString("imagePath", null).ifBlank { null }
+                        note = if (o.has("note") && !o.isNull("note")) o.getString("note").ifBlank { null } else null,
+                        imagePath = if (o.has("imagePath") && !o.isNull("imagePath")) o.getString("imagePath").ifBlank { null } else null
                     )
                 )
             }
@@ -1935,8 +1992,8 @@ class FinanceViewModel(
                         amount = o.optDouble("amount", 0.0),
                         category = o.optString("category", "General"),
                         date = o.optLong("date", System.currentTimeMillis()),
-                        note = o.optString("note", null).ifBlank { null },
-                        imagePath = o.optString("imagePath", null).ifBlank { null },
+                        note = if (o.has("note") && !o.isNull("note")) o.getString("note").ifBlank { null } else null,
+                        imagePath = if (o.has("imagePath") && !o.isNull("imagePath")) o.getString("imagePath").ifBlank { null } else null,
                         type = o.optString("type", "EXPENSE")
                     )
                 )
@@ -1974,7 +2031,7 @@ class FinanceViewModel(
                         isAutoGap = o.optBoolean("isAutoGap", true),
                         iconTag = o.optString("iconTag", "🎮"),
                         category = o.optString("category", "Saving"),
-                        imageUri = o.optString("imageUri", null).ifBlank { null }
+                        imageUri = if (o.has("imageUri") && !o.isNull("imageUri")) o.getString("imageUri").ifBlank { null } else null
                     )
                 )
             }
