@@ -11,7 +11,7 @@ data class CurrencyItem(
 
 object CurrencyManager {
 
-    val currencies = listOf(
+    private val mutableCurrencies = mutableListOf(
         CurrencyItem("India", "Indian Rupee", "INR", "₹", "🇮🇳", 83.5),
         CurrencyItem("United States", "US Dollar", "USD", "$", "🇺🇸", 1.0),
         CurrencyItem("European Union", "Euro", "EUR", "€", "🇪🇺", 0.92),
@@ -115,6 +115,18 @@ object CurrencyManager {
         CurrencyItem("Afghanistan", "Afghan Afghani", "AFN", "؋", "🇦🇫", 72.0),
         CurrencyItem("Yemen", "Yemeni Rial", "YER", "YR", "🇾🇪", 250.0)
     )
+
+    val currencies: List<CurrencyItem> get() = mutableCurrencies
+
+    fun updateRates(ratesMap: Map<String, Double>) {
+        for (i in mutableCurrencies.indices) {
+            val curr = mutableCurrencies[i]
+            val liveRate = ratesMap[curr.code]
+            if (liveRate != null) {
+                mutableCurrencies[i] = curr.copy(rateToUsd = liveRate)
+            }
+        }
+    }
 
     fun getByCode(code: String): CurrencyItem {
         return currencies.firstOrNull { it.code.equals(code, ignoreCase = true) }

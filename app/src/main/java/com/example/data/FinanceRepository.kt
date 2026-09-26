@@ -69,11 +69,19 @@ class FinanceRepository(private val dao: FinanceDao) {
     suspend fun updateSavingsGoal(goal: SavingsGoal) = dao.updateSavingsGoal(goal)
     suspend fun deleteSavingsGoal(goal: SavingsGoal) = dao.deleteSavingsGoal(goal)
 
+    // --- Reminders ---
+    val allReminders: Flow<List<ReminderEntity>> = dao.getAllReminders()
+    suspend fun insertReminder(reminder: ReminderEntity): Long = dao.insertReminder(reminder)
+    suspend fun updateReminder(reminder: ReminderEntity) = dao.updateReminder(reminder)
+    suspend fun deleteReminder(reminder: ReminderEntity) = dao.deleteReminder(reminder)
+    suspend fun deleteReminderById(id: Long) = dao.deleteReminderById(id)
+
     // --- Transfers & Allocations ---
     suspend fun allocateToSavingsGoal(goal: SavingsGoal, account: Account, amount: Double): Boolean {
         if (account.balance < amount) return false
-        
-        dao.updateAccount(account.copy(balance = account.balance - amount))
+
+        // Balance is adjusted once, inside insertTransaction below. Do not
+        // also update it here — that double-applies the deduction.
         dao.updateSavingsGoal(goal.copy(currentAmount = goal.currentAmount + amount))
         
         insertTransaction(
@@ -91,8 +99,9 @@ class FinanceRepository(private val dao: FinanceDao) {
 
     suspend fun withdrawFromSavingsGoal(goal: SavingsGoal, account: Account, amount: Double): Boolean {
         if (goal.currentAmount < amount) return false
-        
-        dao.updateAccount(account.copy(balance = account.balance + amount))
+
+        // Balance is adjusted once, inside insertTransaction below. Do not
+        // also update it here — that double-applies the credit.
         dao.updateSavingsGoal(goal.copy(currentAmount = goal.currentAmount - amount))
         
         insertTransaction(
@@ -127,4 +136,10 @@ class FinanceRepository(private val dao: FinanceDao) {
         if (budgets.isNotEmpty()) dao.insertBudgets(budgets)
         if (goals.isNotEmpty()) dao.insertSavingsGoals(goals)
     }
+
+    suspend fun insertTransactions(transactions: List<Transaction>) = dao.insertTransactions(transactions)
+    suspend fun insertExpenses(expenses: List<Expense>) = dao.insertExpenses(expenses)
+    suspend fun insertBudgets(budgets: List<Budget>) = dao.insertBudgets(budgets)
+    suspend fun insertSavingsGoals(goals: List<SavingsGoal>) = dao.insertSavingsGoals(goals)
+    suspend fun insertAccounts(accounts: List<Account>) = dao.insertAccounts(accounts)
 }

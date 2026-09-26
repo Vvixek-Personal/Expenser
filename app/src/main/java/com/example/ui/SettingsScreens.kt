@@ -54,10 +54,14 @@ enum class SettingsSubScreen {
     BadgesAndMilestones,
     Appearance,
     Language,
+    Currency,
     DateTime,
     Bills,
     CategoriesTags,
     Budgets,
+    SavingsGoals,
+    Calculations,
+    Transactions,
     BackupRestore,
     DataManagement,
     Security,
@@ -116,14 +120,66 @@ fun PersonalDataScreen(
     val currentGender by viewModel.userGender.collectAsStateWithLifecycle()
     val profileImageUri by viewModel.userProfileImageUri.collectAsStateWithLifecycle()
 
+    val isGoogleSignedIn by viewModel.isGoogleSignedIn.collectAsStateWithLifecycle()
+    val googleAccountEmail by viewModel.googleAccountEmail.collectAsStateWithLifecycle()
+    val googleProfileName by viewModel.googleProfileName.collectAsStateWithLifecycle()
+    val googleProfilePhotoUrl by viewModel.googleProfilePhotoUrl.collectAsStateWithLifecycle()
+
     var nameText by remember { mutableStateOf(currentName ?: "William John Malik") }
+    LaunchedEffect(currentName) {
+        if (!currentName.isNullOrBlank()) {
+            nameText = currentName!!
+        }
+    }
     var dobText by remember { mutableStateOf(currentDob) }
     var jobText by remember { mutableStateOf(currentJob) }
     var incomeText by remember { mutableStateOf(currentIncome) }
     var genderOption by remember { mutableStateOf(currentGender) }
 
     val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
     var showPhotoOptionSheet by remember { mutableStateOf(false) }
+
+    val isGoogleAuthLoading by viewModel.isGoogleAuthLoading.collectAsStateWithLifecycle()
+    val isFirestoreSyncing by viewModel.isFirestoreSyncing.collectAsStateWithLifecycle()
+    val lastFirestoreSyncTime by viewModel.lastFirestoreSyncTime.collectAsStateWithLifecycle()
+
+    // Real Google Sign-Up States
+    var showConfigDialog by remember { mutableStateOf(false) }
+    var showPostSignUpDialog by remember { mutableStateOf(false) }
+    var pendingGmailEmail by remember { mutableStateOf("") }
+    var pendingGmailName by remember { mutableStateOf("") }
+    var pendingGmailPhoto by remember { mutableStateOf<String?>(null) }
+
+    fun startGoogleSignUp(customClientId: String? = null) {
+        coroutineScope.launch {
+            viewModel.setGoogleAuthLoading(true)
+            val result = FirebaseAuthManager.signInWithGoogle(
+                context = context,
+                customServerClientId = customClientId ?: viewModel.getGoogleWebClientId()
+            )
+            viewModel.setGoogleAuthLoading(false)
+            when (result) {
+                is GoogleAuthResult.Success -> {
+                    viewModel.completeGoogleSignUp(result.email, result.displayName, result.photoUrl)
+                    pendingGmailEmail = result.email
+                    pendingGmailName = result.displayName
+                    pendingGmailPhoto = result.photoUrl
+                    showPostSignUpDialog = true
+                }
+                is GoogleAuthResult.Error -> {
+                    if (result.isConfigurationIssue) {
+                        showConfigDialog = true
+                    } else {
+                        Toast.makeText(context, result.message, Toast.LENGTH_LONG).show()
+                    }
+                }
+                is GoogleAuthResult.Cancelled -> {
+                    // User dismissed Google Account Chooser bottom sheet
+                }
+            }
+        }
+    }
 
     val imagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -150,6 +206,27 @@ fun PersonalDataScreen(
                 .padding(20.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
+            // Google Sign-Up: Strictly in Profile only, exactly one button in the entire app
+            if (!isGoogleSignedIn) {
+                GoogleSignUpButton(
+                    onClick = { startGoogleSignUp() },
+                    isLoading = isGoogleAuthLoading,
+                    modifier = Modifier.padding(bottom = 12.dp)
+                )
+            } else {
+                GoogleAccountConnectedCard(
+                    email = googleAccountEmail,
+                    isSyncing = isFirestoreSyncing,
+                    lastSyncTime = lastFirestoreSyncTime,
+                    onSyncNow = { viewModel.triggerFirestoreSync(context) },
+                    onSignOut = {
+                        viewModel.signOutGoogle(context)
+                        Toast.makeText(context, "Signed out of Google & Firebase", Toast.LENGTH_SHORT).show()
+                    },
+                    modifier = Modifier.padding(bottom = 12.dp)
+                )
+            }
+
             // Profile Picture Circle
             Box(
                 contentAlignment = Alignment.BottomEnd,
@@ -311,6 +388,42 @@ fun PersonalDataScreen(
                     }
                     TextButton(onClick = { showPhotoOptionSheet = false }) { Text("Cancel") }
                 }
+            }
+        )
+    }
+
+    if (showConfigDialog) {
+        GoogleSetupGuidanceDialog(
+            initialClientId = viewModel.getGoogleWebClientId(),
+            onDismiss = { showConfigDialog = false },
+            onSaveAndRetry = { newClientId ->
+                viewModel.setGoogleWebClientId(newClientId)
+                showConfigDialog = false
+                startGoogleSignUp(newClientId)
+            }
+        )
+    }
+
+    if (showPostSignUpDialog) {
+        GooglePostSignUpProfileDialog(
+            gmailEmail = pendingGmailEmail,
+            gmailDefaultName = pendingGmailName,
+            gmailDefaultPhotoUrl = pendingGmailPhoto,
+            onDismiss = {
+                // If dismissed, default to Gmail profile as requested
+                viewModel.applyGmailProfile()
+                showPostSignUpDialog = false
+                Toast.makeText(context, "Using Gmail profile", Toast.LENGTH_SHORT).show()
+            },
+            onUseGmailProfile = {
+                viewModel.applyGmailProfile()
+                showPostSignUpDialog = false
+                Toast.makeText(context, "Welcome $pendingGmailName! Using Gmail profile.", Toast.LENGTH_SHORT).show()
+            },
+            onSaveCustomProfile = { customName, customPhotoUri ->
+                viewModel.applyCustomProfileAfterGoogle(customName, customPhotoUri)
+                showPostSignUpDialog = false
+                Toast.makeText(context, "Profile setup complete!", Toast.LENGTH_SHORT).show()
             }
         )
     }
@@ -668,7 +781,7 @@ fun AppearanceScreen(
                         Surface(
                             onClick = { viewModel.updateThemeMode(modeKey) },
                             shape = CircleShape,
-                            color = if (isSelected) Color(0xFF1967D2) else Color.Transparent,
+                            color = if (isSelected) SleekPrimary else Color.Transparent,
                             contentColor = if (isSelected) Color.White else SleekTextPrimary,
                             modifier = Modifier
                                 .weight(1f)
@@ -680,7 +793,7 @@ fun AppearanceScreen(
                                 modifier = Modifier.fillMaxSize()
                             ) {
                                 Icon(
-                                    imageVector = if (isSelected && modeKey == "light") Icons.Default.Check else icon,
+                                    imageVector = icon,
                                     contentDescription = null,
                                     modifier = Modifier.size(16.dp)
                                 )
@@ -723,7 +836,7 @@ fun AppearanceScreen(
                                 ),
                                 border = BorderStroke(
                                     width = if (isSelected) 1.5.dp else 0.dp,
-                                    color = if (isSelected) Color(0xFF1967D2) else Color.Transparent
+                                    color = if (isSelected) SleekPrimary else Color.Transparent
                                 ),
                                 modifier = Modifier
                                     .weight(1f)
@@ -745,12 +858,12 @@ fun AppearanceScreen(
                                                 drawArc(color = preview.bottomLeft, startAngle = 90f, sweepAngle = 90f, useCenter = true)
                                             }
 
-                                            if (isSelected) {
+                                             if (isSelected) {
                                                 Box(
                                                     modifier = Modifier
                                                         .align(Alignment.TopEnd)
                                                         .size(18.dp)
-                                                        .background(Color(0xFF1967D2), CircleShape),
+                                                        .background(SleekPrimary, CircleShape),
                                                     contentAlignment = Alignment.Center
                                                 ) {
                                                     Icon(
@@ -779,7 +892,7 @@ fun AppearanceScreen(
                                                     modifier = Modifier
                                                         .align(Alignment.TopEnd)
                                                         .size(18.dp)
-                                                        .background(Color(0xFF1967D2), CircleShape),
+                                                        .background(SleekPrimary, CircleShape),
                                                     contentAlignment = Alignment.Center
                                                 ) {
                                                     Icon(
@@ -4326,6 +4439,65 @@ fun BackupRestoreScreen(
                 }
             }
 
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // ☁️ SECTION 4: FIREBASE FIRESTORE CLOUD PERSISTENCE & SYNC
+            val isGoogleSignedInBackup by viewModel.isGoogleSignedIn.collectAsStateWithLifecycle()
+            val isFirestoreSyncingBackup by viewModel.isFirestoreSyncing.collectAsStateWithLifecycle()
+            val lastFirestoreSyncTimeBackup by viewModel.lastFirestoreSyncTime.collectAsStateWithLifecycle()
+
+            Card(
+                colors = CardDefaults.cardColors(containerColor = SleekSurface),
+                border = BorderStroke(1.dp, Color(0xFF4285F4).copy(alpha = 0.4f)),
+                shape = RoundedCornerShape(20.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(Icons.Default.CloudSync, contentDescription = null, tint = Color(0xFF4285F4))
+                        Text("FIREBASE FIRESTORE CLOUD SYNC", fontWeight = FontWeight.Bold, color = SleekTextPrimary)
+                    }
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        if (isGoogleSignedInBackup) "Connected to Firestore cloud database. Automatically synchronizes all transactions, accounts, budgets, goals, and reminders."
+                        else "Sign in with Google in your Profile to enable automatic Firestore cloud backup and restore.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = SleekTextSecondary
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = if (lastFirestoreSyncTimeBackup != null) "Last Cloud Sync: $lastFirestoreSyncTimeBackup" else "Not yet synced",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color(0xFF4285F4),
+                        fontWeight = FontWeight.SemiBold
+                    )
+
+                    if (isGoogleSignedInBackup) {
+                        Spacer(modifier = Modifier.height(14.dp))
+                        Button(
+                            onClick = { viewModel.triggerFirestoreSync(context) },
+                            enabled = !isFirestoreSyncingBackup,
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = SleekPrimary)
+                        ) {
+                            if (isFirestoreSyncingBackup) {
+                                CircularProgressIndicator(modifier = Modifier.size(18.dp), color = Color.White, strokeWidth = 2.dp)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Syncing with Firestore…", color = Color.White)
+                            } else {
+                                Icon(Icons.Default.Sync, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Sync Cloud Database Now", color = Color.White)
+                            }
+                        }
+                    }
+                }
+            }
+
             Spacer(modifier = Modifier.height(150.dp))
         }
     }
@@ -4690,13 +4862,15 @@ fun PrivacySettingsScreen(
 }
 
 // ==========================================
-// 1️⃣5️⃣ ABOUT APP SCREEN
+// 1️⃣5️⃣ ABOUT APP & UPDATES TIMELINE SCREEN
 // ==========================================
 @Composable
 fun AboutAppScreen(
     viewModel: FinanceViewModel,
     onBack: () -> Unit
 ) {
+    var selectedTab by remember { mutableIntStateOf(0) }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -4704,41 +4878,123 @@ fun AboutAppScreen(
             .statusBarsPadding()
             .navigationBarsPadding()
     ) {
-        SettingsHeaderTitle("About App", onBack)
+        SettingsHeaderTitle("What's New & About App", onBack)
 
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(20.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+        // Segmented Tabs: Updates Timeline vs App Specs
+        TabRow(
+            selectedTabIndex = selectedTab,
+            containerColor = SleekSurface,
+            contentColor = SleekPrimary,
+            divider = { HorizontalDivider(color = SleekBorder) }
         ) {
-            Icon(Icons.Default.AccountBalanceWallet, contentDescription = null, tint = SleekPrimary, modifier = Modifier.size(64.dp))
-            Spacer(modifier = Modifier.height(12.dp))
-            Text("Finance Tracker Pro", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = SleekTextPrimary)
-            Text("Version 1.2.0 • Build 2026.08", style = MaterialTheme.typography.bodyMedium, color = SleekTextSecondary)
+            Tab(
+                selected = selectedTab == 0,
+                onClick = { selectedTab = 0 },
+                text = {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Icon(Icons.Default.Timeline, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Text("Updates Timeline", fontWeight = if (selectedTab == 0) FontWeight.Bold else FontWeight.Normal)
+                    }
+                }
+            )
+            Tab(
+                selected = selectedTab == 1,
+                onClick = { selectedTab = 1 },
+                text = {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Icon(Icons.Default.Info, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Text("About & System", fontWeight = if (selectedTab == 1) FontWeight.Bold else FontWeight.Normal)
+                    }
+                }
+            )
+        }
 
-            Spacer(modifier = Modifier.height(24.dp))
-
-            Card(
-                colors = CardDefaults.cardColors(containerColor = SleekSurface),
-                border = BorderStroke(1.dp, SleekBorder),
-                shape = RoundedCornerShape(16.dp),
-                modifier = Modifier.fillMaxWidth()
+        if (selectedTab == 0) {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 16.dp, vertical = 14.dp)
             ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text("WHAT'S NEW IN THIS RELEASE", fontWeight = FontWeight.Bold, color = SleekTextPrimary)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text("• Fully independent settings screens for every sidebar menu item", style = MaterialTheme.typography.bodySmall, color = SleekTextSecondary)
-                    Text("• 100+ Currency options with Option A/B conversion behavior", style = MaterialTheme.typography.bodySmall, color = SleekTextSecondary)
-                    Text("• Complete 9-language translation support including RTL for Urdu", style = MaterialTheme.typography.bodySmall, color = SleekTextSecondary)
-                    Text("• Dedicated Bills & Reminders configuration & category icon manager", style = MaterialTheme.typography.bodySmall, color = SleekTextSecondary)
-                    Text("• Fluid budget indicator bar with real-time green/red fill", style = MaterialTheme.typography.bodySmall, color = SleekTextSecondary)
+                item {
+                    UpdatesTimelineView()
+                }
+                item {
+                    Spacer(modifier = Modifier.height(100.dp))
                 }
             }
+        } else {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(20.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Icon(Icons.Default.AccountBalanceWallet, contentDescription = null, tint = SleekPrimary, modifier = Modifier.size(64.dp))
+                Spacer(modifier = Modifier.height(12.dp))
+                Text("Finance Tracker Pro", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = SleekTextPrimary)
+                Text("Version 1.25 • Build 2026.09 (v25)", style = MaterialTheme.typography.bodyMedium, color = SleekTextSecondary)
 
-            Spacer(modifier = Modifier.height(200.dp))
+                Spacer(modifier = Modifier.height(20.dp))
+
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = SleekSurface),
+                    border = BorderStroke(1.dp, SleekBorder),
+                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text("System Architecture & Specifications", fontWeight = FontWeight.Bold, color = SleekTextPrimary)
+                        HorizontalDivider(color = SleekBorder)
+                        DetailSpecRow("Platform", "Android (Jetpack Compose & Kotlin)")
+                        DetailSpecRow("Database", "100% Offline SQLite via AndroidX Room")
+                        DetailSpecRow("Localization", "9 Built-in Languages with native RTL")
+                        DetailSpecRow("Currencies", "100+ Global fiat currencies catalog")
+                        DetailSpecRow("Data Security", "Local Encrypted File Storage, No Cloud Telemetry")
+                        DetailSpecRow("Target SDK", "Android 15 (API 36)")
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = SleekSurface),
+                    border = BorderStroke(1.dp, SleekBorder),
+                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("Privacy Guarantee", fontWeight = FontWeight.Bold, color = SleekTextPrimary)
+                        Text(
+                            "This application operates 100% locally on your device. None of your financial transactions, account balances, bills, or personal notes ever leave your hardware.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = SleekTextSecondary,
+                            lineHeight = 18.sp
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(120.dp))
+            }
         }
+    }
+}
+
+@Composable
+private fun DetailSpecRow(label: String, value: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(label, fontSize = 12.sp, color = SleekTextSecondary)
+        Text(value, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = SleekTextPrimary)
     }
 }
 
@@ -4754,6 +5010,10 @@ fun HelpSupportScreen(
 
     val faqs = remember {
         listOf(
+            "How do I use Quick Shortcuts and the All Shortcuts Launcher?" to "You can access primary shortcuts directly from your Home dashboard. Tap the 'More' button to open the full-screen App Launcher with all 16+ tools, search filter, and category pills.",
+            "How do I view App Update details and release specifications?" to "Navigate to Sidebar -> What's New & About App -> Updates Timeline to inspect each release, its realtime date, and categorized specifications.",
+            "How does the Daily Streak work?" to "Every day you open the app and review or record financial activity, your streak advances! Celebrate milestones with dynamic flame bursts, unlock higher tier badges (Starter -> Bronze -> Silver -> Gold -> Platinum -> Diamond), and tap anywhere on screen to smoothly dismiss the celebration.",
+            "How do I use the interactive Calendar tab?" to "The Calendar tab provides a visual breakdown of your income and expenses day by day. Tap any day to inspect transactions, toggle month/week navigation, and use filters to analyze your cash flow across time.",
             "How do I change the default currency?" to "Go to Sidebar -> Currency, search for your currency, and choose Option A (Keep existing) or Option B (Convert existing transactions using real rates).",
             "Are my financial transactions safe?" to "Yes! Your entire financial database is stored 100% locally on your device with local backup & restore capabilities.",
             "How do I manage my monthly budgets?" to "Go to Sidebar -> Budgets or the Home screen budget card to configure monthly limits and warning thresholds.",

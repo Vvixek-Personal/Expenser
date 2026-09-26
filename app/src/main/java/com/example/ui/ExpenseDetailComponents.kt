@@ -296,15 +296,15 @@ fun ExpenseDetailDialog(
     }
 
     // Color definitions matching the screenshot
-    val pageBg = Color(0xFFF1F5F9)
-    val cardBg = Color.White
-    val cardBorder = Color(0xFFE2E8F0)
-    val primaryBlue = Color(0xFF2555C7)
-    val lightBlueButtonBg = Color(0xFFEFF6FF)
-    val lightBlueButtonText = Color(0xFF2555C7)
-    val darkBlueButtonBg = Color(0xFF2555C7)
-    val incomeGreen = Color(0xFF10B981)
-    val expenseRed = Color(0xFFEF4444)
+    val pageBg = SleekBg
+    val cardBg = SleekSurface
+    val cardBorder = SleekBorder
+    val primaryBlue = SleekPrimary
+    val lightBlueButtonBg = SleekPrimaryContainer
+    val lightBlueButtonText = SleekPrimary
+    val darkBlueButtonBg = SleekPrimary
+    val incomeGreen = IncomeGreen
+    val expenseRed = ExpenseRed
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -342,8 +342,8 @@ fun ExpenseDetailDialog(
                         // Back Button (<)
                         Surface(
                             shape = RoundedCornerShape(14.dp),
-                            color = Color.White,
-                            border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                            color = cardBg,
+                            border = BorderStroke(1.dp, cardBorder),
                             shadowElevation = 1.dp,
                             modifier = Modifier
                                 .size(44.dp)
@@ -357,7 +357,7 @@ fun ExpenseDetailDialog(
                                 Icon(
                                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                                     contentDescription = "Back",
-                                    tint = Color(0xFF0F172A),
+                                    tint = SleekTextPrimary,
                                     modifier = Modifier.size(20.dp)
                                 )
                             }
@@ -368,7 +368,7 @@ fun ExpenseDetailDialog(
                             text = "Receipt Detail",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
-                            color = Color(0xFF0F172A),
+                            color = SleekTextPrimary,
                             fontSize = 18.sp
                         )
 
@@ -380,8 +380,8 @@ fun ExpenseDetailDialog(
                             // Edit Icon Button
                             Surface(
                                 shape = RoundedCornerShape(14.dp),
-                                color = Color.White,
-                                border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                                color = cardBg,
+                                border = BorderStroke(1.dp, cardBorder),
                                 shadowElevation = 1.dp,
                                 modifier = Modifier
                                     .size(44.dp)
@@ -395,7 +395,7 @@ fun ExpenseDetailDialog(
                                     Icon(
                                         imageVector = Icons.Default.Edit,
                                         contentDescription = "Edit Transaction",
-                                        tint = Color(0xFF0F172A),
+                                        tint = SleekTextPrimary,
                                         modifier = Modifier.size(20.dp)
                                     )
                                 }
@@ -404,8 +404,8 @@ fun ExpenseDetailDialog(
                             // Delete Icon Button
                             Surface(
                                 shape = RoundedCornerShape(14.dp),
-                                color = Color.White,
-                                border = BorderStroke(1.dp, Color(0xFFFEE2E2)),
+                                color = cardBg,
+                                border = BorderStroke(1.dp, cardBorder),
                                 shadowElevation = 1.dp,
                                 modifier = Modifier
                                     .size(44.dp)
@@ -451,7 +451,7 @@ fun ExpenseDetailDialog(
                                 horizontalArrangement = Arrangement.spacedBy(14.dp)
                             ) {
                                 // Avatar circle
-                                val avatarBg = if (isIncome) Color(0xFFD1FAE5) else Color(0xFFFEE2E2)
+                                val avatarBg = if (isIncome) incomeGreen.copy(alpha = 0.15f) else expenseRed.copy(alpha = 0.15f)
                                 val avatarTint = if (isIncome) incomeGreen else expenseRed
                                 val emoji = getCategoryEmoji(expense.category, categoryIcons)
 
@@ -483,14 +483,14 @@ fun ExpenseDetailDialog(
                                             text = expense.category,
                                             style = MaterialTheme.typography.titleMedium,
                                             fontWeight = FontWeight.Bold,
-                                            color = Color(0xFF0F172A),
+                                            color = SleekTextPrimary,
                                             maxLines = 1,
                                             overflow = TextOverflow.Ellipsis
                                         )
 
                                         // Badge Pill: INCOME / EXPENSE
                                         Surface(
-                                            color = if (isIncome) Color(0xFFE6F8F0) else Color(0xFFFEE2E2),
+                                            color = if (isIncome) incomeGreen.copy(alpha = 0.15f) else expenseRed.copy(alpha = 0.15f),
                                             shape = RoundedCornerShape(6.dp)
                                         ) {
                                             Text(
@@ -508,14 +508,14 @@ fun ExpenseDetailDialog(
                                     Text(
                                         text = formattedDate,
                                         style = MaterialTheme.typography.bodySmall,
-                                        color = Color(0xFF64748B),
+                                        color = SleekTextSecondary,
                                         fontSize = 12.sp
                                     )
                                 }
                             }
 
                             Spacer(modifier = Modifier.height(16.dp))
-                            HorizontalDivider(color = Color(0xFFF1F5F9), thickness = 1.dp)
+                            HorizontalDivider(color = cardBorder, thickness = 1.dp)
                             Spacer(modifier = Modifier.height(16.dp))
 
                             // Large Amount Text (+₹6.00 / -₹XX.XX)
@@ -539,7 +539,7 @@ fun ExpenseDetailDialog(
                                 text = displayNote,
                                 fontSize = 15.sp,
                                 fontWeight = FontWeight.SemiBold,
-                                color = Color(0xFF1E293B),
+                                color = SleekTextPrimary,
                                 maxLines = 2,
                                 overflow = TextOverflow.Ellipsis
                             )
@@ -588,7 +588,7 @@ fun ExpenseDetailDialog(
                     ) {
                         Surface(
                             shape = RoundedCornerShape(8.dp),
-                            color = Color(0xFFE0E7FF),
+                            color = lightBlueButtonBg,
                             modifier = Modifier.size(28.dp)
                         ) {
                             Box(contentAlignment = Alignment.Center) {
@@ -605,7 +605,7 @@ fun ExpenseDetailDialog(
                             text = "Receipt Attachment",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
-                            color = Color(0xFF0F172A),
+                            color = SleekTextPrimary,
                             fontSize = 16.sp
                         )
                     }
@@ -633,7 +633,7 @@ fun ExpenseDetailDialog(
                                             .height(220.dp)
                                             .clip(RoundedCornerShape(18.dp))
                                             .border(1.dp, cardBorder, RoundedCornerShape(18.dp))
-                                            .background(Color(0xFF0F172A))
+                                            .background(cardBg)
                                             .clickable { showFullImageViewer = true },
                                         contentAlignment = Alignment.Center
                                     ) {
@@ -686,8 +686,8 @@ fun ExpenseDetailDialog(
                                             },
                                             modifier = Modifier.weight(1f),
                                             shape = RoundedCornerShape(12.dp),
-                                            border = BorderStroke(1.dp, Color(0xFFCBD5E1)),
-                                            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF0F172A))
+                                            border = BorderStroke(1.dp, cardBorder),
+                                            colors = ButtonDefaults.outlinedButtonColors(contentColor = SleekTextPrimary)
                                         ) {
                                             Icon(Icons.Rounded.Crop, contentDescription = null, modifier = Modifier.size(16.dp))
                                             Spacer(modifier = Modifier.width(4.dp))
@@ -705,7 +705,7 @@ fun ExpenseDetailDialog(
                                                 Toast.makeText(context, "Receipt removed", Toast.LENGTH_SHORT).show()
                                             },
                                             shape = RoundedCornerShape(12.dp),
-                                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFEE2E2), contentColor = expenseRed)
+                                            colors = ButtonDefaults.buttonColors(containerColor = expenseRed.copy(alpha = 0.15f), contentColor = expenseRed)
                                         ) {
                                             Icon(Icons.Default.DeleteOutline, contentDescription = null, modifier = Modifier.size(16.dp))
                                             Spacer(modifier = Modifier.width(4.dp))
@@ -719,9 +719,9 @@ fun ExpenseDetailDialog(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .clip(RoundedCornerShape(18.dp))
-                                        .background(Color(0xFFF8FAFC))
+                                        .background(cardBg)
                                         .dashedBorder(
-                                            color = Color(0xFFCBD5E1),
+                                            color = cardBorder,
                                             strokeWidth = 1.5.dp,
                                             cornerRadius = 18.dp
                                         )
@@ -741,7 +741,7 @@ fun ExpenseDetailDialog(
                                             text = "No Receipt Image Attached",
                                             fontSize = 16.sp,
                                             fontWeight = FontWeight.Bold,
-                                            color = Color(0xFF0F172A)
+                                            color = SleekTextPrimary
                                         )
 
                                         Spacer(modifier = Modifier.height(4.dp))
@@ -749,7 +749,7 @@ fun ExpenseDetailDialog(
                                         Text(
                                             text = "Attach a receipt image for your records",
                                             fontSize = 13.sp,
-                                            color = Color(0xFF64748B),
+                                            color = SleekTextSecondary,
                                             textAlign = TextAlign.Center
                                         )
 
@@ -874,13 +874,13 @@ fun ExpenseDetailDialog(
                 Text(
                     text = "Delete Transaction?",
                     fontWeight = FontWeight.Bold,
-                    color = Color(0xFF0F172A)
+                    color = SleekTextPrimary
                 )
             },
             text = {
                 Text(
                     text = "Are you sure you want to delete this $currencySymbol${String.format(Locale.getDefault(), "%,.2f", expense.amount)} ${expense.category} record? This action cannot be undone.",
-                    color = Color(0xFF64748B)
+                    color = SleekTextSecondary
                 )
             },
             confirmButton = {
@@ -901,10 +901,10 @@ fun ExpenseDetailDialog(
                 TextButton(
                     onClick = { showDeleteConfirmDialog = false }
                 ) {
-                    Text("Cancel", color = Color(0xFF64748B))
+                    Text("Cancel", color = SleekTextSecondary)
                 }
             },
-            containerColor = Color.White,
+            containerColor = cardBg,
             shape = RoundedCornerShape(20.dp)
         )
     }

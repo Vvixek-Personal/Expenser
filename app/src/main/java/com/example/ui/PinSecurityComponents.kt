@@ -97,9 +97,9 @@ fun PinLockScreen(
             .background(
                 Brush.verticalGradient(
                     colors = listOf(
-                        Color(0xFF0F1014),
-                        Color(0xFF1B1D26),
-                        Color(0xFF0F1014)
+                        SleekBg,
+                        SleekSurface,
+                        SleekBg
                     )
                 )
             )
@@ -142,14 +142,14 @@ fun PinLockScreen(
                     text = "Welcome Back",
                     fontSize = 24.sp,
                     fontWeight = FontWeight.Bold,
-                    color = Color.White
+                    color = SleekTextPrimary
                 )
 
                 Text(
                     text = if (isErrorState) errorMessage else "Enter 4-digit PIN code to unlock",
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Medium,
-                    color = if (isErrorState) Color(0xFFEF4444) else Color.LightGray,
+                    color = if (isErrorState) ExpenseRed else SleekTextSecondary,
                     textAlign = TextAlign.Center
                 )
 
@@ -276,11 +276,11 @@ fun KeypadButton(
             .clip(CircleShape)
             .background(
                 if (item == "C" || item == "DEL") Color.Transparent
-                else Color(0xFF232530)
+                else SleekSurface
             )
             .border(
                 width = if (item == "C" || item == "DEL") 0.dp else 1.dp,
-                color = Color(0xFF383A48),
+                color = SleekBorder,
                 shape = CircleShape
             )
             .clickable { onClick() },
@@ -290,20 +290,20 @@ fun KeypadButton(
             "DEL" -> Icon(
                 imageVector = Icons.Default.Backspace,
                 contentDescription = "Delete",
-                tint = Color.LightGray,
+                tint = SleekTextSecondary,
                 modifier = Modifier.size(24.dp)
             )
             "C" -> Text(
                 text = "CLEAR",
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Bold,
-                color = Color.LightGray
+                color = SleekTextSecondary
             )
             else -> Text(
                 text = item,
                 fontSize = 24.sp,
                 fontWeight = FontWeight.Bold,
-                color = Color.White
+                color = SleekTextPrimary
             )
         }
     }
@@ -335,8 +335,8 @@ fun FirstRunPinSetupDialog(
                 .fillMaxWidth(0.92f)
                 .wrapContentHeight(),
             shape = RoundedCornerShape(28.dp),
-            color = Color(0xFF1B1D26),
-            border = BorderStroke(1.dp, Color(0xFF2E303A))
+            color = SleekSurface,
+            border = BorderStroke(1.dp, SleekBorder)
         ) {
             Column(
                 modifier = Modifier.padding(24.dp),
@@ -363,7 +363,7 @@ fun FirstRunPinSetupDialog(
                     text = if (step == 1) "Protect Your App" else "Confirm Passcode",
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Bold,
-                    color = Color.White
+                    color = SleekTextPrimary
                 )
 
                 Text(
@@ -371,7 +371,7 @@ fun FirstRunPinSetupDialog(
                     else if (step == 1) "Set a 4-digit PIN to secure your financial records."
                     else "Re-enter your 4-digit PIN to confirm.",
                     fontSize = 13.sp,
-                    color = if (errorText.isNotEmpty()) Color(0xFFEF4444) else Color.LightGray,
+                    color = if (errorText.isNotEmpty()) ExpenseRed else SleekTextSecondary,
                     textAlign = TextAlign.Center
                 )
 
@@ -445,7 +445,7 @@ fun FirstRunPinSetupDialog(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     TextButton(onClick = onMaybeLater) {
-                        Text("Maybe later", color = Color.LightGray, fontWeight = FontWeight.SemiBold)
+                        Text("Maybe later", color = SleekTextSecondary, fontWeight = FontWeight.SemiBold)
                     }
 
                     if (step == 2) {
@@ -501,8 +501,8 @@ fun ChangePinDialog(
                 .fillMaxWidth(0.92f)
                 .wrapContentHeight(),
             shape = RoundedCornerShape(28.dp),
-            color = Color(0xFF1B1D26),
-            border = BorderStroke(1.dp, Color(0xFF2E303A))
+            color = SleekSurface,
+            border = BorderStroke(1.dp, SleekBorder)
         ) {
             Column(
                 modifier = Modifier.padding(24.dp),
@@ -519,10 +519,10 @@ fun ChangePinDialog(
                         text = if (currentAppPin != null) "Change Passcode" else "Setup Passcode",
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color.White
+                        color = SleekTextPrimary
                     )
                     IconButton(onClick = onDismiss) {
-                        Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.LightGray)
+                        Icon(Icons.Default.Close, contentDescription = "Close", tint = SleekTextSecondary)
                     }
                 }
 
@@ -534,7 +534,7 @@ fun ChangePinDialog(
                         else -> "Re-enter your new 4-digit passcode to confirm."
                     },
                     fontSize = 13.sp,
-                    color = if (errorText.isNotEmpty()) Color(0xFFEF4444) else Color.LightGray,
+                    color = if (errorText.isNotEmpty()) ExpenseRed else SleekTextSecondary,
                     textAlign = TextAlign.Center
                 )
 

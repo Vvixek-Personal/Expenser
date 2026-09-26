@@ -27,6 +27,7 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -83,12 +84,12 @@ fun AddExpenseDialog(
     onConfirm: (amount: Double, category: String, date: Long, note: String, imagePath: String?, type: String) -> Unit
 ) {
     val haptic = LocalHapticFeedback.current
-    var step by remember { mutableIntStateOf(1) } // 1: Main Add Screen, 2: Add Description Screen
+    var step by rememberSaveable { mutableIntStateOf(1) } // 1: Main Add Screen, 2: Add Description Screen
     var showCategorySheet by remember { mutableStateOf(false) }
 
-    var type by remember { mutableStateOf(defaultTxType) } // "EXPENSE" or "INCOME"
-    var amountStr by remember { mutableStateOf("") }
-    var category by remember {
+    var type by rememberSaveable { mutableStateOf(defaultTxType) } // "EXPENSE" or "INCOME"
+    var amountStr by rememberSaveable { mutableStateOf("") }
+    var category by rememberSaveable {
         val initialCategory = if (type == "INCOME") {
             (if (rememberLastCategory) lastUsedIncomeCategory else null)
                 ?: incomeCategories.firstOrNull() ?: "Salary"
@@ -98,7 +99,7 @@ fun AddExpenseDialog(
         }
         mutableStateOf(initialCategory)
     }
-    var note by remember { mutableStateOf("") }
+    var note by rememberSaveable { mutableStateOf("") }
 
     var isAmountEditing by remember { mutableStateOf(false) }
     var showCreateCategoryDialog by remember { mutableStateOf(false) }

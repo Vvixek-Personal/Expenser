@@ -104,6 +104,30 @@ class FinanceViewModel(
         initialValue = emptyList()
     )
 
+    val reminders = repository.allReminders.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = emptyList()
+    )
+
+    fun insertReminder(text: String, dueDate: Long, isEnabled: Boolean = true) {
+        viewModelScope.launch {
+            repository.insertReminder(ReminderEntity(text = text, dueDate = dueDate, isEnabled = isEnabled))
+        }
+    }
+
+    fun updateReminder(reminder: ReminderEntity) {
+        viewModelScope.launch {
+            repository.updateReminder(reminder)
+        }
+    }
+
+    fun deleteReminder(reminder: ReminderEntity) {
+        viewModelScope.launch {
+            repository.deleteReminder(reminder)
+        }
+    }
+
     // Chat and AI states
     private val _chatMessages = MutableStateFlow<List<ChatMessage>>(
         listOf(
@@ -170,6 +194,139 @@ class FinanceViewModel(
 
     private val _userProfileImageUri = MutableStateFlow<String?>(null)
     val userProfileImageUri: StateFlow<String?> = _userProfileImageUri.asStateFlow()
+
+    // Google Sign-In / Sign-Up Integration State (Firebase Auth + CredentialManager)
+    private val _isGoogleSignedIn = MutableStateFlow(false)
+    val isGoogleSignedIn: StateFlow<Boolean> = _isGoogleSignedIn.asStateFlow()
+
+    private val _isGoogleAuthLoading = MutableStateFlow(false)
+    val isGoogleAuthLoading: StateFlow<Boolean> = _isGoogleAuthLoading.asStateFlow()
+
+    private val _googleAccountEmail = MutableStateFlow<String?>(null)
+    val googleAccountEmail: StateFlow<String?> = _googleAccountEmail.asStateFlow()
+
+    private val _googleProfileName = MutableStateFlow<String?>(null)
+    val googleProfileName: StateFlow<String?> = _googleProfileName.asStateFlow()
+
+    private val _googleProfilePhotoUrl = MutableStateFlow<String?>(null)
+    val googleProfilePhotoUrl: StateFlow<String?> = _googleProfilePhotoUrl.asStateFlow()
+
+    // Firestore Sync State
+    private val _isFirestoreSyncing = MutableStateFlow(false)
+    val isFirestoreSyncing: StateFlow<Boolean> = _isFirestoreSyncing.asStateFlow()
+
+    private val _lastFirestoreSyncTime = MutableStateFlow<String?>(null)
+    val lastFirestoreSyncTime: StateFlow<String?> = _lastFirestoreSyncTime.asStateFlow()
+
+    fun triggerFirestoreSync(context: Context) {
+        val user = FirebaseAuthManager.getFirebaseAuth(context).currentUser
+        val userId = user?.uid ?: _googleAccountEmail.value?.replace(".", "_") ?: "default_user"
+        viewModelScope.launch {
+            _isFirestoreSyncing.value = true
+            try {
+                val result = FirestoreSyncManager.syncBidirectional(context, userId, repository)
+                when (result) {
+                    is SyncResult.Success -> {
+                        val sdf = SimpleDateFormat("dd MMM yyyy, hh:mm a", Locale.getDefault())
+                        val nowFormatted = sdf.format(Date())
+                        _lastFirestoreSyncTime.value = nowFormatted
+                        sharedPrefs.edit().putString("last_firestore_sync_time", nowFormatted).apply()
+                        _toastMessage.value = "☁️ Firestore Sync: ${result.message}"
+                    }
+                    is SyncResult.Error -> {
+                        _toastMessage.value = "⚠️ Cloud sync note: ${result.errorMessage}"
+                    }
+                }
+            } catch (e: Exception) {
+                _toastMessage.value = "Cloud sync note: ${e.message}"
+            } finally {
+                _isFirestoreSyncing.value = false
+            }
+        }
+    }
+
+    fun setGoogleAuthLoading(loading: Boolean) {
+        _isGoogleAuthLoading.value = loading
+    }
+
+    fun getGoogleWebClientId(): String? {
+        return sharedPrefs.getString("google_web_client_id", null)
+    }
+
+    fun setGoogleWebClientId(clientId: String) {
+        sharedPrefs.edit().putString("google_web_client_id", clientId.trim()).apply()
+    }
+
+    fun completeGoogleSignUp(email: String, name: String, photoUrl: String?) {
+        _isGoogleSignedIn.value = true
+        _googleAccountEmail.value = email
+        _googleProfileName.value = name
+        _googleProfilePhotoUrl.value = photoUrl
+        sharedPrefs.edit()
+            .putBoolean("is_google_signed_in", true)
+            .putString("google_account_email", email)
+            .putString("google_profile_name", name)
+            .putString("google_profile_photo_url", photoUrl ?: "")
+            .apply()
+        // Trigger automated cloud sync to keep user data persisted in Firestore
+        triggerFirestoreSync(getApplication())
+    }
+
+    fun applyGmailProfile() {
+        val email = _googleAccountEmail.value ?: ""
+        val gName = _googleProfileName.value?.ifBlank { null }
+            ?: if (email.contains("@")) {
+                email.substringBefore("@").replace(".", " ")
+                    .split(" ").joinToString(" ") { it.replaceFirstChar { c -> c.uppercase() } }
+            } else "Google User"
+
+        val gPhoto = _googleProfilePhotoUrl.value?.ifBlank { null }
+            ?: "https://ui-avatars.com/api/?name=${Uri.encode(gName)}&background=4285F4&color=fff&size=256"
+
+        _userName.value = gName
+        sharedPrefs.edit().putString("user_name", gName).apply()
+
+        _userProfileImageUri.value = gPhoto
+        sharedPrefs.edit().putString("user_profile_image_uri", gPhoto).apply()
+    }
+
+    fun applyCustomProfileAfterGoogle(customName: String?, customPhotoUri: String?) {
+        val email = _googleAccountEmail.value ?: ""
+        val defaultName = _googleProfileName.value?.ifBlank { null }
+            ?: if (email.contains("@")) {
+                email.substringBefore("@").replace(".", " ")
+                    .split(" ").joinToString(" ") { it.replaceFirstChar { c -> c.uppercase() } }
+            } else "Google User"
+
+        val finalName = if (!customName.isNullOrBlank()) customName.trim() else defaultName
+        _userName.value = finalName
+        sharedPrefs.edit().putString("user_name", finalName).apply()
+
+        val defaultPhoto = _googleProfilePhotoUrl.value?.ifBlank { null }
+            ?: "https://ui-avatars.com/api/?name=${Uri.encode(finalName)}&background=4285F4&color=fff&size=256"
+
+        val finalPhoto = if (!customPhotoUri.isNullOrBlank()) customPhotoUri else defaultPhoto
+        _userProfileImageUri.value = finalPhoto
+        sharedPrefs.edit().putString("user_profile_image_uri", finalPhoto).apply()
+    }
+
+    fun signOutGoogle(context: Context? = null) {
+        if (context != null) {
+            FirebaseAuthManager.signOut(context)
+        }
+        _isGoogleSignedIn.value = false
+        _googleAccountEmail.value = null
+        _googleProfileName.value = null
+        _googleProfilePhotoUrl.value = null
+        _lastFirestoreSyncTime.value = null
+        sharedPrefs.edit()
+            .remove("is_google_signed_in")
+            .remove("google_account_email")
+            .remove("google_profile_name")
+            .remove("google_profile_photo_url")
+            .remove("last_firestore_sync_time")
+            .apply()
+    }
 
     fun updateUserProfileImageFromUri(context: Context, uri: Uri) {
         viewModelScope.launch(Dispatchers.IO) {
@@ -685,6 +842,22 @@ class FinanceViewModel(
             }
         }
         _userName.value = sharedPrefs.getString("user_name", null)
+        _isGoogleSignedIn.value = sharedPrefs.getBoolean("is_google_signed_in", false)
+        _googleAccountEmail.value = sharedPrefs.getString("google_account_email", null)
+        _googleProfileName.value = sharedPrefs.getString("google_profile_name", null)
+        _googleProfilePhotoUrl.value = sharedPrefs.getString("google_profile_photo_url", null)
+        _lastFirestoreSyncTime.value = sharedPrefs.getString("last_firestore_sync_time", null)
+        try {
+            val fbUser = FirebaseAuthManager.getFirebaseAuth(getApplication()).currentUser
+            if (fbUser != null) {
+                _isGoogleSignedIn.value = true
+                if (_googleAccountEmail.value.isNullOrBlank()) _googleAccountEmail.value = fbUser.email
+                if (_googleProfileName.value.isNullOrBlank()) _googleProfileName.value = fbUser.displayName
+                if (_googleProfilePhotoUrl.value.isNullOrBlank()) _googleProfilePhotoUrl.value = fbUser.photoUrl?.toString()
+            }
+        } catch (e: Exception) {
+            // Safe fallback
+        }
         val savedImageUri = sharedPrefs.getString("user_profile_image_uri", null)
         if (!savedImageUri.isNullOrBlank()) {
             val localFile = File(getApplication<Application>().filesDir, "user_profile_avatar.jpg")
@@ -754,7 +927,6 @@ class FinanceViewModel(
         val savedMode = sharedPrefs.getString("theme_mode", defaultMode) ?: defaultMode
         _themeMode.value = savedMode
         com.example.ui.theme.themeModeState = savedMode
-        com.example.ui.theme.isDarkModeActive = (savedMode == "dark")
 
         val savedFollowColors = sharedPrefs.getBoolean("follow_device_colors", false)
         _isFollowDeviceColors.value = savedFollowColors
@@ -826,17 +998,21 @@ class FinanceViewModel(
 
     fun updateLanguage(language: String) {
         _selectedLanguage.value = language
-        sharedPrefs.edit().putString("selected_language", language).apply()
         LanguageManager.applyAppLocale(getApplication(), language)
+        // Persistence for this key now lives solely in AppSettingsManager —
+        // dispatch below writes it once and its state flow reflects back
+        // into _selectedLanguage via the init{} collector. Writing it here
+        // too was a duplicate write to the same SharedPreferences file/key.
         appSettingsManager.dispatch(AppSettingsIntent.UpdateLanguage(language))
     }
 
     fun updateThemeMode(mode: String) {
         _themeMode.value = mode
-        sharedPrefs.edit().putString("theme_mode", mode).apply()
         com.example.ui.theme.themeModeState = mode
-        com.example.ui.theme.isDarkModeActive = (mode == "dark")
         com.example.ui.theme.updateThemeColors(_themeIndex.value, _customThemeHue.value)
+        // Persistence for theme_mode now lives solely in AppSettingsManager
+        // (see updateLanguage's comment above for why the direct sharedPrefs
+        // write was removed here).
         appSettingsManager.dispatch(AppSettingsIntent.UpdateTheme(_themeIndex.value, _customThemeHue.value, mode))
     }
 
@@ -899,16 +1075,19 @@ class FinanceViewModel(
     }
 
     fun updateTheme(index: Int) {
-        sharedPrefs.edit().putInt("theme_index", index).apply()
         _themeIndex.value = index
         com.example.ui.theme.updateThemeColors(index, _customThemeHue.value)
+        // Persistence for theme_index now lives solely in AppSettingsManager
+        // (see updateLanguage's comment for why the direct sharedPrefs write
+        // was removed here).
         appSettingsManager.dispatch(AppSettingsIntent.UpdateTheme(index, _customThemeHue.value, _themeMode.value))
     }
 
     fun updateCustomThemeHue(hue: Float) {
-        sharedPrefs.edit().putFloat("custom_theme_hue", hue).apply()
         _customThemeHue.value = hue
         com.example.ui.theme.updateThemeColors(_themeIndex.value, hue)
+        // Persistence for custom_theme_hue now lives solely in
+        // AppSettingsManager (see updateLanguage's comment).
         appSettingsManager.dispatch(AppSettingsIntent.UpdateTheme(_themeIndex.value, hue, _themeMode.value))
     }
 
@@ -974,18 +1153,18 @@ class FinanceViewModel(
         viewModelScope.launch {
             _isUpdatingExchangeRates.value = true
             try {
-                val apiResult = GeminiClient.fetchExchangeRates()
+                GeminiClient.fetchExchangeRates()
                 val sdf = SimpleDateFormat("dd MMM yyyy, hh:mm a", Locale.getDefault())
                 val nowFormatted = sdf.format(Date())
                 _lastExchangeRateUpdate.value = nowFormatted
                 sharedPrefs.edit().putString("last_exchange_rate_update", nowFormatted).apply()
-                _toastMessage.value = "Exchange rates updated via Google API successfully"
+                _toastMessage.value = "Exchange rates updated successfully"
             } catch (e: Exception) {
-                val sdf = SimpleDateFormat("dd MMM yyyy, hh:mm a", Locale.getDefault())
-                val nowFormatted = sdf.format(Date())
-                _lastExchangeRateUpdate.value = nowFormatted
-                sharedPrefs.edit().putString("last_exchange_rate_update", nowFormatted).apply()
-                _toastMessage.value = "Exchange rates updated from cached online rates"
+                // Do NOT touch _lastExchangeRateUpdate/sharedPrefs here — the fetch
+                // genuinely failed, so the last known-good timestamp (from the most
+                // recent real success) should stay as-is instead of being stamped
+                // with "now", which would falsely tell the user rates are current.
+                _toastMessage.value = "Couldn't update exchange rates — check your connection and try again"
             } finally {
                 _isUpdatingExchangeRates.value = false
             }

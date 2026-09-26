@@ -74,3 +74,12 @@ data class SavingsGoal(
     val category: String = "Saving",
     val imageUri: String? = null
 )
+
+@Entity(tableName = "reminders")
+data class ReminderEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val text: String,
+    val dueDate: Long, // timestamp
+    val isCompleted: Boolean = false,
+    val isEnabled: Boolean = true
+)

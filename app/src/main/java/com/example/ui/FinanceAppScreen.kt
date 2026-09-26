@@ -11,6 +11,8 @@ import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.lazy.*
@@ -19,9 +21,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -193,6 +197,7 @@ fun FinanceAppScreen(viewModel: FinanceViewModel) {
     val expenseCategories by viewModel.expenseCategories.collectAsStateWithLifecycle()
     val incomeCategories by viewModel.incomeCategories.collectAsStateWithLifecycle()
     val categoryIcons by viewModel.categoryIcons.collectAsStateWithLifecycle()
+    val currencySymbol by viewModel.selectedCurrencySymbol.collectAsStateWithLifecycle()
 
     val appPin by viewModel.appPin.collectAsStateWithLifecycle()
     val isAppLocked by viewModel.isAppLocked.collectAsStateWithLifecycle()
@@ -200,6 +205,7 @@ fun FinanceAppScreen(viewModel: FinanceViewModel) {
 
     var showChangePinDialog by remember { mutableStateOf(false) }
     var showAddExpenseDialog by remember { mutableStateOf(false) }
+    var customTxTypeForAddDialog by remember { mutableStateOf<String?>(null) }
     var prefilledDateForAddDialog by remember { mutableStateOf<Long?>(null) }
     var editingExpense by remember { mutableStateOf<Expense?>(null) }
     var viewingDetailExpense by remember { mutableStateOf<Expense?>(null) }
@@ -222,6 +228,22 @@ fun FinanceAppScreen(viewModel: FinanceViewModel) {
     LaunchedEffect(isAppLocked, appPin) {
         if (isAppLocked && !appPin.isNullOrBlank()) {
             drawerState.close()
+        }
+    }
+
+    // Re-lock app when backgrounded (ON_STOP) if PIN is configured
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner, appPin) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_STOP) {
+                if (!appPin.isNullOrBlank()) {
+                    viewModel.lockApp()
+                }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
         }
     }
 
@@ -312,16 +334,16 @@ fun FinanceAppScreen(viewModel: FinanceViewModel) {
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
-            // Screen Switcher with animations
+            // Screen Switcher with liquid-glass shared animations
             AnimatedContent(
                 targetState = currentScreen,
                 transitionSpec = {
-                    (fadeIn(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
-                     scaleIn(initialScale = 0.95f, animationSpec = spring(stiffness = Spring.StiffnessMediumLow))) togetherWith
-                    (fadeOut(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
-                     scaleOut(targetScale = 1.02f, animationSpec = spring(stiffness = Spring.StiffnessMediumLow)))
+                    (fadeIn(animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessLow)) +
+                     scaleIn(initialScale = 0.92f, animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessLow))) togetherWith
+                    (fadeOut(animationSpec = spring(stiffness = Spring.StiffnessMedium)) +
+                     scaleOut(targetScale = 1.05f, animationSpec = spring(stiffness = Spring.StiffnessMedium)))
                 },
-                label = "ScreenTransition"
+                label = "LiquidGlassScreenTransition"
             ) { screen ->
                 when (screen) {
                     Screen.Dashboard -> DashboardTab(
@@ -332,6 +354,12 @@ fun FinanceAppScreen(viewModel: FinanceViewModel) {
                         onUpdateBudget = { viewModel.updateMonthlyBudget(it) },
                         onUpdateName = { viewModel.saveUserName(it) },
                         onAddExpenseClick = {
+                            customTxTypeForAddDialog = "EXPENSE"
+                            prefilledDateForAddDialog = null
+                            showAddExpenseDialog = true
+                        },
+                        onAddIncomeClick = {
+                            customTxTypeForAddDialog = "INCOME"
                             prefilledDateForAddDialog = null
                             showAddExpenseDialog = true
                         },
@@ -339,6 +367,7 @@ fun FinanceAppScreen(viewModel: FinanceViewModel) {
                         onNavigateToAnalytics = { navigateToScreen(Screen.Analytics) },
                         onProfileClick = { scope.launch { drawerState.open() } },
                         onEditExpenseClick = { viewingDetailExpense = it },
+                        onOpenSettingsSubScreen = { activeSettingsSubScreen = it },
                         viewModel = viewModel
                     )
                     Screen.Expenses -> ExpensesTab(
@@ -359,11 +388,14 @@ fun FinanceAppScreen(viewModel: FinanceViewModel) {
                         onProfileClick = { scope.launch { drawerState.open() } },
                         onExpenseClick = { viewingDetailExpense = it }
                     )
-                    Screen.Calendar -> CalendarTab(
+                    Screen.Calendar -> EnhancedCalendarTab(
                         expenses = expenses,
                         categoryIcons = categoryIcons,
-                        onAddExpenseForDate = { date ->
+                        currencySymbol = currencySymbol,
+                        billsList = viewModel.billsList,
+                        onAddExpenseForDate = { date, type ->
                             prefilledDateForAddDialog = date
+                            customTxTypeForAddDialog = type
                             showAddExpenseDialog = true
                         },
                         onEditExpense = { viewingDetailExpense = it },
@@ -388,7 +420,7 @@ fun FinanceAppScreen(viewModel: FinanceViewModel) {
                     incomeCategories = incomeCategories,
                     categoryIcons = categoryIcons,
                     expenses = expenses,
-                    defaultTxType = defaultTxType,
+                    defaultTxType = customTxTypeForAddDialog ?: defaultTxType,
                     rememberLastCategory = rememberLastCategory,
                     lastUsedExpenseCategory = lastUsedExpenseCategory,
                     lastUsedIncomeCategory = lastUsedIncomeCategory,
@@ -397,11 +429,15 @@ fun FinanceAppScreen(viewModel: FinanceViewModel) {
                     onAddCategory = { name, catType -> viewModel.addCustomCategory(name, catType) },
                     onDeleteCategory = { viewModel.deleteCustomCategory(it) },
                     onEditCategory = { old, new -> viewModel.renameCustomCategory(old, new) },
-                    onDismiss = { showAddExpenseDialog = false },
+                    onDismiss = {
+                        showAddExpenseDialog = false
+                        customTxTypeForAddDialog = null
+                    },
                     onConfirm = { amount, category, date, note, imagePath, type ->
                         viewModel.addExpense(amount, category, date, note, imagePath, type)
                         viewModel.refreshUsageData()
                         showAddExpenseDialog = false
+                        customTxTypeForAddDialog = null
                         recordedTransactionInfo = RecordedTransactionInfo(
                             amount = amount,
                             category = category,
@@ -479,6 +515,10 @@ fun FinanceAppScreen(viewModel: FinanceViewModel) {
                     viewModel = viewModel,
                     onBack = { activeSettingsSubScreen = null }
                 )
+                SettingsSubScreen.Currency -> CurrencySettingsScreen(
+                    viewModel = viewModel,
+                    onBack = { activeSettingsSubScreen = null }
+                )
                 SettingsSubScreen.DateTime -> DateTimeScreen(
                     viewModel = viewModel,
                     onBack = { activeSettingsSubScreen = null }
@@ -492,6 +532,18 @@ fun FinanceAppScreen(viewModel: FinanceViewModel) {
                     onBack = { activeSettingsSubScreen = null }
                 )
                 SettingsSubScreen.Budgets -> BudgetSettingsScreen(
+                    viewModel = viewModel,
+                    onBack = { activeSettingsSubScreen = null }
+                )
+                SettingsSubScreen.SavingsGoals -> SavingsGoalsSettingsScreen(
+                    viewModel = viewModel,
+                    onBack = { activeSettingsSubScreen = null }
+                )
+                SettingsSubScreen.Calculations -> CalculationsScreen(
+                    viewModel = viewModel,
+                    onBack = { activeSettingsSubScreen = null }
+                )
+                SettingsSubScreen.Transactions -> TransactionSettingsScreen(
                     viewModel = viewModel,
                     onBack = { activeSettingsSubScreen = null }
                 )
@@ -588,21 +640,53 @@ fun DashboardTab(
     onUpdateBudget: (Double) -> Unit,
     onUpdateName: (String) -> Unit,
     onAddExpenseClick: () -> Unit,
+    onAddIncomeClick: () -> Unit = {},
     onNavigateToExpenses: () -> Unit,
     onNavigateToAnalytics: () -> Unit = {},
     onProfileClick: () -> Unit,
     onEditExpenseClick: (Expense) -> Unit,
+    onOpenSettingsSubScreen: (SettingsSubScreen) -> Unit = {},
     viewModel: FinanceViewModel
 ) {
+    val context = LocalContext.current
     val accounts by viewModel.accounts.collectAsStateWithLifecycle()
     val savingsGoals by viewModel.savingsGoals.collectAsStateWithLifecycle()
     val selectedLanguage by viewModel.selectedLanguage.collectAsStateWithLifecycle()
+    val currencySymbol by viewModel.selectedCurrencySymbol.collectAsStateWithLifecycle()
+    val selectedCurrencyCode by viewModel.selectedCurrencyCode.collectAsStateWithLifecycle()
+    val billShowUpcomingDashboard by viewModel.billShowUpcomingDashboard.collectAsStateWithLifecycle()
     val profileImageUri by viewModel.userProfileImageUri.collectAsStateWithLifecycle()
     val currentStreak by viewModel.currentStreak.collectAsStateWithLifecycle()
     val showStreakDialog by viewModel.showStreakDialog.collectAsStateWithLifecycle()
     val isPrivacyMode by viewModel.privacyModeEnabled.collectAsStateWithLifecycle()
     val isPrivacyRevealed by viewModel.privacyRevealOverride.collectAsStateWithLifecycle()
     val shouldHideBalance = isPrivacyMode && !isPrivacyRevealed
+
+    val todayStart = remember {
+        Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }.timeInMillis
+    }
+    val todayEnd = remember {
+        Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, 23)
+            set(Calendar.MINUTE, 59)
+            set(Calendar.SECOND, 59)
+            set(Calendar.MILLISECOND, 999)
+        }.timeInMillis
+    }
+    val todayExpense = remember(expenses) {
+        expenses.filter { it.date in todayStart..todayEnd && it.type != "INCOME" && it.category != "Locked Savings" }
+            .sumOf { it.amount }
+    }
+
+    var showQuickDepositDialog by remember { mutableStateOf<SavingsGoal?>(null) }
+    var showQuickSplitDialog by remember { mutableStateOf(false) }
+    var showQuickConvertDialog by remember { mutableStateOf(false) }
+    var showAdjustBudgetDialog by remember { mutableStateOf(false) }
 
     if (showStreakDialog) {
         DailyStreakCelebrationDialog(
@@ -659,11 +743,73 @@ fun DashboardTab(
     var showBillsScreen by remember { mutableStateOf(false) }
     var showRemindersScreen by remember { mutableStateOf(false) }
     var showSavingGoalsScreen by remember { mutableStateOf(false) }
+    var showAllShortcutsScreen by remember { mutableStateOf(false) }
     var showStartupReminder by remember { mutableStateOf(true) }
 
     LaunchedEffect(Unit) {
         kotlinx.coroutines.delay(5000)
         showStartupReminder = false
+    }
+
+    if (showAllShortcutsScreen) {
+        val todayStr = remember { SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(Date()) }
+        val hasBillDueToday = viewModel.billsList.any { it.dueDate == todayStr }
+
+        AllShortcutsTabScreen(
+            onBack = { showAllShortcutsScreen = false },
+            onAddExpense = {
+                showAllShortcutsScreen = false
+                onAddExpenseClick()
+            },
+            onAddIncome = {
+                showAllShortcutsScreen = false
+                onAddIncomeClick()
+            },
+            onQuickSplit = {
+                showAllShortcutsScreen = false
+                showQuickSplitDialog = true
+            },
+            onQuickConvert = {
+                showAllShortcutsScreen = false
+                showQuickConvertDialog = true
+            },
+            onViewGoals = {
+                showAllShortcutsScreen = false
+                showSavingGoalsScreen = true
+            },
+            onNavigateToExpenses = {
+                showAllShortcutsScreen = false
+                onNavigateToExpenses()
+            },
+            onNavigateToAnalytics = {
+                showAllShortcutsScreen = false
+                onNavigateToAnalytics()
+            },
+            onBillsClick = {
+                showAllShortcutsScreen = false
+                showBillsScreen = true
+            },
+            onReminderClick = {
+                showAllShortcutsScreen = false
+                showRemindersScreen = true
+            },
+            onAdjustBudget = {
+                showAllShortcutsScreen = false
+                showAdjustBudgetDialog = true
+            },
+            onOpenStreak = {
+                showAllShortcutsScreen = false
+                viewModel.triggerShowStreakDialog()
+            },
+            onOpenSettingsSubScreen = { subScreen ->
+                showAllShortcutsScreen = false
+                onOpenSettingsSubScreen(subScreen)
+            },
+            hasBillDueToday = hasBillDueToday,
+            currentStreak = currentStreak,
+            selectedLanguage = selectedLanguage
+        )
+        return
     }
 
     // Startup reminder alert dialog removed - shown on-screen in dashboard feed
@@ -805,27 +951,25 @@ fun DashboardTab(
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(28.dp))
-                .background(
-                    Brush.linearGradient(
-                        colors = listOf(SleekPrimary, Color(0xFF004F87)),
-                        start = Offset(0f, 0f),
-                        end = Offset(1000f, 1000f)
-                    )
+                .background(getHeroCardGradient())
+                .border(
+                    BorderStroke(1.dp, Color.White.copy(alpha = 0.15f)),
+                    RoundedCornerShape(28.dp)
                 )
-                .padding(24.dp)
+                .padding(22.dp)
         ) {
-            // Canvas decorative overlapping circles for professional touch
+            // Canvas decorative overlapping ambient circles for fintech polish
             Box(modifier = Modifier.matchParentSize()) {
                 Canvas(modifier = Modifier.fillMaxSize()) {
                     drawCircle(
-                        color = Color.White.copy(alpha = 0.06f),
-                        radius = 110.dp.toPx(),
-                        center = Offset(size.width - 20.dp.toPx(), -20.dp.toPx())
+                        color = Color.White.copy(alpha = 0.07f),
+                        radius = 120.dp.toPx(),
+                        center = Offset(size.width - 15.dp.toPx(), -15.dp.toPx())
                     )
                     drawCircle(
-                        color = Color.White.copy(alpha = 0.03f),
-                        radius = 160.dp.toPx(),
-                        center = Offset(size.width - 10.dp.toPx(), 10.dp.toPx())
+                        color = Color.White.copy(alpha = 0.04f),
+                        radius = 175.dp.toPx(),
+                        center = Offset(size.width - 5.dp.toPx(), 25.dp.toPx())
                     )
                 }
             }
@@ -838,20 +982,28 @@ fun DashboardTab(
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.AccountBalance,
-                            contentDescription = null,
-                            tint = Color.White.copy(alpha = 0.9f),
-                            modifier = Modifier.size(18.dp)
-                        )
+                        Box(
+                            modifier = Modifier
+                                .size(28.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(Color.White.copy(alpha = 0.18f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.AccountBalance,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
                         Text(
                             text = "TOTAL NET BALANCE",
-                            style = MaterialTheme.typography.labelMedium,
+                            style = MaterialTheme.typography.labelSmall,
                             color = Color.White.copy(alpha = 0.9f),
                             fontWeight = FontWeight.Bold,
-                            letterSpacing = 1.2.sp
+                            letterSpacing = 1.1.sp
                         )
                         if (isPrivacyMode) {
                             IconButton(
@@ -861,7 +1013,7 @@ fun DashboardTab(
                                 Icon(
                                     imageVector = if (shouldHideBalance) Icons.Default.VisibilityOff else Icons.Default.Visibility,
                                     contentDescription = "Toggle privacy reveal",
-                                    tint = Color.White.copy(alpha = 0.8f),
+                                    tint = Color.White.copy(alpha = 0.85f),
                                     modifier = Modifier.size(16.dp)
                                 )
                             }
@@ -870,33 +1022,48 @@ fun DashboardTab(
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(20.dp))
-                            .background(if (overallTotalNetBalance >= 0) Color(0xFF10B981).copy(alpha = 0.25f) else Color(0xFFEF4444).copy(alpha = 0.25f))
+                            .background(
+                                if (overallTotalNetBalance >= 0) Color(0xFF10B981).copy(alpha = 0.28f)
+                                else Color(0xFFEF4444).copy(alpha = 0.28f)
+                            )
+                            .border(
+                                BorderStroke(
+                                    1.dp,
+                                    if (overallTotalNetBalance >= 0) Color(0xFF10B981).copy(alpha = 0.6f)
+                                    else Color(0xFFEF4444).copy(alpha = 0.6f)
+                                ),
+                                RoundedCornerShape(20.dp)
+                            )
                             .padding(horizontal = 10.dp, vertical = 4.dp)
                     ) {
                         Text(
                             text = if (overallTotalNetBalance >= 0) "Safe Balance" else "Overdrawn",
                             color = Color.White,
-                            fontSize = 10.sp,
+                            fontSize = 11.sp,
                             fontWeight = FontWeight.Bold
                         )
                     }
                 }
 
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(10.dp))
 
                 Text(
-                    text = if (shouldHideBalance) "₹ ••••••" else String.format("%s₹%,.2f", if (overallTotalNetBalance >= 0) "" else "-", Math.abs(overallTotalNetBalance)),
+                    text = if (shouldHideBalance) "$currencySymbol ••••••" else String.format("%s%s%,.2f", if (overallTotalNetBalance >= 0) "" else "-", currencySymbol, Math.abs(overallTotalNetBalance)),
                     style = MaterialTheme.typography.headlineLarge,
                     color = Color.White,
                     fontWeight = FontWeight.Bold,
-                    fontSize = 38.sp
+                    fontSize = 36.sp
                 )
 
                 if (totalSavingsGoalsMoney > 0) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                        modifier = Modifier.padding(top = 4.dp)
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        modifier = Modifier
+                            .padding(top = 6.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Color.White.copy(alpha = 0.12f))
+                            .padding(horizontal = 10.dp, vertical = 3.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Default.Savings,
@@ -905,113 +1072,131 @@ fun DashboardTab(
                             modifier = Modifier.size(14.dp)
                         )
                         Text(
-                            text = if (shouldHideBalance) "Includes ₹•••• in Savings Goals" else String.format("Includes ₹%,.0f in Savings Goals", totalSavingsGoalsMoney),
-                            color = Color.White.copy(alpha = 0.85f),
+                            text = if (shouldHideBalance) "Includes $currencySymbol•••• in Savings Goals" else String.format("Includes %s%,.0f in Savings Goals", currencySymbol, totalSavingsGoalsMoney),
+                            color = Color.White.copy(alpha = 0.95f),
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Medium
                         )
                     }
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(18.dp))
 
-                // Breakdown row: Inflow vs Outflow
+                // Breakdown row: Inflow vs Outflow with frosted capsules
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Income
+                    // Income Capsule
                     Row(
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(Color.White.copy(alpha = 0.12f))
+                            .border(BorderStroke(1.dp, Color.White.copy(alpha = 0.15f)), RoundedCornerShape(16.dp))
+                            .padding(horizontal = 12.dp, vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Box(
                             modifier = Modifier
-                                .size(28.dp)
+                                .size(30.dp)
                                 .clip(CircleShape)
-                                .background(Color.White.copy(alpha = 0.2f)),
+                                .background(Color(0xFF10B981).copy(alpha = 0.25f)),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 imageVector = Icons.Default.TrendingUp,
                                 contentDescription = null,
-                                tint = Color(0xFF10B981),
-                                modifier = Modifier.size(16.dp)
+                                tint = Color(0xFF34D399),
+                                modifier = Modifier.size(18.dp)
                             )
                         }
-                        Spacer(modifier = Modifier.width(8.dp))
+                        Spacer(modifier = Modifier.width(10.dp))
                         Column {
                             Text(
-                                text = "TOTAL INCOME",
+                                text = "INCOME",
                                 style = MaterialTheme.typography.labelSmall,
-                                color = Color.White.copy(alpha = 0.6f),
-                                fontSize = 9.sp,
-                                fontWeight = FontWeight.Bold
+                                color = Color.White.copy(alpha = 0.75f),
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 0.5.sp
                             )
                             Text(
-                                text = if (shouldHideBalance) "₹••••" else String.format("₹%,.0f", totalAllTimeIncome),
+                                text = if (shouldHideBalance) "$currencySymbol••••" else String.format("%s%,.0f", currencySymbol, totalAllTimeIncome),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = Color.White,
-                                fontWeight = FontWeight.Bold
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 14.sp
                             )
                         }
                     }
 
-                    // Expense
+                    // Expense Capsule
                     Row(
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(Color.White.copy(alpha = 0.12f))
+                            .border(BorderStroke(1.dp, Color.White.copy(alpha = 0.15f)), RoundedCornerShape(16.dp))
+                            .padding(horizontal = 12.dp, vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Box(
                             modifier = Modifier
-                                .size(28.dp)
+                                .size(30.dp)
                                 .clip(CircleShape)
-                                .background(Color.White.copy(alpha = 0.2f)),
+                                .background(Color(0xFFEF4444).copy(alpha = 0.25f)),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 imageVector = Icons.Default.TrendingDown,
                                 contentDescription = null,
                                 tint = Color(0xFFF87171),
-                                modifier = Modifier.size(16.dp)
+                                modifier = Modifier.size(18.dp)
                             )
                         }
-                        Spacer(modifier = Modifier.width(8.dp))
+                        Spacer(modifier = Modifier.width(10.dp))
                         Column {
                             Text(
-                                text = "TOTAL EXPENSE",
+                                text = "EXPENSE",
                                 style = MaterialTheme.typography.labelSmall,
-                                color = Color.White.copy(alpha = 0.6f),
-                                fontSize = 9.sp,
-                                fontWeight = FontWeight.Bold
+                                color = Color.White.copy(alpha = 0.75f),
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 0.5.sp
                             )
                             Text(
-                                text = if (shouldHideBalance) "₹••••" else String.format("₹%,.0f", totalAllTimeExpense),
+                                text = if (shouldHideBalance) "$currencySymbol••••" else String.format("%s%,.0f", currencySymbol, totalAllTimeExpense),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = Color.White,
-                                fontWeight = FontWeight.Bold
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 14.sp
                             )
                         }
                     }
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(14.dp))
 
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     val isDecrease = thisMonthTotal <= lastMonthTotal
-                    val pillBg = if (isDecrease) Color(0xFFBAF0B2) else Color(0xFFFDE2E4)
-                    val pillTextColor = if (isDecrease) Color(0xFF002106) else Color(0xFF3B0000)
+                    val pillBg = if (isDecrease) Color(0xFF10B981).copy(alpha = 0.28f) else Color(0xFFEF4444).copy(alpha = 0.28f)
+                    val pillTextColor = Color.White
                     val prefixSign = if (isDecrease) "-" else "+"
 
                     Box(
                         modifier = Modifier
                             .clip(CircleShape)
                             .background(pillBg)
-                            .padding(horizontal = 8.dp, vertical = 2.dp)
+                            .border(
+                                BorderStroke(1.dp, if (isDecrease) Color(0xFF10B981).copy(alpha = 0.5f) else Color(0xFFEF4444).copy(alpha = 0.5f)),
+                                CircleShape
+                            )
+                            .padding(horizontal = 9.dp, vertical = 3.dp)
                     ) {
                         Text(
                             text = String.format("%s%.1f%%", prefixSign, Math.abs(diffPct)),
@@ -1022,8 +1207,8 @@ fun DashboardTab(
                         )
                     }
                     Text(
-                        text = String.format("expenses vs last month (₹%,.0f)", lastMonthTotal),
-                        color = Color.White.copy(alpha = 0.7f),
+                        text = String.format("vs last month (%s%,.0f)", currencySymbol, lastMonthTotal),
+                        color = Color.White.copy(alpha = 0.85f),
                         style = MaterialTheme.typography.labelSmall,
                         fontSize = 11.sp
                     )
@@ -1031,20 +1216,101 @@ fun DashboardTab(
             }
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(14.dp))
 
-        // Quick Shortcuts Feed (Always directly below Balance Card per user request)
+        // 💡 1. Daily Smart Financial Insight
+        DailyFinancialInsightWidget(
+            thisMonthIncome = thisMonthIncomeTotal,
+            thisMonthExpense = thisMonthTotal,
+            monthlyBudget = monthlyBudget,
+            streakCount = currentStreak,
+            currencySymbol = currencySymbol
+        )
+
+        Spacer(modifier = Modifier.height(14.dp))
+
+        // ⚡ 2. Quick Shortcuts Feed (Non-repeating 1-tap actions + "More" to open All Shortcuts Launcher)
         QuickServicesCategorySection(
             viewModel = viewModel,
             selectedLanguage = selectedLanguage,
-            onNavigateToExpenses = onNavigateToExpenses,
-            onNavigateToAnalytics = onNavigateToAnalytics,
-            onBillsClick = { showBillsScreen = true },
-            onReminderClick = { showRemindersScreen = true },
-            onGoalsClick = { showSavingGoalsScreen = true }
+            onAddExpense = onAddExpenseClick,
+            onAddIncome = onAddIncomeClick,
+            onQuickSplit = { showQuickSplitDialog = true },
+            onQuickConvert = { showQuickConvertDialog = true },
+            onMoreClick = { showAllShortcutsScreen = true }
         )
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(14.dp))
+
+        // 🧾 4. Upcoming Bills Widget with inline "Pay Now"
+        if (billShowUpcomingDashboard) {
+            UpcomingBillsDashboardWidget(
+                bills = viewModel.billsList,
+                currencySymbol = currencySymbol,
+                onPayBill = { bill ->
+                    val totalBal = accounts.sumOf { it.balance }
+                    if (bill.amount > totalBal && totalBal > 0) {
+                        Toast.makeText(context, "Cannot pay: amount exceeds total balance!", Toast.LENGTH_SHORT).show()
+                    } else {
+                        viewModel.addExpense(
+                            amount = bill.amount,
+                            category = "Bills",
+                            date = System.currentTimeMillis(),
+                            note = "Paid ${bill.title}",
+                            type = "EXPENSE"
+                        )
+                        viewModel.billsList.remove(bill)
+                        Toast.makeText(context, "Paid ${bill.title} successfully!", Toast.LENGTH_SHORT).show()
+                    }
+                },
+                onViewAllBills = { showBillsScreen = true }
+            )
+            Spacer(modifier = Modifier.height(14.dp))
+        }
+
+        // 6. Smart Budget Health Gauge Ring
+        if (monthlyBudget > 0) {
+            SmartBudgetHealthGaugeWidget(
+                monthlyBudget = monthlyBudget,
+                currentMonthExpense = thisMonthTotal,
+                currencySymbol = currencySymbol,
+                onUpdateBudget = { showAdjustBudgetDialog = true }
+            )
+            Spacer(modifier = Modifier.height(14.dp))
+        } else {
+            MonthlyBudgetSnapshotCard(
+                monthlyBudget = monthlyBudget,
+                currentMonthExpense = thisMonthTotal,
+                currencySymbol = currencySymbol,
+                onUpdateBudget = onUpdateBudget
+            )
+            Spacer(modifier = Modifier.height(14.dp))
+        }
+
+        // 🎯 7. Interactive Savings Goal Mini-Carousel
+        if (savingsGoals.isNotEmpty()) {
+            SavingsGoalsMiniCarouselWidget(
+                goals = savingsGoals,
+                currencySymbol = currencySymbol,
+                onQuickDeposit = { goal, amount ->
+                    viewModel.quickDepositToGoal(goal, amount)
+                    Toast.makeText(context, "Deposited \$%.0f to \${goal.name}!".format(amount), Toast.LENGTH_SHORT).show()
+                },
+                onViewAllGoals = { showSavingGoalsScreen = true }
+            )
+            Spacer(modifier = Modifier.height(14.dp))
+        }
+
+        // 📊 8. Monthly Top Spending Categories Widget
+        if (thisMonthExpenses.isNotEmpty()) {
+            TopSpendingCategoriesWidget(
+                expensesThisMonth = thisMonthExpenses,
+                categoryIcons = categoryIcons,
+                currencySymbol = currencySymbol,
+                onNavigateToAnalytics = onNavigateToAnalytics
+            )
+            Spacer(modifier = Modifier.height(14.dp))
+        }
 
         // Recent Activity List Header
         Row(
@@ -1087,7 +1353,119 @@ fun DashboardTab(
         } else {
             // Show top 3 recent items
             expenses.take(3).forEach { expense ->
-                RecentExpenseRow(expense = expense, categoryIcons = categoryIcons, onClick = { onEditExpenseClick(expense) })
+                RecentExpenseRow(
+                    expense = expense,
+                    categoryIcons = categoryIcons,
+                    currencySymbol = currencySymbol,
+                    onClick = { onEditExpenseClick(expense) }
+                )
+            }
+        }
+        Spacer(modifier = Modifier.height(90.dp))
+    }
+
+    if (showQuickDepositDialog != null) {
+        val targetGoal = showQuickDepositDialog!!
+        QuickGoalDepositDialog(
+            goal = targetGoal,
+            currencySymbol = currencySymbol,
+            onDismiss = { showQuickDepositDialog = null },
+            onConfirmDeposit = { amt ->
+                viewModel.quickDepositToGoal(targetGoal, amt)
+                showQuickDepositDialog = null
+                Toast.makeText(context, "Deposited to ${targetGoal.name} successfully!", Toast.LENGTH_SHORT).show()
+            }
+        )
+    }
+
+    if (showQuickSplitDialog) {
+        QuickSplitBillDialog(
+            currencySymbol = currencySymbol,
+            onDismiss = { showQuickSplitDialog = false },
+            onRecordExpense = { amt, note ->
+                viewModel.addExpense(
+                    amount = amt,
+                    category = "Food & Dining",
+                    date = System.currentTimeMillis(),
+                    note = note,
+                    type = "EXPENSE"
+                )
+                Toast.makeText(context, "Recorded split expense of $currencySymbol${String.format(Locale.getDefault(), "%,.2f", amt)}!", Toast.LENGTH_SHORT).show()
+            }
+        )
+    }
+
+    if (showQuickConvertDialog) {
+        QuickCurrencyConvertDialog(
+            currencyCode = selectedCurrencyCode,
+            onDismiss = { showQuickConvertDialog = false },
+            onOpenFullSettings = {
+                showQuickConvertDialog = false
+                onOpenSettingsSubScreen(SettingsSubScreen.Currency)
+            }
+        )
+    }
+
+    if (showAdjustBudgetDialog) {
+        var budgetInput by remember { mutableStateOf(if (monthlyBudget > 0) monthlyBudget.toInt().toString() else "") }
+        Dialog(onDismissRequest = { showAdjustBudgetDialog = false }) {
+            Card(
+                shape = RoundedCornerShape(24.dp),
+                colors = CardDefaults.cardColors(containerColor = SleekSurface),
+                border = BorderStroke(1.dp, SleekBorder),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier.padding(22.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    Text(
+                        text = "Set Monthly Budget Target",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = SleekTextPrimary
+                    )
+                    Text(
+                        text = "Your daily spending allowance will automatically adapt based on the days remaining in the month.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = SleekTextSecondary
+                    )
+                    OutlinedTextField(
+                        value = budgetInput,
+                        onValueChange = { budgetInput = it.filter { c -> c.isDigit() } },
+                        label = { Text("Budget Target ($currencySymbol)") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = { showAdjustBudgetDialog = false },
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("Cancel", color = SleekTextSecondary)
+                        }
+                        Button(
+                            onClick = {
+                                val amt = budgetInput.toDoubleOrNull() ?: 0.0
+                                if (amt > 0) {
+                                    onUpdateBudget(amt)
+                                    showAdjustBudgetDialog = false
+                                }
+                            },
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = SleekPrimary),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("Save", color = Color.White)
+                        }
+                    }
+                }
             }
         }
     }
@@ -1168,15 +1546,12 @@ fun DashboardTab(
 fun QuickServicesCategorySection(
     viewModel: FinanceViewModel = androidx.lifecycle.viewmodel.compose.viewModel(),
     selectedLanguage: String = "English",
-    onNavigateToExpenses: () -> Unit,
-    onNavigateToAnalytics: () -> Unit,
-    onBillsClick: () -> Unit,
-    onReminderClick: () -> Unit,
-    onGoalsClick: () -> Unit = {}
+    onAddExpense: () -> Unit,
+    onAddIncome: () -> Unit,
+    onQuickSplit: () -> Unit,
+    onQuickConvert: () -> Unit,
+    onMoreClick: () -> Unit
 ) {
-    val todayStr = remember { SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(Date()) }
-    val hasBillDueToday = viewModel.billsList.any { it.dueDate == todayStr }
-
     Card(
         shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(containerColor = SleekSurface),
@@ -1195,58 +1570,87 @@ fun QuickServicesCategorySection(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = LanguageManager.tr("Quick Shortcuts", selectedLanguage),
-                    style = MaterialTheme.typography.titleMedium,
-                    color = SleekTextPrimary,
-                    fontWeight = FontWeight.Bold
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Bolt,
+                        contentDescription = null,
+                        tint = SleekPrimary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Text(
+                        text = LanguageManager.tr("Quick Shortcuts", selectedLanguage),
+                        style = MaterialTheme.typography.titleMedium,
+                        color = SleekTextPrimary,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                TextButton(
+                    onClick = onMoreClick,
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                ) {
+                    Text(
+                        text = "All Tools",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = SleekPrimary,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.width(2.dp))
+                    Icon(
+                        imageVector = Icons.Rounded.ChevronRight,
+                        contentDescription = null,
+                        tint = SleekPrimary,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
             }
 
             Row(
-                modifier = Modifier
-                    .fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 CategoryFeedTile(
-                    icon = Icons.Rounded.Savings,
-                    label = "Goals",
-                    tileColor = Color(0xFF0EA5E9),
-                    onClick = onGoalsClick,
+                    icon = Icons.Rounded.TrendingDown,
+                    label = "+ Expense",
+                    tileColor = Color(0xFFEF4444),
+                    onClick = onAddExpense,
                     modifier = Modifier.weight(1f)
                 )
 
                 CategoryFeedTile(
-                    icon = Icons.Rounded.ReceiptLong,
-                    label = "Finance",
-                    tileColor = Color(0xFF6366F1),
-                    onClick = onNavigateToExpenses,
-                    modifier = Modifier.weight(1f)
-                )
-
-                CategoryFeedTile(
-                    icon = Icons.Rounded.PieChart,
-                    label = "Analytics",
+                    icon = Icons.Rounded.TrendingUp,
+                    label = "+ Income",
                     tileColor = Color(0xFF10B981),
-                    onClick = onNavigateToAnalytics,
+                    onClick = onAddIncome,
                     modifier = Modifier.weight(1f)
                 )
 
                 CategoryFeedTile(
-                    icon = Icons.Rounded.Receipt,
-                    label = "Bills",
+                    icon = Icons.Rounded.CallSplit,
+                    label = "Split Bill",
+                    tileColor = Color(0xFF6366F1),
+                    onClick = onQuickSplit,
+                    modifier = Modifier.weight(1f)
+                )
+
+                CategoryFeedTile(
+                    icon = Icons.Rounded.CurrencyExchange,
+                    label = "Convert",
+                    tileColor = Color(0xFF0EA5E9),
+                    onClick = onQuickConvert,
+                    modifier = Modifier.weight(1f)
+                )
+
+                CategoryFeedTile(
+                    icon = Icons.Rounded.GridView,
+                    label = "More",
                     tileColor = Color(0xFFF59E0B),
-                    onClick = onBillsClick,
+                    onClick = onMoreClick,
                     modifier = Modifier.weight(1f),
-                    hasBadge = hasBillDueToday
-                )
-
-                CategoryFeedTile(
-                    icon = Icons.Rounded.NotificationsActive,
-                    label = "Reminder",
-                    tileColor = Color(0xFFEC4899),
-                    onClick = onReminderClick,
-                    modifier = Modifier.weight(1f)
+                    hasBadge = true
                 )
             }
         }
@@ -1262,18 +1666,42 @@ fun CategoryFeedTile(
     modifier: Modifier = Modifier,
     hasBadge: Boolean = false
 ) {
+    val haptic = LocalHapticFeedback.current
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.88f else 1.0f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessLow
+        ),
+        label = "tile_scale"
+    )
+
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = modifier
-            .clip(RoundedCornerShape(16.dp))
-            .clickable { onClick() }
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
+            .clip(RoundedCornerShape(18.dp))
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null
+            ) {
+                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                onClick()
+            }
             .padding(vertical = 6.dp, horizontal = 2.dp)
     ) {
         Box(
             modifier = Modifier
-                .size(52.dp)
-                .clip(RoundedCornerShape(16.dp))
-                .background(tileColor.copy(alpha = 0.15f)),
+                .size(54.dp)
+                .clip(RoundedCornerShape(18.dp))
+                .background(tileColor.copy(alpha = 0.14f))
+                .border(BorderStroke(1.dp, tileColor.copy(alpha = 0.22f)), RoundedCornerShape(18.dp)),
             contentAlignment = Alignment.Center
         ) {
             Icon(
@@ -1310,7 +1738,256 @@ fun CategoryFeedTile(
 }
 
 @Composable
-fun RecentExpenseRow(expense: Expense, categoryIcons: Map<String, String> = emptyMap(), onClick: () -> Unit) {
+fun MonthlyBudgetSnapshotCard(
+    monthlyBudget: Double,
+    currentMonthExpense: Double,
+    currencySymbol: String = "₹",
+    onUpdateBudget: (Double) -> Unit
+) {
+    var showEditBudgetDialog by remember { mutableStateOf(false) }
+
+    Card(
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(containerColor = SleekSurface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        border = BorderStroke(1.dp, SleekBorder),
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("dashboard_monthly_budget_card")
+    ) {
+        Column(
+            modifier = Modifier.padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(SleekPrimary.copy(alpha = 0.12f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.PieChart,
+                            contentDescription = null,
+                            tint = SleekPrimary,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    Column {
+                        Text(
+                            text = "Monthly Budget",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = SleekTextPrimary,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = if (monthlyBudget > 0) "Current month burn rate" else "No target configured",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = SleekTextSecondary,
+                            fontSize = 11.sp
+                        )
+                    }
+                }
+
+                TextButton(
+                    onClick = { showEditBudgetDialog = true },
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                ) {
+                    Text(
+                        text = if (monthlyBudget > 0) "Adjust" else "Set Target",
+                        color = SleekPrimary,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 12.sp
+                    )
+                }
+            }
+
+            if (monthlyBudget > 0) {
+                val spentPct = ((currentMonthExpense / monthlyBudget) * 100).coerceAtLeast(0.0)
+                val remaining = monthlyBudget - currentMonthExpense
+                val isExceeded = remaining < 0
+                val progressFraction = (currentMonthExpense / monthlyBudget).toFloat().coerceIn(0f, 1f)
+
+                val statusColor = when {
+                    isExceeded -> Color(0xFFEF4444)
+                    spentPct >= 80 -> Color(0xFFF59E0B)
+                    else -> Color(0xFF10B981)
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.Bottom
+                ) {
+                    Column {
+                        Text(
+                            text = "Spent this month",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = SleekTextSecondary,
+                            fontSize = 11.sp
+                        )
+                        Text(
+                            text = String.format("%s%,.0f", currencySymbol, currentMonthExpense),
+                            style = MaterialTheme.typography.titleLarge,
+                            color = SleekTextPrimary,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    Column(horizontalAlignment = Alignment.End) {
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(statusColor.copy(alpha = 0.15f))
+                                .border(BorderStroke(1.dp, statusColor.copy(alpha = 0.3f)), RoundedCornerShape(8.dp))
+                                .padding(horizontal = 8.dp, vertical = 3.dp)
+                        ) {
+                            Text(
+                                text = if (isExceeded) "Exceeded by ${String.format("%s%,.0f", currencySymbol, Math.abs(remaining))}"
+                                else String.format("%.0f%% used", spentPct),
+                                color = statusColor,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = if (!isExceeded) String.format("%s%,.0f remaining", currencySymbol, remaining) else "Limit: ${String.format("%s%,.0f", currencySymbol, monthlyBudget)}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = SleekTextSecondary,
+                            fontSize = 11.sp
+                        )
+                    }
+                }
+
+                // Sleek progress bar
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(10.dp)
+                        .clip(RoundedCornerShape(5.dp))
+                        .background(SleekBorder.copy(alpha = 0.5f))
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(fraction = progressFraction)
+                            .fillMaxHeight()
+                            .clip(RoundedCornerShape(5.dp))
+                            .background(
+                                Brush.horizontalGradient(
+                                    colors = listOf(statusColor.copy(alpha = 0.8f), statusColor)
+                                )
+                            )
+                    )
+                }
+            } else {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(SleekBorder.copy(alpha = 0.25f))
+                        .padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Info,
+                        contentDescription = null,
+                        tint = SleekTextSecondary,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Set a monthly target to visualize burn rate and receive pace alerts.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = SleekTextSecondary,
+                        fontSize = 12.sp,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+        }
+    }
+
+    if (showEditBudgetDialog) {
+        var inputBudget by remember { mutableStateOf(if (monthlyBudget > 0) String.format(Locale.getDefault(), "%.0f", monthlyBudget) else "") }
+        Dialog(onDismissRequest = { showEditBudgetDialog = false }) {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = SleekSurface),
+                border = BorderStroke(1.dp, SleekBorder),
+                shape = RoundedCornerShape(24.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier.padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = "Set Monthly Budget",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = SleekTextPrimary,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    OutlinedTextField(
+                        value = inputBudget,
+                        onValueChange = { inputBudget = it.filter { ch -> ch.isDigit() || ch == '.' } },
+                        label = { Text("Budget Cap ($currencySymbol)", color = SleekTextSecondary) },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true,
+                        shape = RoundedCornerShape(12.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = SleekPrimary,
+                            unfocusedBorderColor = SleekBorder
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(modifier = Modifier.height(24.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = { showEditBudgetDialog = false },
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("Cancel", color = SleekTextSecondary)
+                        }
+                        Button(
+                            onClick = {
+                                val value = inputBudget.toDoubleOrNull() ?: 0.0
+                                onUpdateBudget(value)
+                                showEditBudgetDialog = false
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = SleekPrimary),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("Save", color = Color.White)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun RecentExpenseRow(
+    expense: Expense,
+    categoryIcons: Map<String, String> = emptyMap(),
+    currencySymbol: String = "₹",
+    onClick: () -> Unit
+) {
     val dateStr = SimpleDateFormat("MMM dd, yyyy", Locale.getDefault()).format(Date(expense.date))
     val isIncome = expense.type == "INCOME"
     val catColor = if (isIncome) {
@@ -1332,7 +2009,7 @@ fun RecentExpenseRow(expense: Expense, categoryIcons: Map<String, String> = empt
             .clickable(onClick = onClick),
         colors = CardDefaults.cardColors(containerColor = SleekSurface),
         border = BorderStroke(1.dp, SleekBorder),
-        shape = RoundedCornerShape(16.dp)
+        shape = RoundedCornerShape(18.dp)
     ) {
         Row(
             modifier = Modifier
@@ -1342,16 +2019,17 @@ fun RecentExpenseRow(expense: Expense, categoryIcons: Map<String, String> = empt
         ) {
             Box(
                 modifier = Modifier
-                    .size(40.dp)
-                    .clip(CircleShape)
-                    .background(catColor.copy(alpha = 0.15f)),
+                    .size(42.dp)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(catColor.copy(alpha = 0.15f))
+                    .border(BorderStroke(1.dp, catColor.copy(alpha = 0.25f)), RoundedCornerShape(14.dp)),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = getCategoryIcon(expense.category, categoryIcons),
                     contentDescription = expense.category,
                     tint = catColor,
-                    modifier = Modifier.size(20.dp)
+                    modifier = Modifier.size(22.dp)
                 )
             }
 
@@ -1374,7 +2052,7 @@ fun RecentExpenseRow(expense: Expense, categoryIcons: Map<String, String> = empt
             }
 
             Text(
-                text = String.format("%s₹%,.2f", if (isIncome) "+" else "-", expense.amount),
+                text = String.format("%s%s%,.2f", if (isIncome) "+" else "-", currencySymbol, expense.amount),
                 style = MaterialTheme.typography.bodyMedium,
                 color = if (isIncome) Color(0xFF10B981) else ExpenseRed,
                 fontWeight = FontWeight.Bold
@@ -1397,6 +2075,7 @@ fun ExpensesTab(
     val selectedDateRange by viewModel.selectedDateRange.collectAsStateWithLifecycle()
     val categoryIcons by viewModel.categoryIcons.collectAsStateWithLifecycle()
     val accounts by viewModel.accounts.collectAsStateWithLifecycle()
+    val currencySymbol by viewModel.selectedCurrencySymbol.collectAsStateWithLifecycle()
 
     var searchQuery by remember { mutableStateOf("") }
     var isSearchActive by remember { mutableStateOf(false) }
@@ -1610,6 +2289,7 @@ fun ExpensesTab(
                                 expense = expense,
                                 isSelected = isSelected,
                                 categoryIcons = categoryIcons,
+                                currencySymbol = currencySymbol,
                                 onLongClick = {
                                     selectedExpenseIds = if (isSelected) {
                                         selectedExpenseIds - expense.id
@@ -1726,6 +2406,7 @@ fun Image1TransactionRow(
     expense: Expense,
     isSelected: Boolean,
     categoryIcons: Map<String, String> = emptyMap(),
+    currencySymbol: String = "₹",
     onLongClick: () -> Unit,
     onClick: () -> Unit
 ) {
@@ -1816,7 +2497,7 @@ fun Image1TransactionRow(
 
             // Right: Amount +₹5,710.20 (Green) / -₹124.55 (Red)
             Text(
-                text = String.format("%s₹%,.2f", if (isIncome) "+" else "-", expense.amount),
+                text = String.format("%s%s%,.2f", if (isIncome) "+" else "-", currencySymbol, expense.amount),
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Bold,
                 color = if (isIncome) IncomeGreen else ExpenseRed
@@ -2144,6 +2825,7 @@ fun AnalyticsTab(
         mutableStateOf(if (effectivePreset in timeFilters) effectivePreset else "7D")
     }
     var showExportDialog by remember { mutableStateOf(false) }
+    var analyticsSubView by rememberSaveable { mutableStateOf("overview") }
 
     val initials = remember(userName) {
         if (!userName.isNullOrBlank()) {
@@ -2429,9 +3111,95 @@ fun AnalyticsTab(
             }
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(14.dp))
 
-        // Time Range Filter Bar (Pills in App Default Style)
+        // Analytics Sub-View Switcher: [ Overview | Spending Trends ]
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(16.dp))
+                .background(SleekSurface)
+                .border(1.dp, SleekBorder, RoundedCornerShape(16.dp))
+                .padding(4.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(if (analyticsSubView == "overview") SleekPrimary else Color.Transparent)
+                    .clickable {
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        analyticsSubView = "overview"
+                    }
+                    .padding(vertical = 9.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.PieChart,
+                        contentDescription = null,
+                        tint = if (analyticsSubView == "overview") Color.White else SleekTextSecondary,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Text(
+                        text = "Overview",
+                        fontSize = 13.sp,
+                        fontWeight = if (analyticsSubView == "overview") FontWeight.Bold else FontWeight.Medium,
+                        color = if (analyticsSubView == "overview") Color.White else SleekTextSecondary
+                    )
+                }
+            }
+
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(if (analyticsSubView == "trends") SleekPrimary else Color.Transparent)
+                    .clickable {
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        analyticsSubView = "trends"
+                    }
+                    .padding(vertical = 9.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Timeline,
+                        contentDescription = null,
+                        tint = if (analyticsSubView == "trends") Color.White else SleekTextSecondary,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Text(
+                        text = "Spending Trends",
+                        fontSize = 13.sp,
+                        fontWeight = if (analyticsSubView == "trends") FontWeight.Bold else FontWeight.Medium,
+                        color = if (analyticsSubView == "trends") Color.White else SleekTextSecondary
+                    )
+                }
+            }
+        }
+
+        if (analyticsSubView == "trends") {
+            Spacer(modifier = Modifier.height(16.dp))
+            SpendingTrendsScreen(
+                expenses = allExpenses,
+                currencySymbol = currencySymbol,
+                categoryColors = categoryColors,
+                onExpenseClick = onExpenseClick,
+                onBackClick = { analyticsSubView = "overview" }
+            )
+            Spacer(modifier = Modifier.height(110.dp))
+        } else {
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Time Range Filter Bar (Pills in App Default Style)
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -2659,6 +3427,69 @@ fun AnalyticsTab(
             }
         }
 
+        Spacer(modifier = Modifier.height(14.dp))
+
+        // 📈 TRENDS EXPLORER PROMINENT CALLOUT BANNER
+        Card(
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = SleekPrimaryContainer.copy(alpha = 0.5f)),
+            border = BorderStroke(1.dp, SleekPrimary.copy(alpha = 0.35f)),
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable {
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    analyticsSubView = "trends"
+                }
+                .testTag("analytics_trends_banner")
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .background(SleekPrimary),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Timeline,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    Column {
+                        Text(
+                            text = "Weekly & Monthly Trends",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = SleekTextPrimary
+                        )
+                        Text(
+                            text = "Interactive Canvas curves, burn rate & velocity",
+                            fontSize = 11.sp,
+                            color = SleekTextSecondary
+                        )
+                    }
+                }
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                    contentDescription = "Open Trends",
+                    tint = SleekPrimary,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+        }
+
         Spacer(modifier = Modifier.height(16.dp))
 
         // 💎 NET WORTH OVER TIME CHART CARD
@@ -2713,6 +3544,7 @@ fun AnalyticsTab(
         )
 
         Spacer(modifier = Modifier.height(110.dp))
+        }
     }
 }
 
@@ -3878,8 +4710,8 @@ fun EditExpenseDialog(
     onConfirm: (Expense) -> Unit
 ) {
     val haptic = LocalHapticFeedback.current
-    var type by remember { mutableStateOf(expense.type) }
-    var amountStr by remember { mutableStateOf(expense.amount.toString()) }
+    var type by rememberSaveable { mutableStateOf(expense.type) }
+    var amountStr by rememberSaveable { mutableStateOf(expense.amount.toString()) }
 
     val otherExpenses = remember(expenses, expense) {
         expenses.filter { it.id != expense.id }.realExpense()
@@ -3904,8 +4736,8 @@ fun EditExpenseDialog(
         (defaultExpensePreset + (if (expenseCategories.isNotEmpty()) expenseCategories else categories.filter { !defaultIncomePreset.contains(it) })).distinct()
     }
     
-    var category by remember { mutableStateOf(expense.category) }
-    var note by remember { mutableStateOf(expense.note ?: "") }
+    var category by rememberSaveable { mutableStateOf(expense.category) }
+    var note by rememberSaveable { mutableStateOf(expense.note ?: "") }
 
     var showCreateCategoryDialog by remember { mutableStateOf(false) }
 
@@ -5142,10 +5974,20 @@ fun RemindersFullScreen(
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
-    val remindersList = viewModel.remindersList
+    val reminders by viewModel.reminders.collectAsStateWithLifecycle()
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { _ -> }
+
+    LaunchedEffect(Unit) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            permissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
 
     var showAddEditDialog by remember { mutableStateOf(false) }
-    var editingReminder by remember { mutableStateOf<ReminderEntry?>(null) }
+    var editingReminder by remember { mutableStateOf<ReminderEntity?>(null) }
     var reminderText by remember { mutableStateOf("") }
     var reminderDueDate by remember { mutableStateOf(SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(Date())) }
 
@@ -5215,17 +6057,18 @@ fun RemindersFullScreen(
                         Button(
                             onClick = {
                                 if (reminderText.isNotBlank()) {
+                                    val df = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault())
+                                    val dueDateLong = try { df.parse(reminderDueDate)?.time ?: System.currentTimeMillis() } catch (e: Exception) { System.currentTimeMillis() }
+
                                     val currentEditing = editingReminder
                                     if (currentEditing == null) {
-                                        remindersList.add(ReminderEntry(System.currentTimeMillis().toString(), reminderText.trim(), reminderDueDate))
+                                        viewModel.insertReminder(reminderText.trim(), dueDateLong, true)
+                                        ReminderNotificationHelper.showReminderNotification(context, System.currentTimeMillis(), reminderText.trim(), reminderDueDate)
                                     } else {
-                                        val idx = remindersList.indexOfFirst { it.id == currentEditing.id }
-                                        if (idx != -1) {
-                                            remindersList[idx] = currentEditing.copy(text = reminderText.trim(), dueDate = reminderDueDate)
-                                        }
+                                        viewModel.updateReminder(currentEditing.copy(text = reminderText.trim(), dueDate = dueDateLong))
                                     }
                                     showAddEditDialog = false
-                                    Toast.makeText(context, "Saved reminder successfully!", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, "Saved reminder to Room DB!", Toast.LENGTH_SHORT).show()
                                 }
                             },
                             colors = ButtonDefaults.buttonColors(containerColor = SleekPrimary),
@@ -5282,12 +6125,12 @@ fun RemindersFullScreen(
             }
 
             Text(
-                text = "Toggle active reminders on/off or tap card actions.",
+                text = "Room-backed reminders with push notifications & active state.",
                 style = MaterialTheme.typography.bodySmall,
                 color = SleekTextSecondary
             )
 
-            if (remindersList.isEmpty()) {
+            if (reminders.isEmpty()) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -5308,7 +6151,8 @@ fun RemindersFullScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                     modifier = Modifier.fillMaxSize()
                 ) {
-                    items(remindersList, key = { it.id }) { rem ->
+                    items(reminders, key = { it.id }) { rem ->
+                        val dateStr = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(Date(rem.dueDate))
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -5322,11 +6166,11 @@ fun RemindersFullScreen(
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Icon(Icons.Rounded.NotificationsActive, contentDescription = null, tint = if (rem.isEnabled) Color(0xFFEC4899) else SleekTextSecondary, modifier = Modifier.size(22.dp))
-                                
+
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(rem.text, fontSize = 14.sp, color = SleekTextPrimary, fontWeight = FontWeight.Medium)
                                     Spacer(modifier = Modifier.height(2.dp))
-                                    Text("Due: ${rem.dueDate} • ${if (rem.isEnabled) "Active" else "Stopped"}", fontSize = 11.sp, color = if (rem.isEnabled) Color(0xFFEC4899) else SleekTextSecondary, fontWeight = FontWeight.Bold)
+                                    Text("Due: $dateStr • ${if (rem.isEnabled) "Active" else "Stopped"}", fontSize = 11.sp, color = if (rem.isEnabled) Color(0xFFEC4899) else SleekTextSecondary, fontWeight = FontWeight.Bold)
                                 }
 
                                 Row(
@@ -5336,9 +6180,9 @@ fun RemindersFullScreen(
                                     Switch(
                                         checked = rem.isEnabled,
                                         onCheckedChange = { isChecked ->
-                                            val idx = remindersList.indexOfFirst { it.id == rem.id }
-                                            if (idx != -1) {
-                                                remindersList[idx] = rem.copy(isEnabled = isChecked)
+                                            viewModel.updateReminder(rem.copy(isEnabled = isChecked))
+                                            if (isChecked) {
+                                                ReminderNotificationHelper.showReminderNotification(context, rem.id, rem.text, dateStr)
                                             }
                                         },
                                         colors = SwitchDefaults.colors(
@@ -5349,7 +6193,7 @@ fun RemindersFullScreen(
 
                                     IconButton(
                                         onClick = {
-                                            remindersList.remove(rem)
+                                            viewModel.updateReminder(rem.copy(isCompleted = true, isEnabled = false))
                                             Toast.makeText(context, "Marked reminder as complete!", Toast.LENGTH_SHORT).show()
                                         },
                                         modifier = Modifier.size(32.dp)
@@ -5361,7 +6205,7 @@ fun RemindersFullScreen(
                                         onClick = {
                                             editingReminder = rem
                                             reminderText = rem.text
-                                            reminderDueDate = rem.dueDate
+                                            reminderDueDate = dateStr
                                             showAddEditDialog = true
                                         },
                                         modifier = Modifier.size(32.dp)
@@ -5371,7 +6215,7 @@ fun RemindersFullScreen(
 
                                     IconButton(
                                         onClick = {
-                                            remindersList.remove(rem)
+                                            viewModel.deleteReminder(rem)
                                             Toast.makeText(context, "Deleted reminder", Toast.LENGTH_SHORT).show()
                                         },
                                         modifier = Modifier.size(32.dp)
@@ -5970,6 +6814,28 @@ fun SidebarDrawerContent(
                         onCloseDrawer()
                         onOpenSettingsScreen(SettingsSubScreen.Language)
                     }
+                ),
+                SidebarMenuItemData(
+                    icon = Icons.Default.Payments,
+                    iconColor = Color(0xFF10B981),
+                    iconBgColor = Color(0xFFD1FAE5),
+                    titleKey = "Currency & Rates",
+                    subtitleKey = "100+ currencies, live conversion & stats currency",
+                    onClick = {
+                        onCloseDrawer()
+                        onOpenSettingsScreen(SettingsSubScreen.Currency)
+                    }
+                ),
+                SidebarMenuItemData(
+                    icon = Icons.Default.Receipt,
+                    iconColor = Color(0xFF0D9488),
+                    iconBgColor = Color(0xFFCCFBF1),
+                    titleKey = "Transaction Preferences",
+                    subtitleKey = "Input defaults, remember category & safe delete",
+                    onClick = {
+                        onCloseDrawer()
+                        onOpenSettingsScreen(SettingsSubScreen.Transactions)
+                    }
                 )
             ),
             "FINANCIAL MANAGEMENT" to listOf(
@@ -5993,6 +6859,28 @@ fun SidebarDrawerContent(
                     onClick = {
                         onCloseDrawer()
                         onOpenSettingsScreen(SettingsSubScreen.Budgets)
+                    }
+                ),
+                SidebarMenuItemData(
+                    icon = Icons.Default.Savings,
+                    iconColor = Color(0xFFF59E0B),
+                    iconBgColor = Color(0xFFFEF3C7),
+                    titleKey = "Savings Goals",
+                    subtitleKey = "Goal layouts, milestone celebrations & auto-gap",
+                    onClick = {
+                        onCloseDrawer()
+                        onOpenSettingsScreen(SettingsSubScreen.SavingsGoals)
+                    }
+                ),
+                SidebarMenuItemData(
+                    icon = Icons.Default.Calculate,
+                    iconColor = Color(0xFF6366F1),
+                    iconBgColor = Color(0xFFEEF2FF),
+                    titleKey = "Financial Calculators",
+                    subtitleKey = "Currency converter, split bill, tip & percentage tools",
+                    onClick = {
+                        onCloseDrawer()
+                        onOpenSettingsScreen(SettingsSubScreen.Calculations)
                     }
                 )
             ),
@@ -6350,7 +7238,7 @@ fun SidebarDrawerContent(
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             Text(
-                text = "Version 1.2.0 (Stable & Secure)",
+                text = "Version 1.25 (Stable & Secure)",
                 style = MaterialTheme.typography.labelMedium,
                 color = SleekTextSecondary
             )
@@ -6647,6 +7535,52 @@ fun FaqAccordion(viewModel: FinanceViewModel) {
                 }
             }
         }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // App Version Footer
+        Card(
+            colors = CardDefaults.cardColors(containerColor = SleekSurfaceVariant.copy(alpha = 0.5f)),
+            border = BorderStroke(1.dp, SleekBorder),
+            shape = RoundedCornerShape(14.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(14.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text(
+                        text = "Expense Tracker",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = SleekTextPrimary
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "100% Offline • Secure Room DB",
+                        fontSize = 10.sp,
+                        color = SleekTextSecondary
+                    )
+                }
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = SleekPrimary.copy(alpha = 0.15f),
+                    border = BorderStroke(1.dp, SleekPrimary.copy(alpha = 0.35f))
+                ) {
+                    Text(
+                        text = "v1.27",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = SleekPrimary,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                    )
+                }
+            }
+        }
     }
 }
 
@@ -6713,344 +7647,6 @@ fun EditNameDialog(
                         modifier = Modifier.weight(1f)
                     ) {
                         Text("Save", color = Color.White)
-                    }
-                }
-            }
-        }
-    }
-}
-
-// ==========================================
-// 🔥 CUSTOM STREAK FLAME LOGO (AS REQUESTED)
-// ==========================================
-@Composable
-fun StreakFlameLogo(
-    streakCount: Int,
-    modifier: Modifier = Modifier,
-    size: androidx.compose.ui.unit.Dp = 44.dp,
-    onClick: (() -> Unit)? = null
-) {
-    val haptic = LocalHapticFeedback.current
-    val isLarge = size > 60.dp
-    val width = if (isLarge) size * 0.86f else 42.dp
-    val height = if (isLarge) size else 48.dp
-    val cornerRadius = if (isLarge) 28.dp else 14.dp
-
-    Box(
-        modifier = modifier
-            .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
-            .clip(RoundedCornerShape(cornerRadius + 2.dp))
-            .clickable(
-                enabled = onClick != null,
-                role = Role.Button,
-                onClick = {
-                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                    onClick?.invoke()
-                }
-            ),
-        contentAlignment = Alignment.Center
-    ) {
-        Surface(
-            shape = RoundedCornerShape(cornerRadius),
-            color = Color(0xFF13121D),
-            border = BorderStroke(if (isLarge) 2.dp else 1.dp, Color(0xFF2B2844)),
-            shadowElevation = if (isLarge) 8.dp else 2.dp,
-            modifier = Modifier.size(width = width, height = height)
-        ) {
-            Canvas(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = if (isLarge) 12.dp else 4.dp, vertical = if (isLarge) 10.dp else 3.dp)
-            ) {
-                val w = this.size.width
-                val h = this.size.height
-
-                // Top Right Spark (small diamond)
-                val spark1 = Path().apply {
-                    val cx = 0.54f * w
-                    val cy = 0.08f * h
-                    val r = 0.042f * minOf(w, h)
-                    moveTo(cx, cy - r)
-                    lineTo(cx + r, cy)
-                    lineTo(cx, cy + r)
-                    lineTo(cx - r, cy)
-                    close()
-                }
-                drawPath(spark1, color = Color(0xFFFFB703))
-
-                // Top Left Spark (larger diamond)
-                val spark2 = Path().apply {
-                    val cx = 0.40f * w
-                    val cy = 0.15f * h
-                    val r = 0.060f * minOf(w, h)
-                    moveTo(cx, cy - r)
-                    lineTo(cx + r, cy)
-                    lineTo(cx, cy + r)
-                    lineTo(cx - r, cy)
-                    close()
-                }
-                drawPath(spark2, color = Color(0xFFFFB703))
-
-                // Outer Flame Body
-                val outerFlame = Path().apply {
-                    val tipX = 0.52f * w
-                    val tipY = 0.22f * h
-                    moveTo(tipX, tipY)
-                    // Left contour swooping down to notch
-                    cubicTo(
-                        0.45f * w, 0.28f * h,
-                        0.36f * w, 0.35f * h,
-                        0.34f * w, 0.42f * h
-                    )
-                    // Notch curve on left
-                    cubicTo(
-                        0.32f * w, 0.44f * h,
-                        0.28f * w, 0.45f * h,
-                        0.27f * w, 0.52f * h
-                    )
-                    // Left belly swelling down
-                    cubicTo(
-                        0.25f * w, 0.62f * h,
-                        0.26f * w, 0.76f * h,
-                        0.34f * w, 0.85f * h
-                    )
-                    // Bottom curve cradling base
-                    cubicTo(
-                        0.42f * w, 0.90f * h,
-                        0.58f * w, 0.90f * h,
-                        0.66f * w, 0.85f * h
-                    )
-                    // Right belly swelling up
-                    cubicTo(
-                        0.74f * w, 0.76f * h,
-                        0.75f * w, 0.62f * h,
-                        0.74f * w, 0.52f * h
-                    )
-                    // Right convex curve back to tip
-                    cubicTo(
-                        0.73f * w, 0.40f * h,
-                        0.63f * w, 0.28f * h,
-                        tipX, tipY
-                    )
-                    close()
-                }
-                drawPath(outerFlame, color = Color(0xFFFF7A00))
-
-                // Inner Flame Core
-                val innerFlame = Path().apply {
-                    val tipX = 0.51f * w
-                    val tipY = 0.53f * h
-                    moveTo(tipX, tipY)
-                    cubicTo(
-                        0.43f * w, 0.64f * h,
-                        0.43f * w, 0.75f * h,
-                        0.48f * w, 0.81f * h
-                    )
-                    cubicTo(
-                        0.50f * w, 0.83f * h,
-                        0.52f * w, 0.83f * h,
-                        0.54f * w, 0.81f * h
-                    )
-                    cubicTo(
-                        0.59f * w, 0.75f * h,
-                        0.59f * w, 0.64f * h,
-                        tipX, tipY
-                    )
-                    close()
-                }
-                drawPath(innerFlame, color = Color(0xFFFFC700))
-
-                // Streak count text at bottom
-                val streakStr = streakCount.toString()
-                drawIntoCanvas { canvas ->
-                    val nativeCanvas = canvas.nativeCanvas
-                    val textSize = when {
-                        streakStr.length <= 2 -> 0.32f * h
-                        streakStr.length == 3 -> 0.25f * h
-                        else -> 0.20f * h
-                    }
-                    val textY = 0.88f * h
-
-                    val typeface = try {
-                        android.graphics.Typeface.create("sans-serif-rounded", android.graphics.Typeface.BOLD)
-                    } catch (e: Exception) {
-                        android.graphics.Typeface.DEFAULT_BOLD
-                    }
-
-                    // Cutout stroke paint (background color punch-out effect)
-                    val strokePaint = android.graphics.Paint().apply {
-                        isAntiAlias = true
-                        color = android.graphics.Color.parseColor("#13121D")
-                        style = android.graphics.Paint.Style.STROKE
-                        strokeWidth = 0.16f * textSize
-                        strokeJoin = android.graphics.Paint.Join.ROUND
-                        strokeCap = android.graphics.Paint.Cap.ROUND
-                        this.textSize = textSize
-                        this.typeface = typeface
-                        textAlign = android.graphics.Paint.Align.CENTER
-                    }
-
-                    // Pure white fill paint
-                    val fillPaint = android.graphics.Paint().apply {
-                        isAntiAlias = true
-                        color = android.graphics.Color.WHITE
-                        style = android.graphics.Paint.Style.FILL
-                        this.textSize = textSize
-                        this.typeface = typeface
-                        textAlign = android.graphics.Paint.Align.CENTER
-                    }
-
-                    nativeCanvas.drawText(streakStr, 0.50f * w, textY, strokePaint)
-                    nativeCanvas.drawText(streakStr, 0.50f * w, textY, fillPaint)
-                }
-            }
-        }
-    }
-}
-
-// ==========================================
-// DAILY STREAK CELEBRATION ANIMATED DIALOG
-// ==========================================
-@Composable
-fun DailyStreakCelebrationDialog(
-    streakCount: Int,
-    onDismiss: () -> Unit
-) {
-    val haptic = LocalHapticFeedback.current
-    LaunchedEffect(streakCount) {
-        try {
-            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-        } catch (_: Exception) {}
-    }
-    val infiniteTransition = rememberInfiniteTransition(label = "streak_anim")
-
-    val rayRotation by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 360f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(12000, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "ray_rotation"
-    )
-
-    val badgeScale by infiniteTransition.animateFloat(
-        initialValue = 0.94f,
-        targetValue = 1.06f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1000, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "badge_scale"
-    )
-
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.82f))
-                .clickable { onDismiss() },
-            contentAlignment = Alignment.Center
-        ) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center,
-                modifier = Modifier
-                    .padding(24.dp)
-                    .clickable(enabled = false) {}
-            ) {
-                // Central Streak Emblem Container with Radiating Sunburst Rays
-                Box(
-                    modifier = Modifier.size(260.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Canvas(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .graphicsLayer { rotationZ = rayRotation }
-                    ) {
-                        val centerPx = Offset(size.width / 2f, size.height / 2f)
-                        val rayCount = 20
-                        val angleStep = 360f / rayCount
-                        val rayLength = size.width / 2f
-
-                        for (i in 0 until rayCount) {
-                            val angleRad = Math.toRadians((i * angleStep).toDouble())
-                            val endX = centerPx.x + (rayLength * Math.cos(angleRad)).toFloat()
-                            val endY = centerPx.y + (rayLength * Math.sin(angleRad)).toFloat()
-
-                            drawLine(
-                                color = Color(0xFFFCD34D).copy(alpha = if (i % 2 == 0) 0.5f else 0.25f),
-                                start = centerPx,
-                                end = Offset(endX, endY),
-                                strokeWidth = if (i % 2 == 0) 6f else 3f,
-                                cap = StrokeCap.Round
-                            )
-                        }
-                    }
-
-                    // Central Streak Flame Logo
-                    StreakFlameLogo(
-                        streakCount = streakCount,
-                        size = 140.dp,
-                        modifier = Modifier.graphicsLayer {
-                            scaleX = badgeScale
-                            scaleY = badgeScale
-                        }
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // Title & Subtitle Card
-                Card(
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFF1E293B)),
-                    shape = RoundedCornerShape(24.dp),
-                    border = BorderStroke(1.dp, Color(0xFFF97316).copy(alpha = 0.5f)),
-                    modifier = Modifier.fillMaxWidth(0.9f)
-                ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.padding(20.dp)
-                    ) {
-                        Text(
-                            text = if (streakCount == 1) "1 Day Streak Started! 🔥" else "$streakCount Day Streak! 🔥",
-                            fontSize = 22.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White,
-                            textAlign = TextAlign.Center
-                        )
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Text(
-                            text = if (streakCount == 1)
-                                "Welcome back! Open the app daily to keep your streak burning hot."
-                            else
-                                "You're on fire! You have opened the app $streakCount days in a row.",
-                            fontSize = 13.sp,
-                            color = Color(0xFF94A3B8),
-                            textAlign = TextAlign.Center
-                        )
-                        Spacer(modifier = Modifier.height(18.dp))
-                        Button(
-                            onClick = {
-                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                onDismiss()
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF97316)),
-                            shape = RoundedCornerShape(14.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text(
-                                text = "Awesome! 🔥",
-                                color = Color.White,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 15.sp,
-                                modifier = Modifier.padding(vertical = 4.dp)
-                            )
-                        }
                     }
                 }
             }

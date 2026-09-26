@@ -107,24 +107,48 @@ object GeminiClient {
     }
 
     suspend fun fetchExchangeRates(): String = withContext(Dispatchers.IO) {
-        val apiKey = BuildConfig.GEMINI_API_KEY
-        if (apiKey.isEmpty() || apiKey == "MY_GEMINI_API_KEY") {
-            return@withContext "Google API Key not configured. Updated local exchange rates."
-        }
-
-        val request = GenerateContentRequest(
-            contents = listOf(Content(parts = listOf(Part(text = "Provide the current USD exchange rates for major currencies (INR, EUR, GBP, JPY, CAD, AUD, AED). Keep answer brief.")))),
-            systemInstruction = Content(parts = listOf(Part(text = "You are an automated financial currency rate assistant powered by Google API."))),
-            generationConfig = GenerationConfig(temperature = 0.2f)
-        )
-
         try {
-            val response = RetrofitClient.service.generateContent(apiKey, request)
-            response.candidates?.firstOrNull()?.content?.parts?.firstOrNull()?.text
-                ?: "Exchange rates updated via Google API"
+            val response = ExchangeRateClient.service.getLatestRates()
+            if (response.result == "success" && response.rates != null) {
+                com.example.ui.CurrencyManager.updateRates(response.rates)
+                "Exchange rates successfully updated from Open Exchange API"
+            } else {
+                throw Exception("API returned non-success result")
+            }
         } catch (e: Exception) {
             e.printStackTrace()
-            "Exchange rates updated from cached online rates"
+            throw e
         }
+    }
+}
+
+@JsonClass(generateAdapter = true)
+data class ExchangeRateApiResponse(
+    val result: String,
+    @Json(name = "time_last_update_utc") val timeLastUpdateUtc: String?,
+    val rates: Map<String, Double>?
+)
+
+interface ExchangeRateApiService {
+    @retrofit2.http.GET("v6/latest/USD")
+    suspend fun getLatestRates(): ExchangeRateApiResponse
+}
+
+object ExchangeRateClient {
+    private val retrofit = Retrofit.Builder()
+        .baseUrl("https://open.er-api.com/")
+        .client(
+            OkHttpClient.Builder()
+                .connectTimeout(30, TimeUnit.SECONDS)
+                .readTimeout(30, TimeUnit.SECONDS)
+                .build()
+        )
+        .addConverterFactory(MoshiConverterFactory.create(
+            Moshi.Builder().addLast(KotlinJsonAdapterFactory()).build()
+        ))
+        .build()
+
+    val service: ExchangeRateApiService by lazy {
+        retrofit.create(ExchangeRateApiService::class.java)
     }
 }

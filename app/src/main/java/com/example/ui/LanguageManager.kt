@@ -213,6 +213,30 @@ object LanguageManager {
         ),
         "Export CSV File" to mapOf(
             "en" to "Export CSV File", "es" to "Exportar Archivo CSV", "hi" to "CSV फ़ाइल निर्यात करें", "fr" to "Exporter Fichier CSV", "de" to "CSV-Datei exportieren", "ja" to "CSV出力"
+        ),
+        "Currency & Rates" to mapOf(
+            "en" to "Currency & Rates", "hi" to "मुद्रा और दरें", "bn" to "মুদ্রা ও বিনিময় হার", "mr" to "चलन आणि दर", "pa" to "ਮੁਦਰਾ ਅਤੇ ਦਰਾਂ", "fr" to "Devises & Taux", "zh" to "货币与汇率", "ur" to "کرنسی اور شرح مبادلہ", "ja" to "通貨と為替レート"
+        ),
+        "Transaction Preferences" to mapOf(
+            "en" to "Transaction Preferences", "hi" to "लेन-देन प्राथमिकताएं", "bn" to "লেনদেন পছন্দসমূহ", "mr" to "व्यवहार प्राधान्ये", "pa" to "ਲੈਣ-ਦੇਣ ਤਰਜੀਹਾਂ", "fr" to "Préférences de transaction", "zh" to "交易偏好设置", "ur" to "لین دین کی ترجیحات", "ja" to "取引設定"
+        ),
+        "Bills & Reminders" to mapOf(
+            "en" to "Bills & Reminders", "hi" to "बिल और अनुस्मारक", "bn" to "বিল ও অনুস্মারক", "mr" to "बिले आणि स्मरणपत्रे", "pa" to "ਬਿੱਲ ਅਤੇ ਰੀਮਾਈਂਡਰ", "fr" to "Factures & Rappels", "zh" to "账单与提醒", "ur" to "بل اور یاد دہانیاں", "ja" to "請求書とリマインダー"
+        ),
+        "Budgets" to mapOf(
+            "en" to "Budgets", "hi" to "बजट", "bn" to "বাজেট", "mr" to "अंदाजपत्रक", "pa" to "ਬਜਟ", "fr" to "Budgets", "zh" to "预算", "ur" to "بجٹ", "ja" to "予算"
+        ),
+        "Financial Calculators" to mapOf(
+            "en" to "Financial Calculators", "hi" to "वित्तीय कैलकुलेटर", "bn" to "আর্থিক ক্যালকুলেটর", "mr" to "आर्थिक गणकयंत्र", "pa" to "ਵਿੱਤੀ ਕੈਲਕੁਲੇਟਰ", "fr" to "Calculateurs financiers", "zh" to "财务计算器", "ur" to "مالیاتی کیلکولیٹر", "ja" to "財務計算機"
+        ),
+        "Password & Security" to mapOf(
+            "en" to "Password & Security", "hi" to "पासवर्ड और सुरक्षा", "bn" to "পাসওয়ার্ড ও নিরাপত্তা", "mr" to "पासवर्ड आणि सुरक्षा", "pa" to "ਪਾਸਵਰਡ ਅਤੇ ਸੁਰੱਖਿਆ", "fr" to "Mot de passe & Sécurité", "zh" to "密码与安全", "ur" to "پاس ورڈ اور سیکیورٹی", "ja" to "パスワードとセキュリティ"
+        ),
+        "Privacy Settings" to mapOf(
+            "en" to "Privacy Settings", "hi" to "गोपनीयता सेटिंग्स", "bn" to "গোপনীয়তা সেটিংস", "mr" to "गोपनीयता सेटिंग्ज", "pa" to "ਗੋਪਨੀਯਤਾ ਸੈਟਿੰਗਾਂ", "fr" to "Paramètres de confidentialité", "zh" to "隐私设置", "ur" to "رازداری کی ترتیبات", "ja" to "プライバシー設定"
+        ),
+        "What's New & About" to mapOf(
+            "en" to "What's New & About", "hi" to "नया क्या है और परिचय", "bn" to "নতুন কি এবং বিবরণ", "mr" to "नवीन काय आणि परिचय", "pa" to "ਨਵਾਂ ਕੀ ਹੈ ਅਤੇ ਬਾਰੇ", "fr" to "Nouveautés & À propos", "zh" to "新功能与关于", "ur" to "نیا کیا ہے اور تعارف", "ja" to "最新情報とアプリ情報"
         )
     )
 

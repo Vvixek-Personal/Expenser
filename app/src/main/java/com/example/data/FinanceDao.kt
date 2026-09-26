@@ -121,4 +121,23 @@ interface FinanceDao {
 
     @Query("DELETE FROM savings_goals")
     suspend fun deleteAllSavingsGoals()
+
+    // --- Reminders ---
+    @Query("SELECT * FROM reminders ORDER BY dueDate ASC")
+    fun getAllReminders(): Flow<List<ReminderEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertReminder(reminder: ReminderEntity): Long
+
+    @Update
+    suspend fun updateReminder(reminder: ReminderEntity)
+
+    @Delete
+    suspend fun deleteReminder(reminder: ReminderEntity)
+
+    @Query("DELETE FROM reminders WHERE id = :id")
+    suspend fun deleteReminderById(id: Long)
+
+    @Query("DELETE FROM reminders")
+    suspend fun deleteAllReminders()
 }

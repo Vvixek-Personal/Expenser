@@ -42,6 +42,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.ui.theme.SleekBorder
 import com.example.ui.theme.SleekPrimary
 import com.example.ui.theme.isDarkModeActive
 import com.example.ui.theme.mixPrimaryWithColor
@@ -73,10 +74,17 @@ fun FloatingDockBar(
         screens.indexOfFirst { it.first == currentScreen }.coerceAtLeast(0)
     }
 
-    // Theme-adaptive dark navy glass container tint
-    val baseTint = if (isDarkModeActive) Color(0xFF081220) else Color(0xFF0F1A2A)
-    val dockContainerBg = mixPrimaryWithColor(SleekPrimary, baseTint, 0.35f).copy(alpha = 0.94f)
-    val dockBorderColor = Color(0xFF38BDF8).copy(alpha = 0.35f)
+    // Theme-adaptive glass capsule aesthetic
+    val dockContainerBg = if (isDarkModeActive) {
+        mixPrimaryWithColor(SleekPrimary, Color(0xFF10131C), 0.12f).copy(alpha = 0.92f)
+    } else {
+        Color(0xFFFFFFFF).copy(alpha = 0.96f)
+    }
+    val dockBorderColor = if (isDarkModeActive) {
+        SleekPrimary.copy(alpha = 0.35f)
+    } else {
+        SleekBorder
+    }
 
     Box(
         modifier = modifier
@@ -89,9 +97,9 @@ fun FloatingDockBar(
         Surface(
             shape = RoundedCornerShape(42.dp),
             color = dockContainerBg,
-            border = BorderStroke(1.5.dp, dockBorderColor),
-            shadowElevation = 18.dp,
-            tonalElevation = 6.dp,
+            border = BorderStroke(1.2.dp, dockBorderColor),
+            shadowElevation = if (isDarkModeActive) 16.dp else 10.dp,
+            tonalElevation = 4.dp,
             modifier = Modifier.clip(RoundedCornerShape(42.dp))
         ) {
             Row(
@@ -135,7 +143,7 @@ private fun AnimatedDockTile(
     )
 
     val animatedScale by animateFloatAsState(
-        targetValue = if (isSelected) 1.12f else 1.0f,
+        targetValue = if (isSelected) 1.08f else 1.0f,
         animationSpec = spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioMediumBouncy),
         label = "tileScale"
     )
@@ -163,7 +171,7 @@ private fun AnimatedDockTile(
             .background(containerBg)
             .border(
                 border = BorderStroke(
-                    width = if (isSelected) 1.5.dp else 0.dp,
+                    width = if (isSelected) 1.2.dp else 0.dp,
                     color = if (isSelected) activePillBorder else Color.Transparent
                 ),
                 shape = RoundedCornerShape(26.dp)
@@ -189,17 +197,30 @@ private fun AnimatedDockTile(
                             )
                         )
                     } else {
-                        Brush.linearGradient(
-                            colors = listOf(
-                                Color.White.copy(alpha = 0.08f),
-                                Color.White.copy(alpha = 0.04f)
+                        if (isDarkModeActive) {
+                            Brush.linearGradient(
+                                colors = listOf(
+                                    Color.White.copy(alpha = 0.08f),
+                                    Color.White.copy(alpha = 0.04f)
+                                )
                             )
-                        )
+                        } else {
+                            Brush.linearGradient(
+                                colors = listOf(
+                                    Color(0xFFF1F5F9),
+                                    Color(0xFFE2E8F0)
+                                )
+                            )
+                        }
                     }
                 )
                 .border(
                     width = if (isSelected) 1.5.dp else 1.dp,
-                    color = if (isSelected) Color.White.copy(alpha = 0.9f) else Color.White.copy(alpha = 0.2f),
+                    color = if (isSelected) {
+                        Color.White.copy(alpha = 0.9f)
+                    } else {
+                        if (isDarkModeActive) Color.White.copy(alpha = 0.15f) else Color(0xFFCBD5E1)
+                    },
                     shape = CircleShape
                 ),
             contentAlignment = Alignment.Center
@@ -207,7 +228,11 @@ private fun AnimatedDockTile(
             Icon(
                 imageVector = icon,
                 contentDescription = title,
-                tint = if (isSelected) Color.White else Color.White.copy(alpha = 0.75f),
+                tint = if (isSelected) {
+                    Color.White
+                } else {
+                    if (isDarkModeActive) Color.White.copy(alpha = 0.75f) else Color(0xFF475569)
+                },
                 modifier = Modifier.size(if (isSelected) 19.dp else 18.dp)
             )
         }

@@ -13,6 +13,7 @@ import com.example.ui.FinanceViewModelFactory
 import com.example.ui.theme.MyApplicationTheme
 
 class MainActivity : BaseActivity() {
+    // Android application entry point for Financer
     private val viewModel: FinanceViewModel by viewModels {
         val database = FinanceDatabase.getDatabase(applicationContext)
         val dao = database.financeDao()

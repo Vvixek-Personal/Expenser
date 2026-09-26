@@ -3,6 +3,8 @@ package com.example.ui.theme
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 
 // Sleek Interface Theme Colors (Backed by dynamic Compose states)
@@ -97,52 +99,93 @@ fun mixPrimaryWithColor(primary: Color, base: Color, fraction: Float): Color {
 }
 
 val SleekBg: Color get() = if (isDarkModeActive) {
-    mixPrimaryWithColor(activeSleekPrimary, Color(0xFF111215), 0.04f)
+    mixPrimaryWithColor(activeSleekPrimary, Color(0xFF0B0D13), 0.05f)
 } else {
-    mixPrimaryWithColor(activeSleekPrimary, Color(0xFFFAFAFC), 0.06f)
+    mixPrimaryWithColor(activeSleekPrimary, Color(0xFFF7F8FC), 0.04f)
 }
 
 val SleekSurface: Color get() = if (isDarkModeActive) {
-    mixPrimaryWithColor(activeSleekPrimary, Color(0xFF1C1D21), 0.05f)
+    mixPrimaryWithColor(activeSleekPrimary, Color(0xFF151822), 0.07f)
 } else {
     Color(0xFFFFFFFF)
 }
 
-val SleekBorder: Color get() = if (isDarkModeActive) {
-    Color(0xFF2C2F36)
+val SleekSurfaceElevated: Color get() = if (isDarkModeActive) {
+    mixPrimaryWithColor(activeSleekPrimary, Color(0xFF1D212E), 0.09f)
 } else {
-    Color(0xFFE1E3E8)
+    Color(0xFFFFFFFF)
+}
+
+val SleekSurfaceVariant: Color get() = SleekSurfaceElevated
+
+val SleekBorder: Color get() = if (isDarkModeActive) {
+    Color(0xFF242836)
+} else {
+    Color(0xFFE4E7F0)
 }
 
 val SleekTextPrimary: Color get() = if (isDarkModeActive) {
-    Color(0xFFF1F1F5)
+    Color(0xFFF8FAFC)
 } else {
-    Color(0xFF1A1C1E)
+    Color(0xFF0F172A)
 }
 
 val SleekTextSecondary: Color get() = if (isDarkModeActive) {
-    Color(0xFF9CA3AF)
+    Color(0xFF94A3B8)
 } else {
-    Color(0xFF44474E)
+    Color(0xFF64748B)
 }
 
-val SleekNeutralLight = Color(0xFFE2E2E6)
+val SleekGlassBg: Color get() = if (isDarkModeActive) {
+    Color(0xFF151822).copy(alpha = 0.82f)
+} else {
+    Color(0xFFFFFFFF).copy(alpha = 0.88f)
+}
 
-// Semantic Alerts (Sleek Theme Palette)
-val ExpenseRed = Color(0xFFBA1A1A)
-val ExpenseRedBg = Color(0xFFFDE2E4)
-val IncomeGreen = Color(0xFF146C2E)
-val IncomeGreenBg = Color(0xFFD1F2EB)
-val SavingGold = Color(0xFF0061A4)
-val WarningOrange = Color(0xFFF59E0B)
-val InfoBlue = Color(0xFF0061A4)
+val SleekGlassBorder: Color get() = if (isDarkModeActive) {
+    Color(0xFFFFFFFF).copy(alpha = 0.09f)
+} else {
+    Color(0xFF000000).copy(alpha = 0.07f)
+}
+
+val SleekNeutralLight: Color get() = if (isDarkModeActive) Color(0xFF2C3242) else Color(0xFFE2E6EE)
+
+// Dynamic Hero Net Balance Card Gradient
+fun getHeroCardGradient(): Brush {
+    val p = activeSleekPrimary
+    return if (isDarkModeActive) {
+        val darkEnd = mixPrimaryWithColor(p, Color(0xFF080D18), 0.55f)
+        val darkStart = mixPrimaryWithColor(p, Color(0xFF1A2234), 0.85f)
+        Brush.linearGradient(
+            colors = listOf(darkStart, darkEnd),
+            start = Offset(0f, 0f),
+            end = Offset(1000f, 1000f)
+        )
+    } else {
+        val lightEnd = mixPrimaryWithColor(p, Color(0xFF0B192E), 0.65f)
+        Brush.linearGradient(
+            colors = listOf(p, lightEnd),
+            start = Offset(0f, 0f),
+            end = Offset(1000f, 1000f)
+        )
+    }
+}
+
+// Semantic Alerts (Modern Fintech Palette)
+val ExpenseRed = Color(0xFFEF4444)
+val ExpenseRedBg: Color get() = if (isDarkModeActive) Color(0xFFEF4444).copy(alpha = 0.20f) else Color(0xFFEF4444).copy(alpha = 0.12f)
+val IncomeGreen = Color(0xFF10B981)
+val IncomeGreenBg: Color get() = if (isDarkModeActive) Color(0xFF10B981).copy(alpha = 0.20f) else Color(0xFF10B981).copy(alpha = 0.12f)
+val SavingGold = Color(0xFFF59E0B)
+val WarningOrange = Color(0xFFF97316)
+val InfoBlue = Color(0xFF3B82F6)
 
 // Backward-compatible aliases for "Sleek Interface" look
-val SlateDarkBg = SleekBg
-val SlateDarkCard = SleekSurface
-val SlateDarkBorder = SleekBorder
-val SlateTextPrimary = SleekTextPrimary
-val SlateTextSecondary = SleekTextSecondary
-val EmeraldPrimary = SleekPrimary
-val EmeraldSecondary = SleekPrimaryContainer
-val AmberTertiary = SleekPrimaryContainer
+val SlateDarkBg: Color get() = SleekBg
+val SlateDarkCard: Color get() = SleekSurface
+val SlateDarkBorder: Color get() = SleekBorder
+val SlateTextPrimary: Color get() = SleekTextPrimary
+val SlateTextSecondary: Color get() = SleekTextSecondary
+val EmeraldPrimary: Color get() = SleekPrimary
+val EmeraldSecondary: Color get() = SleekPrimaryContainer
+val AmberTertiary: Color get() = SleekPrimaryContainer
